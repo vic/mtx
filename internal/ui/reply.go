@@ -17,8 +17,8 @@ func (a App) WithEdit(f func(ch string, target model.Line, text string) error) A
 // prepare sets the reply, edit or thread target for an INSERT key (i a A C o O T).
 func (a App) prepare(k ActKind) App {
 	switch k {
-	case NewLine: // i: a new message to the main chat
-		a.quote, a.quoteBody, a.edit, a.thread = nil, false, nil, ""
+	case NewLine: // i: a new message in the current view (thread or main)
+		a.quote, a.quoteBody, a.edit = nil, false, nil // i keeps the current thread target
 	case ReplyOwn, ReplyOwnQuoted: // a: reply to my message; A: the same with the quote in the body
 		a.edit = nil
 		if l, ok := a.ownTarget(); ok {

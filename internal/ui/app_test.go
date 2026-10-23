@@ -164,6 +164,7 @@ func TestAppInsertSend(t *testing.T) {
 		t.Fatalf("input not cleared: %q", a.in.Value())
 	}
 	// "/quit" in insert mode is a command, not a send
+	a, _ = press(t, a, "i") // RET left INSERT; back in it for the command
 	a = typeText(t, a, "/quit")
 	a, cmd = press(t, a, "enter")
 	if len(log) != 1 || cmd == nil || cmd() != tea.Quit() {

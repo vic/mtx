@@ -556,6 +556,8 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 	}
 	a.histAt = -1
 	a.in.Reset()
+	a.mode = Normal // RET sends and leaves INSERT
+	a.in.Blur()
 	ch := a.m.Current().Name
 	switch {
 	case strings.HasPrefix(text, "/"): // commands run with no channel too (/create makes the first one)

@@ -204,3 +204,14 @@ func TestReplyLastThreadKey(t *testing.T) {
 	a = a.prepare(ReplyThread)
 	require.Equal(t, "$a1", a.thread)
 }
+
+// TestEnterReturnsToNormal: RET sends the line and leaves INSERT.
+func TestEnterReturnsToNormal(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, "i")
+	a.in.SetValue("hello")
+	next, cmd := a.sendLine()
+	require.NotNil(t, cmd)
+	require.Equal(t, Normal, next.(App).mode)
+}

@@ -6,7 +6,7 @@ pkgs.buildGoModule {
     root = ./.;
     fileset = pkgs.lib.fileset.unions [ ./cmd ./internal ./go.mod ./go.sum ];
   };
-  vendorHash = pkgs.lib.fakeHash; # recompute on first nix build (needs approval)
+  vendorHash = "sha256-+dX9/n2GOtYnS07LAsRWkx5Q9dpo//S5klvR5ea7bDg="; # recompute on first nix build (needs approval)
   env.CGO_ENABLED = 0;
   subPackages = [ "cmd/mtx" ];
   tags = [ "goolm" ];

@@ -42,7 +42,7 @@ jobs:
       - uses: cachix/install-nix-action@v31 # pin: the nix that provides matrix-conduit
       - name: Start Conduit
         run: |
-          CONDUIT_CONFIG=.github/conduit.toml nix-shell -p matrix-conduit --run 'conduit' > conduit.log 2>&1 &
+          CONDUIT_CONFIG=.github/conduit.toml nix shell nixpkgs#matrix-conduit --command conduit > conduit.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:6167/_matrix/client/versions >/dev/null && break; sleep 1; done
           curl -sf http://127.0.0.1:6167/_matrix/client/versions >/dev/null
       - name: Register test users and export their sessions

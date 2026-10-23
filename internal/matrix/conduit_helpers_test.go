@@ -32,7 +32,11 @@ func conduitEnv(t *testing.T, side string) Config {
 // encryptedRoom creates an encrypted private room from alice's client and invites bob.
 func encryptedRoom(t *testing.T, ctx context.Context, alice *Client, bobUser string) id.RoomID {
 	t.Helper()
-	resp, err := alice.MX().CreateRoom(ctx, &mautrix.ReqCreateRoom{Invite: []id.UserID{id.UserID(bobUser)}, Preset: "private_chat",
+	var invite []id.UserID
+	if bobUser != "" {
+		invite = []id.UserID{id.UserID(bobUser)}
+	}
+	resp, err := alice.MX().CreateRoom(ctx, &mautrix.ReqCreateRoom{Invite: invite, Preset: "private_chat",
 		InitialState: []*event.Event{{Type: event.StateEncryption, StateKey: ptr(""),
 			Content: event.Content{Parsed: &event.EncryptionEventContent{Algorithm: id.AlgorithmMegolmV1}}}}})
 	require.NoError(t, err)

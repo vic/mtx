@@ -11,6 +11,7 @@ type CmdName string
 
 const (
 	CmdJoin   CmdName = "join"
+	CmdCreate CmdName = "create"
 	CmdPart   CmdName = "part"
 	CmdClose  CmdName = "close"
 	CmdInvite CmdName = "invite"
@@ -25,7 +26,7 @@ const (
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "part", "rm", "close", "invite", "kick", "topic", "whois", "names", "msg", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "whois", "names", "msg", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -40,7 +41,7 @@ func (c Cmd) Args() []string { return c.args }
 // the line verbatim. ok is false for an unknown name; n < 0 is free-form.
 func arity(n CmdName) (count int, raw, ok bool) {
 	switch n {
-	case CmdJoin, CmdKick:
+	case CmdJoin, CmdCreate, CmdKick:
 		return 1, false, true
 	case CmdInvite:
 		return 2, false, true
@@ -104,6 +105,7 @@ func ParseCmd(line string) (Cmd, error) {
 // usage is shown when a command gets the wrong arguments (vic 2026-10-23).
 var usage = map[CmdName]string{
 	CmdJoin:   "/join &room",
+	CmdCreate: "/create &room",
 	CmdPart:   "/part [&room]",
 	CmdClose:  "/close [&room] (or /rm)",
 	CmdInvite: "/invite <nick> &room",

@@ -46,6 +46,8 @@ func roomArg(args []string, ch string) string {
 func (c *cmds) do(ch string, cm model.Cmd) error {
 	args := cm.Args()
 	switch cm.Name() {
+	case model.CmdCreate:
+		return c.create(args[0])
 	case model.CmdJoin:
 		return c.join(args[0])
 	case model.CmdPart:
@@ -244,3 +246,30 @@ func (c *cmds) whois(user string) error {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// create: /create &name makes an encrypted private room with alias #name:<server>, invites nobody,
+// and focuses it.
+func (c *cmds) create(s string) error {
+	if !strings.HasPrefix(s, "&") || len(s) < 2 {
+		return errors.New("usage: /create &room")
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	resp, err := c.r.mx.CreateRoom(ctx, &mautrix.ReqCreateRoom{
+		RoomAliasName: s[1:],
+		Preset:        "private_chat",
+		InitialState: []*event.Event{{
+			Type:     event.StateEncryption,
+			StateKey: ptr(""),
+			Content:  event.Content{Parsed: &event.EncryptionEventContent{Algorithm: id.AlgorithmMegolmV1}},
+		}},
+	})
+	if err != nil {
+		return err
+	}
+	alias := "#" + s[1:] + ":" + c.server
+	name := c.r.register(resp.RoomID, alias)
+	c.r.emitRooms()
+	c.r.emit(ui.FocusMsg(name))
+	return nil
+}

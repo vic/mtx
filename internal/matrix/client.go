@@ -122,6 +122,12 @@ func (c *Client) Run(ctx context.Context, h Handler) error {
 func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string, h Handler) error {
 	m := c.helper.Machine()
 	m.ProcessSyncResponse(ctx, resp, since) // room keys, device lists, OTK counts
+	// Invites are accepted by policy: join before the batch's room events are handled.
+	for roomID := range resp.Rooms.Invite {
+		if _, err := c.cli.JoinRoomByID(ctx, roomID); err != nil {
+			return fmt.Errorf("auto-join %s: %w", roomID, err)
+		}
+	}
 	for roomID, room := range resp.Rooms.Join {
 		for i := range room.State.Events {
 			st := room.State.Events[i]

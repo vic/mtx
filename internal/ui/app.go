@@ -59,8 +59,9 @@ type AgentsMsg struct {
 
 // MembersMsg sets the member nicks of room Ch.
 type MembersMsg struct {
-	Ch    string
-	Nicks []string
+	Ch     string
+	Nicks  []string
+	Levels []int // power level of each nick (parallel to Nicks); admins first
 }
 
 // TypingMsg sets the nicks typing now in room Ch (empty = nobody). They show 💬 in the nick pane.
@@ -292,6 +293,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		ms := make([]model.Member, len(msg.Nicks))
 		for i, n := range msg.Nicks {
 			ms[i].Nick = n
+			if i < len(msg.Levels) {
+				ms[i].Level = msg.Levels[i]
+			}
 		}
 		if m, err := a.m.WithRoomMembers(msg.Ch, ms); err == nil {
 			a.m = m
@@ -1239,7 +1243,7 @@ func (a App) paneItems(f paneFocus) (show, names []string) {
 		show = names
 	} else {
 		names = chanNicks(a.m.Current(), a.user)
-		show = a.paneNicks()
+		show, _ = a.nickRows()
 	}
 	if f != a.focus || strings.TrimSpace(a.fq) == "" {
 		return show, names
@@ -1401,7 +1405,12 @@ func (a App) mention(nick string) App {
 func (a App) sides() sidePanes {
 	chans, _ := a.paneItems(focusChans)
 	nicks, _ := a.paneItems(focusNicks)
-	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread, unread: a.unreadAll(), mainUnread: a.mainUnread[a.m.Current().Name]}
+	_, rowOf := a.nickRows()
+	nickSel := -1
+	if a.fsel >= 0 && a.fsel < len(rowOf) {
+		nickSel = rowOf[a.fsel]
+	}
+	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, nickSel: nickSel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread, unread: a.unreadAll(), mainUnread: a.mainUnread[a.m.Current().Name]}
 }
 
 // lineStep moves the cursor (the reversed line) one line down (to newer) or up,

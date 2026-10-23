@@ -177,7 +177,7 @@ func (c *cmds) names(ch string) error {
 	if err != nil {
 		return err
 	}
-	nicks, err := c.r.members(room)
+	nicks, _, err := c.r.members(room)
 	if err != nil {
 		return err
 	}

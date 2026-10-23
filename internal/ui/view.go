@@ -251,7 +251,10 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			seg(midTitle(p, details), mid, line(1))+edge(2, "┬")+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
 		for i := 0; i < n; i++ {
 			nk := at(p.nicks, i)
-			if nk != "" { // an empty Render still emits escapes
+			label := strings.HasPrefix(nk, nickLabel) // a group label: dim, not a nick
+			if label {
+				nk = dimmed.Render(strings.TrimPrefix(nk, nickLabel))
+			} else if nk != "" { // an empty Render still emits escapes
 				mark, name := "", nk
 				for _, sm := range statusMarks {
 					if rest, ok := strings.CutPrefix(nk, sm); ok {
@@ -264,7 +267,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			if p.focus == focusChans && i == p.sel && i < len(chans) {
 				cc = fit(current, " "+chans[i].Name, chanW)
 			}
-			if p.focus == focusNicks && i == p.sel && i < len(p.nicks) {
+			if p.focus == focusNicks && i == p.nickSel {
 				nc = fit(current, " "+p.nicks[i], nickW)
 			}
 			if sep == 1 && i == tRows { // the line between the threads box and the chat box
@@ -569,6 +572,7 @@ type sidePanes struct {
 	chans, nicks []string
 	focus        paneFocus
 	sel          int
+	nickSel      int // row of the selected nick (-1 none), labels are not selectable
 	q            string
 	heads        []model.Thread // thread heads of the current channel (top rows of the chat column)
 	thread       string         // selected head root

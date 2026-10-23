@@ -118,20 +118,39 @@ func (r *runner) emitRooms() {
 	r.emit(ui.RoomsMsg(r.rooms()))
 }
 
-// members returns the joined user localparts of room, sorted.
-func (r *runner) members(room id.RoomID) ([]string, error) {
+// members returns the joined user localparts and their power levels, admins first (level desc),
+// then by name.
+func (r *runner) members(room id.RoomID) ([]string, []int, error) {
 	ctx, cancel := callCtx()
 	defer cancel()
 	resp, err := r.mx.JoinedMembers(ctx, room)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	nicks := make([]string, 0, len(resp.Joined))
+	var pl event.PowerLevelsEventContent
+	if err := r.mx.StateEvent(ctx, room, event.StatePowerLevels, "", &pl); err != nil {
+		pl = event.PowerLevelsEventContent{} // no power levels: everyone is a member
+	}
+	type member struct {
+		nick  string
+		level int
+	}
+	ms := make([]member, 0, len(resp.Joined))
 	for u := range resp.Joined {
-		nicks = append(nicks, localpart(u.String()))
+		ms = append(ms, member{localpart(u.String()), pl.GetUserLevel(u)})
 	}
-	slices.Sort(nicks)
-	return nicks, nil
+	slices.SortFunc(ms, func(a, b member) int {
+		if a.level != b.level {
+			return b.level - a.level
+		}
+		return strings.Compare(a.nick, b.nick)
+	})
+	nicks := make([]string, len(ms))
+	levels := make([]int, len(ms))
+	for i, m := range ms {
+		nicks[i], levels[i] = m.nick, m.level
+	}
+	return nicks, levels, nil
 }
 
 func (r *runner) emitMembers(room id.RoomID) error {
@@ -139,11 +158,11 @@ func (r *runner) emitMembers(room id.RoomID) error {
 	if !ok {
 		return nil
 	}
-	nicks, err := r.members(room)
+	nicks, levels, err := r.members(room)
 	if err != nil {
 		return err
 	}
-	r.emit(ui.MembersMsg{Ch: name, Nicks: nicks})
+	r.emit(ui.MembersMsg{Ch: name, Nicks: nicks, Levels: levels})
 	return nil
 }
 

@@ -9,8 +9,9 @@ import (
 
 // Member is one room participant: its nick and session pid.
 type Member struct {
-	Nick string
-	PID  int
+	Nick  string
+	PID   int
+	Level int // power level in the room (100 admin, 50 mod, else member)
 }
 
 // ErrNotRoom means the channel is a session channel, which has no members.

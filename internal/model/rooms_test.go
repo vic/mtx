@@ -15,7 +15,7 @@ func TestWithRooms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m, err = m.WithRoomMembers("&x", []Member{{"n", 5}}); err != nil {
+	if m, err = m.WithRoomMembers("&x", []Member{{Nick: "n", PID: 5}}); err != nil {
 		t.Fatal(err)
 	}
 	m2 := m.WithRooms([]string{"&z", "&x"})                                                      // &y gone, &z new (last), &x kept in place

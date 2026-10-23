@@ -17,7 +17,7 @@ func roomModel(t *testing.T, lines ...Line) Model {
 	for _, l := range lines {
 		r.Push(l)
 	}
-	m.chans = []Channel{{Name: "#a", Kind: SessionChan, PID: 1, Unread: 2}, {Name: "&review", Kind: RoomChan, PID: 0, Unread: 3, Lines: r, Members: []Member{{"a", 2}, {"b", 3}}}}
+	m.chans = []Channel{{Name: "#a", Kind: SessionChan, PID: 1, Unread: 2}, {Name: "&review", Kind: RoomChan, PID: 0, Unread: 3, Lines: r, Members: []Member{{Nick: "a", PID: 2}, {Nick: "b", PID: 3}}}}
 	return m
 }
 
@@ -80,11 +80,11 @@ func mustNew(t *testing.T) Model {
 
 func TestWithRoomMembers(t *testing.T) {
 	m := roomModel(t)
-	m2, err := m.WithRoomMembers("&review", []Member{{"x", 1}, {"y", 2}, {"z", 3}})
+	m2, err := m.WithRoomMembers("&review", []Member{{Nick: "x", PID: 1}, {Nick: "y", PID: 2}, {Nick: "z", PID: 3}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := m2.Channels()[1].Members; !reflect.DeepEqual(got, []Member{{"x", 1}, {"y", 2}, {"z", 3}}) {
+	if got := m2.Channels()[1].Members; !reflect.DeepEqual(got, []Member{{Nick: "x", PID: 1}, {Nick: "y", PID: 2}, {Nick: "z", PID: 3}}) {
 		t.Fatalf("members %v", got)
 	}
 	if len(m.Channels()[1].Members) != 2 { // old Model unchanged
@@ -103,7 +103,7 @@ func TestWithRoomMembers(t *testing.T) {
 		t.Fatal("Channels leaks Members")
 	}
 	// copy on write: caller's slice is not aliased
-	in := []Member{{"x", 1}}
+	in := []Member{{Nick: "x", PID: 1}}
 	m3, _ := m.WithRoomMembers("&review", in)
 	in[0].Nick = "y"
 	if m3.Channels()[1].Members[0].Nick != "x" {
@@ -113,7 +113,7 @@ func TestWithRoomMembers(t *testing.T) {
 
 func TestWithRoomMembersErrors(t *testing.T) {
 	m := roomModel(t)
-	if _, err := m.WithRoomMembers("#a", []Member{{"x", 1}}); !errors.Is(err, ErrNotRoom) {
+	if _, err := m.WithRoomMembers("#a", []Member{{Nick: "x", PID: 1}}); !errors.Is(err, ErrNotRoom) {
 		t.Fatalf("session chan: %v", err)
 	}
 	if _, err := m.WithRoomMembers("&nope", nil); !errors.Is(err, ErrUnknownChannel) {
@@ -123,7 +123,7 @@ func TestWithRoomMembersErrors(t *testing.T) {
 
 func TestStatusDistinctPIDs(t *testing.T) {
 	m := roomModel(t)
-	m, err := m.WithRoomMembers("&review", []Member{{"parent", 2}, {"teammate", 2}, {"ghost", 7}, {"ghost2", 7}})
+	m, err := m.WithRoomMembers("&review", []Member{{Nick: "parent", PID: 2}, {Nick: "teammate", PID: 2}, {Nick: "ghost", PID: 7}, {Nick: "ghost2", PID: 7}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,8 @@ package ui
 
 import (
 	"errors"
+
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 
@@ -41,5 +43,24 @@ func TestSeenNewLineInCurrentChannel(t *testing.T) {
 	seenCmd(func(ch string) error { seen = append(seen, ch); return errors.New("ignored") }, "#a")()
 	if len(seen) != 1 || seen[0] != "#a" {
 		t.Fatalf("seen calls %v", seen)
+	}
+}
+
+// TestNickGroupsByRole: in a room, admins come first under an 'admins' label, then mods, then members.
+func TestNickGroupsByRole(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(RoomsMsg{"&r"})
+	a = next.(App).focusName("&r")
+	a.m, _ = a.m.WithRoomMembers("&r", []model.Member{{Nick: "boss", Level: 100}, {Nick: "mod1", Level: 50}, {Nick: "pal", Level: 0}})
+	rows, _ := a.nickRows()
+	var got []string
+	for _, r := range rows {
+		got = append(got, strings.TrimPrefix(ansi.Strip(r), " "))
+	}
+	s := strings.Join(got, "|")
+	iAdm, iMod, iMem := strings.Index(s, "admins"), strings.Index(s, "mods"), strings.Index(s, "members")
+	if iAdm < 0 || iMod < 0 || iMem < 0 || !(iAdm < strings.Index(s, "boss") && strings.Index(s, "boss") < iMod && iMod < strings.Index(s, "mod1") && strings.Index(s, "mod1") < iMem) {
+		t.Fatalf("groups: %q", s)
 	}
 }

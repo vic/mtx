@@ -32,6 +32,7 @@ type Line struct {
 	Dim        bool
 	Kind       LineKind
 	ID         string // producer's event ID (a reply target); not shown
+	Thread     string // thread root event ID of this message; "" = main chat
 }
 
 // ChanKind tells a session channel (#) from a room (&).

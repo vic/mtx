@@ -77,3 +77,11 @@ func leftRoom(evt *event.Event) bool {
 	cur := evt.Content.AsMember()
 	return cur != nil && (cur.Membership == event.MembershipLeave || cur.Membership == event.MembershipBan)
 }
+
+// threadOf is the thread root of a message, "" for main-chat messages (and for a thread root itself).
+func threadOf(evt *event.Event) string {
+	if m := evt.Content.AsMessage(); m != nil && m.RelatesTo != nil {
+		return string(m.RelatesTo.GetThreadParent())
+	}
+	return ""
+}

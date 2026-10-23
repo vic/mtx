@@ -63,6 +63,7 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config, dataHome s
 	}
 	var p *tea.Program
 	r := newRunner(c.MX(), func(msg tea.Msg) { p.Send(msg) })
+	c.OnInvite(r.toastInvite)
 	_, server, _ := strings.Cut(cfg.UserID, ":")
 	cs := &cmds{r: r, me: id.UserID(cfg.UserID), server: server}
 

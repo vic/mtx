@@ -27,7 +27,7 @@ func addInviteSync(ts *mockserver.MockServer, onEmpty func()) {
 			fmt.Fprint(w, `{"next_batch":"s2"}`)
 			return
 		}
-		fmt.Fprintf(w, `{"next_batch":"s1","rooms":{"invite":{%q:{"invite_state":{"events":[]}}}}}`, inviteRoom)
+		fmt.Fprintf(w, `{"next_batch":"s1","rooms":{"invite":{%q:{"invite_state":{"events":[{"type":"m.room.member","state_key":"@alice:mock.test","sender":"@bob:mock.test","content":{"membership":"invite"}}]}}}}}`, inviteRoom)
 	})
 }
 
@@ -51,7 +51,10 @@ func TestInviteAutoJoin(t *testing.T) {
 	c, err := New(ctx, testConfig(t, ts.Server.URL, tok, "DEV1"))
 	require.NoError(t, err)
 	defer c.Close()
+	var invites []Invite
+	c.OnInvite(func(in Invite) { invites = append(invites, in) })
 	require.ErrorIs(t, c.Run(ctx, func(context.Context, *event.Event, error) error { return nil }), context.Canceled)
+	require.Equal(t, []Invite{{Room: inviteRoom, Inviter: "@bob:mock.test"}}, invites)
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []string{string(inviteRoom)}, joined)

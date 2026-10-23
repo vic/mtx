@@ -18,6 +18,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"mtx/internal/matrix"
 	"mtx/internal/model"
 	"mtx/internal/ui"
 )
@@ -99,4 +100,14 @@ func TestRegisterClashUsesRoomID(t *testing.T) {
 	b := r.register("!two:s", "#review:t")
 	require.Equal(t, "&review", a)
 	require.Equal(t, "&two", b)
+}
+
+// TestToastInviteNamesAliasAndInviter: the toast names the alias when there is one, and the inviter.
+func TestToastInviteNamesAliasAndInviter(t *testing.T) {
+	var out []tea.Msg
+	r := newRunner(nil, func(m tea.Msg) { out = append(out, m) })
+	r.toastInvite(matrix.Invite{Room: "!x:s", Alias: "#review:s", Inviter: "@bob:s"})
+	r.toastInvite(matrix.Invite{Room: "!y:s", Inviter: "@carol:s"})
+	require.Equal(t, ui.ToastMsg{Text: "invited to #review:s by @bob:s: joined"}, out[0])
+	require.Equal(t, ui.ToastMsg{Text: "invited to !y:s by @carol:s: joined"}, out[1])
 }

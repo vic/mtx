@@ -13,6 +13,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
+	"mtx/internal/matrix"
 	"mtx/internal/model"
 	"mtx/internal/ui"
 )
@@ -217,4 +218,13 @@ func (r *runner) sendLiteral(ch, text string) error {
 	}
 	r.emit(ui.LineMsg{Ch: ch, L: model.Line{At: time.Now(), Nick: localpart(r.mx.UserID.String()), Text: text}})
 	return nil
+}
+
+// toastInvite tells the user an invite was accepted. The room is named by its alias when it has one.
+func (r *runner) toastInvite(in matrix.Invite) {
+	what := string(in.Room)
+	if in.Alias != "" {
+		what = in.Alias
+	}
+	r.emit(ui.ToastMsg{Text: fmt.Sprintf("invited to %s by %s: joined", what, in.Inviter)})
 }

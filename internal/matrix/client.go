@@ -21,10 +21,11 @@ const (
 
 // Client is a logged-in device with E2EE on and its own sync loop.
 type Client struct {
-	cli    *mautrix.Client
-	helper *cryptohelper.CryptoHelper
-	db     *dbutil.Database
-	user   id.UserID
+	cli      *mautrix.Client
+	helper   *cryptohelper.CryptoHelper
+	db       *dbutil.Database
+	user     id.UserID
+	onInvite func(Invite)
 }
 
 // New opens the store, checks the device against the server, and starts E2EE.
@@ -123,9 +124,16 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 	m := c.helper.Machine()
 	m.ProcessSyncResponse(ctx, resp, since) // room keys, device lists, OTK counts
 	// Invites are accepted by policy: join before the batch's room events are handled.
-	for roomID := range resp.Rooms.Invite {
+	for roomID, inv := range resp.Rooms.Invite {
+		in, err := c.inviteOf(roomID, inv)
+		if err != nil {
+			return err
+		}
 		if _, err := c.cli.JoinRoomByID(ctx, roomID); err != nil {
 			return fmt.Errorf("auto-join %s: %w", roomID, err)
+		}
+		if c.onInvite != nil {
+			c.onInvite(in)
 		}
 	}
 	for roomID, room := range resp.Rooms.Join {

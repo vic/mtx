@@ -136,16 +136,16 @@ func TestToggles(t *testing.T) {
 	if got := shown(); got != "hi|thinking out loud" { // default: tools hidden
 		t.Fatalf("default %q", got)
 	}
-	a, _ = press(t, a, "t")
-	if got := shown(); got != "hi|thinking out loud|* Bash: ls" || !strings.Contains(a.screen(), "* Bash: ls") {
-		t.Fatalf("t %q", got)
+	a, _ = press(t, a, "t") // t is the thread toggle now: tool lines stay hidden
+	if got := shown(); got != "hi|thinking out loud" || a.tools {
+		t.Fatalf("t %q tools %v", got, a.tools)
 	}
 	a, _ = press(t, a, "m")
 	if got := shown(); got != "hi" || strings.Contains(a.screen(), "thinking out loud") {
 		t.Fatalf("m %q", got)
 	}
 	a, _ = press(t, a, "g", "t") // NEG: gt still switches channel, does not toggle
-	if cur(a) != "#b" || !a.tools {
+	if cur(a) != "#b" || a.tools {
 		t.Fatalf("gt: %s tools %v", cur(a), a.tools)
 	}
 }

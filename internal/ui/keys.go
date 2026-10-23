@@ -146,11 +146,11 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		case "s":
 			return Action{Kind: ToggleStamps}, Normal, ""
 		case "t":
-			return Action{Kind: ToggleTools}, Normal, ""
+			return Action{Kind: ThreadNext}, Normal, ""
 		case "m":
 			return Action{Kind: ToggleMentions}, Normal, ""
 		case "T":
-			return Action{Kind: ThreadNext}, Normal, ""
+			return Action{Kind: ThreadStart}, Insert, ""
 		case "?":
 			return Action{Kind: Help}, Normal, ""
 		case ":":

@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Run the mtx TUI against the local conduit. Each launch registers a fresh disposable user and
+# Run the mtx TUI against the local .github/conduit.toml. Each launch registers a fresh disposable user and
 # uses a fresh store, so nothing (token, pickle key) is kept after exit.
 # Usage: /tmp/mtx.sh   (run once per terminal; two terminals = two users to chat with)
 set -euo pipefail
 
+REPO=$PWD
 HS=http://127.0.0.1:6167
 BIN=/tmp/mtx-tui-bin
-TOK=$(sed -n 's/^registration_token = "\(.*\)"/\1/p' "$HOME/conduit.toml")
-[ -n "$TOK" ] || { echo "no registration_token in ~/conduit.toml" >&2; exit 1; }
+TOK=$(sed -n 's/^registration_token = "\(.*\)"/\1/p' "$REPO/.github/conduit.toml")
+[ -n "$TOK" ] || { echo "no registration_token in $REPO/.github/conduit.toml" >&2; exit 1; }
 
 echo "mtx: building (first run takes a moment)..." >&2
-CGO_ENABLED=0 nix-shell -p go --run "go build -tags goolm -o $BIN ./cmd/mtx"
+(cd "$REPO" && CGO_ENABLED=0 nix-shell -p go --run "go build -tags goolm -o $BIN ./cmd/mtx")
 
 NAME="mtxtui$RANDOM$RANDOM"
 PW=$(head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 20)
@@ -25,6 +26,7 @@ export MTX_DEVICE_ID="$(field device_id)"
 export MTX_PICKLE_KEY="$(head -c 32 /dev/urandom | base64 -w0)"
 export MTX_DB="$(mktemp -d /tmp/mtx-tui.XXXXXX)/mtx.db"
 
-echo "mtx: $MTX_USER_ID (store $MTX_DB). Press RET to open mtx" >&2
+export MTX_LOG="${MTX_LOG:-/tmp/mtx-tui.log}"
+echo "mtx: $MTX_USER_ID (store $MTX_DB, log $MTX_LOG)" >&2
 read
 exec "$BIN"

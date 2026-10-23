@@ -72,6 +72,7 @@ func TestHelpButtonsOpenLinks(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	a.help = true
+	a.w, a.h = 120, 60 // tall enough that the first help row is on screen
 	bl := strings.Split(helpBox(a.h, a.helpOff), "\n")
 	bw := lipgloss.Width(bl[0])
 	top, left := max((a.h-len(bl))/2, 0), max((a.w-bw)/2, 0)
@@ -80,7 +81,7 @@ func TestHelpButtonsOpenLinks(t *testing.T) {
 	if u, ok := a.helpButtonAt(x, top+1); !ok || u != repoURL {
 		t.Fatalf("repo button: %q %v", u, ok)
 	}
-	x = left + lipgloss.Width(row[:strings.Index(row, "donate to @vic")]) + 1
+	x = left + lipgloss.Width(row[:strings.Index(row, "sponsor @vic")]) + 1
 	if u, ok := a.helpButtonAt(x, top+1); !ok || u != donateURL {
 		t.Fatalf("donate button: %q %v", u, ok)
 	}

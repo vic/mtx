@@ -262,6 +262,10 @@ func (r *runner) messageText(evt *event.Event, decErr error) (text string, dim, 
 		return "", false, false
 	}
 	body := m.Body
+	switch m.MsgType {
+	case event.MsgImage, event.MsgVideo, event.MsgAudio, event.MsgFile:
+		body = r.mediaText(m)
+	}
 	if m.NewContent != nil {
 		body = "(edited) " + m.NewContent.Body
 	}

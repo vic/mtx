@@ -90,3 +90,24 @@ func listFiles(dir string) []string {
 	}
 	return slices.DeleteFunc(strings.Split(string(out), "\x00"), func(s string) bool { return s == "" })
 }
+
+// urlAt is the http(s) URL of the word under column col of row, "" when there is none.
+func urlAt(row string, col int) string {
+	if col < 0 || col >= lipgloss.Width(row) {
+		return ""
+	}
+	b := byteAt(row, col)
+	start := strings.LastIndexAny(row[:b], " \t") + 1
+	if row[b] == ' ' || row[b] == '\t' { // a click on the space between words
+		return ""
+	}
+	end := len(row)
+	if i := strings.IndexAny(row[b:], " \t"); i >= 0 {
+		end = b + i
+	}
+	word := strings.Trim(row[start:end], "\"'()[]{}<>,;")
+	if strings.HasPrefix(word, "https://") || strings.HasPrefix(word, "http://") {
+		return word
+	}
+	return ""
+}

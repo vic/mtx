@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maunium.net/go/mautrix/event"
 	"net/http"
 	"sync"
 	"testing"
@@ -42,4 +43,15 @@ func TestEditSendsReplace(t *testing.T) {
 	require.Equal(t, "* new", sent[0]["body"])
 	require.Equal(t, map[string]any{"rel_type": "m.replace", "event_id": "$m1"}, sent[0]["m.relates_to"])
 	require.Equal(t, "new", sent[0]["m.new_content"].(map[string]any)["body"])
+}
+
+// TestImageTextHasDownloadLink: an unencrypted image shows its name and a clickable download URL.
+func TestImageTextHasDownloadLink(t *testing.T) {
+	cli, err := mautrix.NewClient("https://mock.test", "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	got := r.mediaText(&event.MessageEventContent{MsgType: event.MsgImage, Body: "cat.png", URL: "mxc://example.org/abc"})
+	require.Equal(t, "[image] cat.png https://mock.test/_matrix/media/v3/download/example.org/abc", got)
+	enc := r.mediaText(&event.MessageEventContent{MsgType: event.MsgFile, Body: "x.pdf", File: &event.EncryptedFileInfo{}})
+	require.Equal(t, "[file encrypted] x.pdf", enc)
 }

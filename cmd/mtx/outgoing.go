@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -77,4 +78,19 @@ func (r *runner) edit(ch string, target model.Line, text string) error {
 		_, err := r.mx.SendMessageEvent(ctx, room, event.EventMessage, content)
 		return err
 	})
+}
+
+// mediaText is the scrollback text of a media message: its name and, for unencrypted media, the
+// homeserver download URL (clickable). Encrypted media has no link yet.
+func (r *runner) mediaText(m *event.MessageEventContent) string {
+	kind := strings.TrimPrefix(string(m.MsgType), "m.")
+	if m.File != nil {
+		return fmt.Sprintf("[%s encrypted] %s", kind, m.Body)
+	}
+	u, err := id.ParseContentURI(string(m.URL))
+	if err != nil {
+		return fmt.Sprintf("[%s] %s", kind, m.Body)
+	}
+	link := fmt.Sprintf("%s/_matrix/media/v3/download/%s/%s", strings.TrimSuffix(r.mx.HomeserverURL.String(), "/"), u.Homeserver, u.FileID)
+	return fmt.Sprintf("[%s] %s %s", kind, m.Body, link)
 }

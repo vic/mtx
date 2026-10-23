@@ -1334,6 +1334,9 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 		if !ok {
 			break
 		}
+		if url := urlAt(row, m.X-chanW-3); url != "" { // a link opens in the browser
+			return a, openURL(url)
+		}
 		if path, cmd, hit := clickTarget(row, m.X-chanW-3); hit { // the text starts after the border and a space
 			return a.openTarget(path, cmd)
 		}

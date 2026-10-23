@@ -170,8 +170,9 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		for i := range room.State.Events {
 			st := room.State.Events[i]
 			st.RoomID = roomID
+			st.Type.Class = event.StateEventType // the state section is state-class
 			if err := st.Content.ParseRaw(st.Type); err != nil {
-				return fmt.Errorf("parse state %s: %w", st.ID, err)
+				continue // a state type this client does not model: nothing to apply, the batch goes on
 			}
 			if st.Type == event.StateMember {
 				m.HandleMemberEvent(rctx, st)
@@ -225,7 +226,7 @@ func (c *Client) deliver(ctx context.Context, evt *event.Event, h Handler) (err 
 	}()
 	if evt.Content.Parsed == nil { // state events were parsed for HandleMemberEvent
 		if err := evt.Content.ParseRaw(evt.Type); err != nil {
-			return fmt.Errorf("parse %s: %w", evt.ID, err)
+			return h(ctx, evt, nil) // a type this client does not model: the handler sees it raw and ignores it
 		}
 	}
 	if evt.Type == event.EventEncrypted {

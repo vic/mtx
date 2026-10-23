@@ -107,7 +107,7 @@ func (c *Client) Run(ctx context.Context, h Handler) error {
 			if errors.Is(err, mautrix.MUnknownToken) || ctx.Err() != nil {
 				return err
 			}
-			wait, limited := retryAfter(err)
+			wait, limited := RetryAfter(err)
 			if !limited {
 				wait = failedBackof // transient: back off, retry
 			}

@@ -18,7 +18,10 @@ import (
 	"mtx/internal/ui"
 )
 
-const callTimeout = 30 * time.Second
+const (
+	callTimeout  = 30 * time.Second
+	sendAttempts = 3
+)
 
 // runner is the Matrix side of the UI: rooms are channels named &local, and
 // every UI message is produced here.
@@ -235,8 +238,10 @@ func (r *runner) send(ch, text string) error {
 	}
 	ctx, cancel := callCtx()
 	defer cancel()
-	_, err = r.mx.SendText(ctx, room, text)
-	return err
+	return matrix.Retry(ctx, sendAttempts, func() error {
+		_, err := r.mx.SendText(ctx, room, text)
+		return err
+	})
 }
 
 // sendLiteral sends a : line as is. There is no local echo for it, so the line is shown here.

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"strconv"
 
 	"mtx/internal/model"
 )
@@ -55,14 +56,15 @@ func threadRow(h model.Thread, selected bool, unread, w int) string {
 		mark = "▸ "
 	}
 	label := fmt.Sprintf("%s%s: %s (%d)", mark, h.Nick, h.Text, h.Count)
-	if unread > 0 {
-		label += fmt.Sprintf(" [%d new]", unread)
-	}
-	row := fit(cell, label, w)
-	if unread == 0 && !selected {
+	if unread == 0 {
+		row := fit(cell, label, w)
+		if selected {
+			return row
+		}
 		return faint.Render(row)
 	}
-	return row
+	// the channel unread marker: the count, styled as channels style theirs
+	return fit(cell, label, w-3) + fit(cell, unreadMark.Render(strconv.Itoa(unread)), 3)
 }
 
 // unreadAll is the unread count of each head of the current channel, in head order.
@@ -122,3 +124,6 @@ func (a App) unreadOf(h model.Thread) int {
 	}
 	return 0
 }
+
+// unreadMark is the channel unread count style (the number next to a channel with unread lines).
+var unreadMark = unread

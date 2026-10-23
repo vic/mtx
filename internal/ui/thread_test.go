@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -76,11 +77,27 @@ func TestThreadUnreadCount(t *testing.T) {
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 4, Live: 3}}}
 	a.seenLive = map[string]int{"$a1": 1}
 	s := ansi.Strip(a.screen())
-	if !strings.Contains(s, "[2 new]") {
+	if !regexp.MustCompile(`start \(4\).*2`).MatchString(s) {
 		t.Fatalf("unread not on screen:\n%s", s)
 	}
 	a = a.selectThread("$a1")
-	if s := ansi.Strip(a.screen()); strings.Contains(s, "[2 new]") {
+	if s := ansi.Strip(a.screen()); regexp.MustCompile(`start \(4\).*2`).MatchString(s) {
 		t.Fatalf("selected thread still shows unread:\n%s", s)
+	}
+}
+
+// TestCtrlOKeepsChannelsAndNicks: the Ctrl+O list still has channels and @nicks next to threads.
+func TestCtrlOKeepsChannelsAndNicks(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1, Live: 1}}}
+	src := a.pickSource()
+	for _, want := range []string{"#a", threadLabel(a.threads["#a"][0])} {
+		if !slices.Contains(src, want) {
+			t.Fatalf("ctrl+o source lacks %q: %v", want, src)
+		}
+	}
+	if !slices.ContainsFunc(src, func(s string) bool { return strings.HasPrefix(s, "@") }) {
+		t.Fatalf("ctrl+o source lacks @nicks: %v", src)
 	}
 }

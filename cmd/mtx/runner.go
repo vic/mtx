@@ -29,13 +29,15 @@ type runner struct {
 	mx   *mautrix.Client
 	emit func(tea.Msg)
 
-	mu    sync.Mutex
-	names map[string]id.RoomID // "&name" -> room
-	ids   map[id.RoomID]string // room -> "&name"
+	mu     sync.Mutex
+	last   map[id.RoomID]id.EventID // newest message per room (read markers)
+	marked map[id.RoomID]id.EventID // newest message per room already marked read
+	names  map[string]id.RoomID     // "&name" -> room
+	ids    map[id.RoomID]string     // room -> "&name"
 }
 
 func newRunner(mx *mautrix.Client, emit func(tea.Msg)) *runner {
-	return &runner{mx: mx, emit: emit, names: map[string]id.RoomID{}, ids: map[id.RoomID]string{}}
+	return &runner{mx: mx, emit: emit, names: map[string]id.RoomID{}, ids: map[id.RoomID]string{}, last: map[id.RoomID]id.EventID{}, marked: map[id.RoomID]id.EventID{}}
 }
 
 func callCtx() (context.Context, context.CancelFunc) {
@@ -172,6 +174,7 @@ func (r *runner) canonicalAlias(room id.RoomID) string {
 // onEvent is the matrix.Handler: messages become lines, member changes refresh the nick pane.
 func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) error {
 	old := matrix.IsHistory(ctx) // replayed on the first sync: scrollback, no unread count
+	r.noteLast(evt)
 	name, ok := r.nameOf(evt.RoomID)
 	if !ok {
 		if err := r.refresh(); err != nil {
@@ -263,5 +266,5 @@ func (r *runner) toastInvite(in matrix.Invite) {
 	if in.Alias != "" {
 		what = in.Alias
 	}
-	r.emit(ui.ToastMsg{Text: fmt.Sprintf("invited to %s by %s: joined", what, in.Inviter)})
+	r.emit(ui.ToastMsg{Text: fmt.Sprintf("invited to %s by %s: joined", what, localpart(in.Inviter.String()))})
 }

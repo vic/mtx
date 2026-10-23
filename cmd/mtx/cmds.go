@@ -239,7 +239,7 @@ func (c *cmds) whois(user string) error {
 	if err != nil {
 		return err
 	}
-	c.r.emit(ui.NoteMsg{L: dim(fmt.Sprintf("%s %s", user, p.DisplayName))})
+	c.r.emit(ui.NoteMsg{L: dim(fmt.Sprintf("%s %s", localpart(user), p.DisplayName))})
 	return nil
 }
 

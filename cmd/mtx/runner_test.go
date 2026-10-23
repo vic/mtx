@@ -108,8 +108,8 @@ func TestToastInviteNamesAliasAndInviter(t *testing.T) {
 	r := newRunner(nil, func(m tea.Msg) { out = append(out, m) })
 	r.toastInvite(matrix.Invite{Room: "!x:s", Alias: "#review:s", Inviter: "@bob:s"})
 	r.toastInvite(matrix.Invite{Room: "!y:s", Inviter: "@carol:s"})
-	require.Equal(t, ui.ToastMsg{Text: "invited to #review:s by @bob:s: joined"}, out[0])
-	require.Equal(t, ui.ToastMsg{Text: "invited to !y:s by @carol:s: joined"}, out[1])
+	require.Equal(t, ui.ToastMsg{Text: "invited to #review:s by bob: joined"}, out[0])
+	require.Equal(t, ui.ToastMsg{Text: "invited to !y:s by carol: joined"}, out[1])
 }
 
 // TestHistoryLinesAreOld: lines replayed on the first sync are scrollback, not unread.

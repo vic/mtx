@@ -63,6 +63,12 @@ type MembersMsg struct {
 	Nicks []string
 }
 
+// TypingMsg sets the nicks typing now in room Ch (empty = nobody). They show 💬 in the nick pane.
+type TypingMsg struct {
+	Ch    string
+	Nicks []string
+}
+
 // InfoMsg replaces the per-pid status the modeline shows.
 type InfoMsg map[int]model.SessionInfo
 
@@ -105,27 +111,29 @@ type App struct {
 	w, h      int
 	prompt    rune // 0 or promptCmd (:): the input line holds a prompt
 	query     string
-	hit       int             // index in the current channel of the last search hit, -1 none
-	offs      map[string]int  // per channel: lines scrolled back from the newest
-	help      bool            // the ? popup is shown; the next key closes it
-	focus     paneFocus       // tab: which pane takes keys (chat, channels, nicks)
-	fq        string          // query typed in a focused side pane (fuzzy filter)
-	fsel      int             // selected row in the focused side pane
-	stamps    bool            // s: show "15:04 " before each line
-	pick      bool            // ctrl+o or /: the picker is open
-	pickWhat  pickKind        // what the picker lists: channels (ctrl+o), lines (/), speakers (S)
-	speakers  []string        // S: show only these nicks' lines; none = all
-	grep      string          // ctrl+g: show only lines fuzzy-matching this; "" off
-	marks     []string        // S picker: nicks marked with space, applied by enter
-	resumeTo  string          // channel to focus once it shows up (the last one of the previous run)
-	toasts    []toast         // notification cards, newest last; the tick drops old ones
-	helpOff   int             // help box scroll (j k, wheel) when it is taller than the screen
-	pq        textinput.Model // picker query (own input: a typed message survives)
-	files     []string        // pickFiles: the session's files, from git ls-files (filesMsg)
-	psel      int             // picker selection, an index in pickList
-	comp      completion      // tab completion state of the INSERT line
-	tools     bool            // t: show tool lines
-	mentions  bool            // m: show only direct lines (see shows)
+	hit       int                   // index in the current channel of the last search hit, -1 none
+	offs      map[string]int        // per channel: lines scrolled back from the newest
+	help      bool                  // the ? popup is shown; the next key closes it
+	focus     paneFocus             // tab: which pane takes keys (chat, channels, nicks)
+	fq        string                // query typed in a focused side pane (fuzzy filter)
+	fsel      int                   // selected row in the focused side pane
+	stamps    bool                  // s: show "15:04 " before each line
+	pick      bool                  // ctrl+o or /: the picker is open
+	pickWhat  pickKind              // what the picker lists: channels (ctrl+o), lines (/), speakers (S)
+	speakers  []string              // S: show only these nicks' lines; none = all
+	grep      string                // ctrl+g: show only lines fuzzy-matching this; "" off
+	marks     []string              // S picker: nicks marked with space, applied by enter
+	resumeTo  string                // channel to focus once it shows up (the last one of the previous run)
+	toasts    []toast               // notification cards, newest last; the tick drops old ones
+	helpOff   int                   // help box scroll (j k, wheel) when it is taller than the screen
+	pq        textinput.Model       // picker query (own input: a typed message survives)
+	files     []string              // pickFiles: the session's files, from git ls-files (filesMsg)
+	psel      int                   // picker selection, an index in pickList
+	comp      completion            // tab completion state of the INSERT line
+	tools     bool                  // t: show tool lines
+	mentions  bool                  // m: show only direct lines (see shows)
+	typing    map[string][]string   // channel -> nicks typing now (TypingMsg); a room's nick pane marks them
+	seen      func(ch string) error // the channel's newest line is on screen (read markers); nil = none
 }
 
 // New returns an App over m that sends channel text through send.
@@ -154,10 +162,44 @@ type toast struct {
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	before := a.m.Current().Name
+	model, cmd := a.update(msg)
+	app, ok := model.(App)
+	if !ok || app.seen == nil {
+		return model, cmd
+	}
+	ch := app.m.Current().Name
+	if ch != "" && (ch != before || newLineFor(msg, ch)) {
+		cmd = tea.Batch(cmd, seenCmd(app.seen, ch))
+	}
+	return app, cmd
+}
+
+// newLineFor reports whether msg adds a live line to channel ch.
+func newLineFor(msg tea.Msg, ch string) bool {
+	l, ok := msg.(LineMsg)
+	return ok && !l.Old && l.Ch == ch
+}
+
+// seenCmd reports to the program owner that channel ch is on screen; it runs off the UI loop.
+func seenCmd(seen func(ch string) error, ch string) tea.Cmd {
+	return func() tea.Msg {
+		_ = seen(ch) // read markers are best effort: a failed receipt shows nothing
+		return nil
+	}
+}
+
+// update applies msg (Update adds the read-marker hook around it).
+func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case SessionsMsg:
 		a.m = a.m.WithSessions(msg)
 		a = a.resume()
+	case TypingMsg:
+		if a.typing == nil {
+			a.typing = map[string][]string{}
+		}
+		a.typing[msg.Ch] = msg.Nicks
 	case LineMsg:
 		if msg.Old {
 			if m, err := a.m.AddHistory(msg.Ch, msg.L); err == nil {
@@ -1070,7 +1112,8 @@ func (a App) paneNicks() []string {
 	for i := 1; i < len(out); i++ {
 		switch {
 		case cur.Kind == model.RoomChan:
-			out[i] = mark(busy(a.pidOf(cur.Members[i-1].Nick))) + out[i]
+			nick := cur.Members[i-1].Nick
+			out[i] = roomMark(busy(a.pidOf(nick)), slices.Contains(a.typing[cur.Name], nick)) + out[i]
 		case i == 1: // the main agent
 			out[i] = mark(busy(cur.PID)) + out[i]
 		default:
@@ -1543,5 +1586,23 @@ func (a App) Fresh() App {
 		a.in.CursorDown()
 	}
 	a.in.SetCursorColumn(col)
+	return a
+}
+
+// roomMark is the status of a room member: busy (a session with a PID), typing, or idle.
+func roomMark(busy, typing bool) string {
+	if busy {
+		return busyMark
+	}
+	if typing {
+		return typingMark
+	}
+	return idleMark
+}
+
+// WithSeen sets the read-marker hook: it runs with a channel's name when the channel is shown
+// and a line arrives in it, or when it becomes current. Errors are ignored.
+func (a App) WithSeen(f func(ch string) error) App {
+	a.seen = f
 	return a
 }

@@ -27,6 +27,7 @@ type Client struct {
 	db       *dbutil.Database
 	user     id.UserID
 	onInvite func(Invite)
+	onTyping func(id.RoomID, []id.UserID)
 }
 
 // New opens the store, checks the device against the server, and starts E2EE.
@@ -152,6 +153,9 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 			if err := c.backfill(ctx, roomID, room.Timeline.PrevBatch, h); err != nil {
 				return err
 			}
+		}
+		if err := c.typingOf(roomID, room.Ephemeral.Events); err != nil {
+			return err
 		}
 		for i := range room.State.Events {
 			st := room.State.Events[i]

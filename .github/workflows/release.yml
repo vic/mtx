@@ -7,7 +7,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Linux only: ircc reads /proc and SO_PEERCRED.
+        # Linux only: mtx builds with the goolm tag.
         arch: [amd64, arm64]
     permissions:
       contents: write
@@ -24,10 +24,10 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: "0"
         run: |
-          name=ircc-${VERSION#v}-linux-${GOARCH}
+          name=mtx-${VERSION#v}-linux-${GOARCH}
           mkdir -p release
-          go build -trimpath -o release/ircc ./cmd/ircc
-          tar -C release -czf "release/$name.tar.gz" ircc
+          go build -trimpath -tags goolm -o release/mtx ./cmd/mtx
+          tar -C release -czf "release/$name.tar.gz" mtx
       - uses: softprops/action-gh-release@v3
         with:
           files: release/*.tar.gz

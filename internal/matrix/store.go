@@ -119,9 +119,22 @@ func (s *SyncStore) LoadNextBatch(ctx context.Context, user id.UserID) (string, 
 	return v.String, err
 }
 
-// migrate creates mtx's own tables. cryptohelper creates its tables on Init.
+// schemaVersion is PRAGMA user_version. Each step is one migration; a newer DB than this is an error.
+const schemaVersion = 1
+
+// migrate brings mtx's own tables to schemaVersion. cryptohelper creates its tables on Init.
 func migrate(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `
+	var v int
+	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&v); err != nil {
+		return err
+	}
+	if v > schemaVersion {
+		return fmt.Errorf("store schema %d is newer than this mtx (%d)", v, schemaVersion)
+	}
+	if v == schemaVersion {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS sync_state (
 	user_id    TEXT PRIMARY KEY,
 	filter_id  TEXT,
@@ -133,6 +146,19 @@ CREATE TABLE IF NOT EXISTS pending_events (
 );
 CREATE TABLE IF NOT EXISTS seen_events (
 	event_id TEXT PRIMARY KEY
-);`)
+);`); err != nil {
+		return err
+	}
+	_, err := db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
+	return err
+}
+
+// seenKeep is how many delivered event IDs are kept for redelivery dedupe; a replay window never
+// reaches back this far.
+const seenKeep = 10000
+
+// pruneSeen drops the oldest delivered IDs beyond seenKeep.
+func pruneSeen(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, `DELETE FROM seen_events WHERE rowid NOT IN (SELECT rowid FROM seen_events ORDER BY rowid DESC LIMIT ?)`, seenKeep)
 	return err
 }

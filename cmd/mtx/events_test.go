@@ -50,3 +50,9 @@ func TestTopicText(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "alice set topic: release day", got)
 }
+
+func TestLeftRoom(t *testing.T) {
+	require.True(t, leftRoom(member("@alice:s", "@alice:s", event.MembershipLeave, event.MembershipJoin)))
+	require.True(t, leftRoom(member("@alice:s", "@alice:s", event.MembershipBan, event.MembershipJoin)))
+	require.False(t, leftRoom(member("@alice:s", "@alice:s", event.MembershipJoin, event.MembershipInvite)))
+}

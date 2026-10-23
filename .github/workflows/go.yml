@@ -18,9 +18,9 @@ jobs:
           go fmt ./...
           go mod tidy
           git diff --exit-code
-          go vet ./...
+          go vet -tags goolm ./...
   test:
-    # Linux only: ircc reads /proc and SO_PEERCRED.
+    # Linux only: mtx builds with goolm and CGO_ENABLED=0 for the release binary.
     runs-on: ubuntu-latest
     needs: lint
     steps:
@@ -29,4 +29,4 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Test
-        run: go test -race -count=1 ./...
+        run: go test -race -count=1 -tags goolm ./...

@@ -188,7 +188,18 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 		if text, ok := membershipText(evt); ok {
 			r.emit(ui.LineMsg{Old: old, Ch: name, L: systemLine(evt, text)})
 		}
+		if evt.GetStateKey() == r.mx.UserID.String() && leftRoom(evt) {
+			r.unregister(evt.RoomID) // kicked, banned, left, or invite declined: the channel goes
+			r.emitRooms()
+			return nil
+		}
 		return r.emitMembers(evt.RoomID)
+	}
+	if evt.Type == event.StateRoomName {
+		if n := evt.Content.AsRoomName(); n != nil {
+			r.emit(ui.LineMsg{Old: old, Ch: name, L: systemLine(evt, fmt.Sprintf("%s renamed the room to %s", localpart(evt.Sender.String()), n.Name))})
+		}
+		return nil
 	}
 	if evt.Type == event.StateTopic {
 		if text, ok := topicText(evt); ok {
@@ -245,8 +256,12 @@ func (r *runner) send(ch, text string) error {
 	}
 	ctx, cancel := callCtx()
 	defer cancel()
+	content, err := r.content(ctx, room, text)
+	if err != nil {
+		return err
+	}
 	return matrix.Retry(ctx, sendAttempts, func() error {
-		_, err := r.mx.SendText(ctx, room, text)
+		_, err := r.mx.SendMessageEvent(ctx, room, event.EventMessage, content)
 		return err
 	})
 }

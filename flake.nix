@@ -1,12 +1,12 @@
 {
-  description = "ircc: a local IRC-like chat for your Claude Code sessions";
+  description = "mtx: a terminal IRC-like Matrix client";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
     { nixpkgs, ... }:
     let
-      # Linux only: ircc reads /proc and SO_PEERCRED.
+      # Linux only: mtx is built for Linux.
       systems = [
         "x86_64-linux"
         "aarch64-linux"

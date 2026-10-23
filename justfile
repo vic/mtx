@@ -1,8 +1,8 @@
 build:
-    nix-shell -p go --run 'go build -o ircc ./cmd/ircc'
+    nix-shell -p go --run 'go build -tags goolm -o mtx ./cmd/mtx'
 
 test:
-    nix-shell -p go --run 'go test ./...'
+    nix-shell -p go --run 'go test -tags goolm ./...'
 
 fmt:
     nix-shell -p go --run 'go fmt ./...'
@@ -11,4 +11,4 @@ run:
     nix-shell -p go --run 'go run ./...'
 
 vet:
-    nix-shell -p go --run 'go vet ./...'
+    nix-shell -p go --run 'go vet -tags goolm ./...'

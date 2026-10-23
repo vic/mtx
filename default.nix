@@ -1,12 +1,13 @@
 { pkgs ? import <nixpkgs> { } }:
 pkgs.buildGoModule {
-  pname = "ircc";
+  pname = "mtx";
   version = "0.1.0";
   src = pkgs.lib.fileset.toSource {
     root = ./.;
     fileset = pkgs.lib.fileset.unions [ ./cmd ./internal ./go.mod ./go.sum ];
   };
-  vendorHash = "sha256-Im0gy9h9JYcQuD5gktHmGb+yNEuiDmHu4yIyU/y2hH8=";
+  vendorHash = pkgs.lib.fakeHash; # recompute on first nix build (needs approval)
   env.CGO_ENABLED = 0;
-  subPackages = [ "cmd/ircc" ];
+  subPackages = [ "cmd/mtx" ];
+  tags = [ "goolm" ];
 }

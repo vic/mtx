@@ -166,6 +166,7 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 			if st.Type == event.StateMember {
 				m.HandleMemberEvent(ctx, st)
 			}
+			c.cli.StateStoreSyncHandler(ctx, st) // room state (encryption, members) for sends and lookups
 			if err := c.handleOnce(ctx, st, h); err != nil {
 				return err
 			}
@@ -173,10 +174,16 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		for i := range room.Timeline.Events {
 			evt := room.Timeline.Events[i]
 			evt.RoomID = roomID
+			if evt.StateKey != nil {
+				c.cli.StateStoreSyncHandler(ctx, evt)
+			}
 			if err := c.handleOnce(ctx, evt, h); err != nil {
 				return err
 			}
 		}
+	}
+	if err := pruneSeen(ctx, c.db.RawDB); err != nil {
+		return err
 	}
 	return c.store().SaveNextBatch(ctx, c.user, resp.NextBatch)
 }

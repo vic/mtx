@@ -27,7 +27,7 @@ type cmds struct {
 func (c *cmds) cmd(ch string, cm model.Cmd) tea.Cmd {
 	return func() tea.Msg {
 		if err := c.do(ch, cm); err != nil {
-			return ui.NoteMsg{L: dim(err.Error())}
+			return ui.ToastMsg{Text: err.Error(), Err: true}
 		}
 		return nil
 	}

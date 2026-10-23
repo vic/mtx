@@ -71,3 +71,9 @@ func parseIfRaw(c *event.Content, typ event.Type) error {
 	}
 	return c.ParseRaw(typ)
 }
+
+// leftRoom reports whether a membership event removes the user from the room (leave or ban).
+func leftRoom(evt *event.Event) bool {
+	cur := evt.Content.AsMember()
+	return cur != nil && (cur.Membership == event.MembershipLeave || cur.Membership == event.MembershipBan)
+}

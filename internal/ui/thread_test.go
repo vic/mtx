@@ -14,15 +14,18 @@ import (
 	"mtx/internal/model"
 )
 
-// TestNextThreadCycles: T steps main, head 1, head 2, main.
-func TestNextThreadCycles(t *testing.T) {
+// TestNextThreadToggles: T toggles main thread and the last thread opened; it never walks the other heads.
+func TestNextThreadToggles(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1"}, {Root: "$a2"}}}
 	a = a.nextThread()
-	require.Equal(t, "$a1", a.thread)
+	require.Equal(t, "$a1", a.thread, "first T with no thread opened: first head")
+	a = a.selectThread("$a2")
 	a = a.nextThread()
-	require.Equal(t, "$a2", a.thread)
+	require.Equal(t, "", a.thread, "T from a thread: main")
+	a = a.nextThread()
+	require.Equal(t, "$a2", a.thread, "T from main: the last thread opened, not the next head")
 	a = a.nextThread()
 	require.Equal(t, "", a.thread)
 }

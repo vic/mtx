@@ -13,26 +13,25 @@ type ThreadsMsg struct {
 	Heads []model.Thread
 }
 
-// nextThread moves the thread selection: main chat, then each head in order, then main again.
+// nextThread (T) toggles between the main thread and the last thread opened. From main it goes to
+// the last thread; with none opened yet, to the first head.
 func (a App) nextThread() App {
 	heads := a.threads[a.m.Current().Name]
-	if len(heads) == 0 {
-		a = a.selectThread("")
-		return a
+	switch {
+	case a.thread != "":
+		return a.selectThread("")
+	case a.lastThread != "" && a.hasHead(a.lastThread):
+		return a.selectThread(a.lastThread)
+	case len(heads) > 0:
+		return a.selectThread(heads[0].Root)
 	}
-	i := -1
-	for k, h := range heads {
-		if h.Root == a.thread {
-			i = k
-		}
-	}
-	if i+1 >= len(heads) {
-		a = a.selectThread("")
-	} else {
-		a = a.selectThread(heads[i+1].Root)
-	}
-	a.hit, a.offs = -1, nil
 	return a
+}
+
+// hasHead reports whether root is a head in the current channel.
+func (a App) hasHead(root string) bool {
+	_, ok := a.headOf(root)
+	return ok
 }
 
 // inThread reports whether l belongs to the selected thread (the head itself included).
@@ -90,6 +89,9 @@ func (a App) threadAt(label string) (model.Thread, bool) {
 // selectThread shows root in the chat pane ("" = main chat) and marks it read.
 func (a App) selectThread(root string) App {
 	a.thread, a.hit, a.offs = root, -1, nil
+	if root != "" {
+		a.lastThread = root
+	}
 	if h, ok := a.headOf(root); ok {
 		if a.seenLive == nil {
 			a.seenLive = map[string]int{}

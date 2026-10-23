@@ -138,6 +138,7 @@ type App struct {
 	threads    map[string][]model.Thread                         // per channel: thread heads (ThreadsMsg)
 	thread     string                                            // selected thread root ("" = main chat): the chat pane shows it, sends go to it
 	lastThread string                                            // the last thread opened (T toggles between main and this)
+	mainUnread map[string]int                                    // per channel: main-thread lines not on screen (main thread row count)
 	seenLive   map[string]int                                    // per thread root: Live replies when it was last read
 }
 
@@ -170,6 +171,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := a.m.Current().Name
 	model, cmd := a.update(msg)
 	app, ok := model.(App)
+	if ok && app.thread == "" { // on the main thread: its unread count is read
+		delete(app.mainUnread, app.m.Current().Name)
+	}
 	if !ok || app.seen == nil {
 		return model, cmd
 	}
@@ -228,6 +232,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else if next, err := a.addLine(msg.Ch, msg.L); err == nil {
 			a = next
+			if msg.L.Thread == "" && (msg.Ch != a.m.Current().Name || a.thread != "") { // a main line not on screen
+				a.mainUnread = bumpMain(a.mainUnread, msg.Ch)
+			}
 		} else {
 			a = a.note("line for unknown channel " + msg.Ch)
 		}
@@ -558,6 +565,7 @@ func (a App) focusName(name string) App {
 		if c.Name == name && name != from {
 			a.m, _ = a.m.Focus(i)                   // i is in range: it comes from Channels
 			a.hit, a.speakers, a.grep = -1, nil, "" // the speaker and grep filters belong to the channel they were set in
+			a.thread = ""                           // a channel opens on its main thread
 		}
 	}
 	return a
@@ -1395,7 +1403,7 @@ func (a App) mention(nick string) App {
 func (a App) sides() sidePanes {
 	chans, _ := a.paneItems(focusChans)
 	nicks, _ := a.paneItems(focusNicks)
-	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread, unread: a.unreadAll()}
+	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread, unread: a.unreadAll(), mainUnread: a.mainUnread[a.m.Current().Name]}
 }
 
 // lineStep moves the cursor (the reversed line) one line down (to newer) or up,

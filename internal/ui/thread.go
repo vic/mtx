@@ -164,7 +164,7 @@ func midTitle(p sidePanes, name string) string {
 func threadsRow(p sidePanes, i, w int) string {
 	focused := p.focus == focusThreads && p.sel == i
 	if i == 0 {
-		return mainThreadRow(p.thread == "" || focused, w)
+		return mainThreadRow(p.thread == "" || focused, p.mainUnread, w)
 	}
 	if i-1 >= len(p.heads) {
 		return fit(cell, "", w)
@@ -178,13 +178,6 @@ func threadsRow(p sidePanes, i, w int) string {
 }
 
 // mainThreadRow is the main thread row: marked when selected.
-func mainThreadRow(selected bool, w int) string {
-	mark := "  "
-	if selected {
-		mark = "▸ "
-	}
-	return fit(cell, mark+mainThreadLabel, w)
-}
 
 // nextPane is the pane Tab moves to: chat, channels, nicks, then the threads box when it shows.
 func (a App) nextPane() paneFocus {
@@ -198,4 +191,26 @@ func (a App) nextPane() paneFocus {
 		}
 	}
 	return focusChat
+}
+
+// mainThreadRow is the main thread row: marked when selected, with its unread count.
+func mainThreadRow(selected bool, unread, w int) string {
+	mark := "  "
+	if selected {
+		mark = "▸ "
+	}
+	label := mark + mainThreadLabel
+	if unread > 0 {
+		return fit(cell, label, w-3) + fit(cell, unreadMark.Render(strconv.Itoa(unread)), 3)
+	}
+	return fit(cell, label, w)
+}
+
+// bumpMain counts one more main-thread line in channel ch.
+func bumpMain(m map[string]int, ch string) map[string]int {
+	if m == nil {
+		m = map[string]int{}
+	}
+	m[ch]++
+	return m
 }

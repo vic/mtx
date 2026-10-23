@@ -568,6 +568,7 @@ type sidePanes struct {
 	heads        []model.Thread // thread heads of the current channel (top rows of the chat column)
 	thread       string         // selected head root
 	unread       []int          // per head: live replies not yet read (same order as heads)
+	mainUnread   int            // main-thread lines not on screen (the main thread row)
 }
 
 // title is a side pane's title: "▸name query" while it has focus.

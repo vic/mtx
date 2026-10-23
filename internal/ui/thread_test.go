@@ -149,3 +149,32 @@ func TestThreadsBoxAboveChat(t *testing.T) {
 		t.Fatalf("threads box: main thread then head expected:\n%s", s)
 	}
 }
+
+// TestMainThreadUnread: main lines arriving while a thread is open count on the main thread row;
+// opening the main thread clears them; a channel pick returns to main.
+func TestMainThreadUnread(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1, Live: 1}}}
+	a = a.selectThread("$a1")
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "main msg", ID: "$m1"}})
+	a = next.(App)
+	require.Equal(t, 1, a.mainUnread["#a"])
+	require.Contains(t, ansi.Strip(a.screen()), "1")
+	a = a.selectThread("")
+	next, _ = a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "again", ID: "$m2"}})
+	a = next.(App)
+	require.Equal(t, 0, a.mainUnread["#a"], "on main: nothing counted and nothing kept")
+}
+
+// TestChannelPickReturnsToMain: picking a channel while in a thread lands on that channel's main thread.
+func TestChannelPickReturnsToMain(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1"}}}
+	a = a.selectThread("$a1")
+	next, _ := a.Update(RoomsMsg{"#b"})
+	a = next.(App).focusName("#b")
+	require.Equal(t, "#b", a.Channel())
+	require.Equal(t, "", a.thread)
+}

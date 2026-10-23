@@ -846,7 +846,7 @@ func (a App) chanNames() []string {
 type pickKind uint8
 
 const (
-	pickChans     pickKind = iota // ctrl+o: channels and @nicks
+	pickChans     pickKind = iota // ctrl+o: channels, @nicks and threads
 	pickLines                     // /: the current channel's shown lines; enter jumps
 	pickSpeakers                  // S: who spoke here; enter shows only that nick (vic 2026-10-23)
 	pickInvite                    // I: who can be invited to this room; enter invites (vic 2026-10-23)
@@ -882,6 +882,9 @@ func (a App) pickSource() []string {
 	switch a.pickWhat {
 	case pickChans:
 		out = a.chanNames()
+		for _, h := range a.threads[a.m.Current().Name] { // threads of this channel
+			out = append(out, threadLabel(h))
+		}
 		cur := a.m.Current()
 		nicks := chanNicks(cur, a.user)[1:] // this channel: plain nicks
 		for _, c := range a.m.Channels() {  // other sessions: agents only as agent@session, never plain
@@ -974,7 +977,9 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			a.hit, a.query = ms[a.psel].idx, a.pq.Value() // n / N go on from here
 			a = a.showHit()
 		} else if a.psel < len(ms) {
-			if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok {
+			if h, ok := a.threadAt(ms[a.psel].name); ok { // a thread: the chat pane shows it
+				a.thread, a.hit, a.offs = h.Root, -1, nil
+			} else if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok {
 				a.mode = Insert
 				a.in.SetValue(a.in.Value() + "@" + nick + " ")
 				a.in.MoveToEnd()
@@ -1191,13 +1196,19 @@ const (
 	focusChat paneFocus = iota
 	focusChans
 	focusNicks
+	focusThreads // the thread heads at the top of the chat column (tab cycles here too)
 )
 
 // paneItems is the focused side pane's rows: names (channels, or nicks with busy
 // marks) filtered fuzzily by fq, and the plain names to act on. Unfocused or
 // with no query, every row in pane order.
 func (a App) paneItems(f paneFocus) (show, names []string) {
-	if f == focusChans {
+	if f == focusThreads {
+		for _, h := range a.threads[a.m.Current().Name] {
+			names = append(names, threadLabel(h))
+		}
+		show = names
+	} else if f == focusChans {
 		names = a.chanNames()
 		show = names
 	} else {
@@ -1236,7 +1247,7 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		a.focus = focusChat
 	case "tab":
-		a.focus, a.fq, a.fsel = (a.focus+1)%3, "", 0
+		a.focus, a.fq, a.fsel = (a.focus+1)%4, "", 0
 	case "up", "ctrl+p":
 		a.fsel = max(a.fsel-1, 0)
 	case "down", "ctrl+n":
@@ -1249,7 +1260,11 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if a.fsel >= len(names) {
 			return a, nil
 		}
-		if a.focus == focusChans {
+		if a.focus == focusThreads {
+			if h, ok := a.threadAt(names[a.fsel]); ok {
+				a.thread, a.hit, a.offs = h.Root, -1, nil
+			}
+		} else if a.focus == focusChans {
 			a = a.focusName(names[a.fsel])
 		} else {
 			a = a.mention(names[a.fsel])

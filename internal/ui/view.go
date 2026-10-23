@@ -270,7 +270,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			}
 			midCell := ""
 			if i < k {
-				midCell = fit(cell, threadRow(p.heads[i], p.heads[i].Root == p.thread, mid), mid)
+				midCell = fit(cell, threadRow(p.heads[i], p.heads[i].Root == p.thread || (p.focus == focusThreads && i == p.sel), mid), mid)
 			} else {
 				midCell = lineRow(lines, of, shown, hit, i-k, mid, " ", code, q)
 			}

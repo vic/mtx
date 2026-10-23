@@ -55,3 +55,18 @@ func threadRow(h model.Thread, selected bool, w int) string {
 	}
 	return fit(cell, fmt.Sprintf("%s%s: %s (%d)", mark, h.Nick, h.Text, h.Count), w)
 }
+
+// threadLabel is a head as the thread pane and the Ctrl+O picker list it.
+func threadLabel(h model.Thread) string {
+	return fmt.Sprintf("thread: %s: %s (%d)", h.Nick, h.Text, h.Count)
+}
+
+// threadAt is the head that label names in the current channel.
+func (a App) threadAt(label string) (model.Thread, bool) {
+	for _, h := range a.threads[a.m.Current().Name] {
+		if threadLabel(h) == label {
+			return h, true
+		}
+	}
+	return model.Thread{}, false
+}

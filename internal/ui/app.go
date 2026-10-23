@@ -639,6 +639,9 @@ func (a App) inputLine() (label, input, hint string) {
 		if u := a.cmdUsage(); u != "" { // typing a /command: its usage is the hint (vic 2026-10-23)
 			return "INSERT", prompt + withCursor(a.in.Value(), inputPos(a.in)), u
 		}
+		if a.edit != nil { // C: the input is the edited text; enter saves it
+			return "EDIT", prompt + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "save edit", "esc", "cancel")
+		}
 		hint := keyHint("enter", "send", "/", "command", "@", "mention", "tab", "complete", "↑↓", "line", "C-t", "files", "C-f", "file block", "C-o", "pick", "esc", "normal")
 		if a.quote != nil { // the replied-to line is shown here, not in the input
 			hint = keyHint("re", "<"+a.quote.Nick+"> "+a.quote.Text) + "   " + hint
@@ -646,18 +649,20 @@ func (a App) inputLine() (label, input, hint string) {
 		return "INSERT", prompt + withCursor(a.in.Value(), inputPos(a.in)), hint
 	case a.focus == focusChans:
 		return "CHANNELS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "join", "tab", "nicks", "esc", "chat")
+	case a.focus == focusThreads:
+		return "THREADS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "open thread", "tab", "chat", "esc", "chat")
 	case a.focus == focusNicks:
 		return "NICKS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "mention", "tab", "chat", "esc", "chat")
 	}
-	return "NORMAL", a.footer(), keyHint("↑↓", "line", "C-n/C-p", "channel", "tab", "panes", "C-t", "files", "C-f", "file block", "C-o", "pick", "i", "type", "?", "help", "$", "shell", "!", "capture")
+	return "NORMAL", a.footer(), keyHint("↑↓", "line", "C-n/C-p", "channel", "tab", "panes", "C-t", "files", "C-f", "file block", "C-o", "pick", "i", "new", "a", "reply", "T", "thread", "?", "help", "$", "shell", "!", "capture")
 }
 
 // footer is the last row outside INSERT: more keys and the toggle states, since
 // there is no input to show (vic 2026-10-23).
 func (a App) footer() string {
 	// states first: on a narrow screen the keys fall off the end (they are in ? help)
-	return fit(cell, " "+keyHint("t", "tools:"+onOff(a.tools), "m", "mentions:"+onOff(a.mentions), "s", "time:"+onOff(a.stamps),
-		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "A", "reply @", ":", "literal"), max(a.w, 1)) // one row
+	return fit(cell, " "+keyHint("t", "thread:"+cmp.Or(threadState(a.thread), "main"), "m", "mentions:"+onOff(a.mentions), "s", "time:"+onOff(a.stamps),
+		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "C", "edit", "O", "thread reply", ":", "literal"), max(a.w, 1)) // one row
 }
 
 // View is the full-screen frame; screen is its text.

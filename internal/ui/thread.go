@@ -214,3 +214,11 @@ func bumpMain(m map[string]int, ch string) map[string]int {
 	m[ch]++
 	return m
 }
+
+// threadState is the thread name the modeline shows: "" for main, else the thread's head nick.
+func threadState(root string) string {
+	if root == "" {
+		return ""
+	}
+	return "open"
+}

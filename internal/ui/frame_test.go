@@ -553,7 +553,7 @@ func TestPromptOnlyInInsert(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	last := func(a App) string { rs := strings.Split(ansi.Strip(a.screen()), "\n"); return rs[len(rs)-1] }
-	if l := last(a); strings.HasPrefix(l, ">") || !strings.Contains(l, "tools:off") || !strings.Contains(l, "speaker:all") {
+	if l := last(a); strings.HasPrefix(l, ">") || !strings.Contains(l, "thread:main") || !strings.Contains(l, "speaker:all") {
 		t.Fatalf("normal last row %q", l)
 	}
 	a, _ = press(t, a, "i")

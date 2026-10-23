@@ -1,0 +1,102 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/mockserver"
+
+	tea "charm.land/bubbletea/v2"
+
+	"mtx/internal/model"
+	"mtx/internal/ui"
+)
+
+const testRoom = id.RoomID("!r:mock.test")
+
+// fakeRooms serves join, joined rooms, members and send. sent collects message bodies.
+func fakeRooms(ts *mockserver.MockServer, sent *[]string, mu *sync.Mutex) {
+	ts.Router.HandleFunc("POST /_matrix/client/v3/join/{alias}", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"room_id":%q}`, testRoom)
+	})
+	ts.Router.HandleFunc("GET /_matrix/client/v3/joined_rooms", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"joined_rooms":[%q]}`, testRoom)
+	})
+	ts.Router.HandleFunc("GET /_matrix/client/v3/rooms/{roomID}/joined_members", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"joined":{"@alice:mock.test":{},"@bob:mock.test":{}}}`)
+	})
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{roomID}/send/{type}/{txn}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		var m struct {
+			Body string `json:"body"`
+		}
+		_ = json.Unmarshal(b, &m)
+		mu.Lock()
+		*sent = append(*sent, m.Body)
+		mu.Unlock()
+		fmt.Fprint(w, `{"event_id":"$sent"}`)
+	})
+}
+
+// TestRunnerJoinSendReceive: /join &r focuses the room, send reaches the server, a received
+// message becomes a line for the room, and our own echo is not shown twice.
+func TestRunnerJoinSendReceive(t *testing.T) {
+	ctx := context.Background()
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var sent []string
+	fakeRooms(ts, &sent, &mu)
+
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	var out []tea.Msg
+	var outMu sync.Mutex
+	r := newRunner(cli, func(m tea.Msg) { outMu.Lock(); out = append(out, m); outMu.Unlock() })
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+
+	require.NoError(t, cs.join("&r"))
+	require.NoError(t, r.send("&r", "hi"))
+	require.Equal(t, []string{"hi"}, sent)
+
+	require.NoError(t, r.onEvent(ctx, &event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$b1", Sender: "@bob:mock.test",
+		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "yo"}}}, nil))
+	require.NoError(t, r.onEvent(ctx, &event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$a1", Sender: "@alice:mock.test",
+		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "hi"}}}, nil))
+
+	outMu.Lock()
+	defer outMu.Unlock()
+	var focus ui.FocusMsg
+	var lines []model.Line
+	for _, m := range out {
+		switch v := m.(type) {
+		case ui.FocusMsg:
+			focus = v
+		case ui.LineMsg:
+			require.Equal(t, "&r", v.Ch)
+			lines = append(lines, v.L)
+		}
+	}
+	require.Equal(t, ui.FocusMsg("&r"), focus)
+	require.Len(t, lines, 1, "own echo is not shown again")
+	require.Equal(t, "bob", lines[0].Nick)
+	require.Equal(t, "yo", lines[0].Text)
+}
+
+// TestRegisterClashUsesRoomID: two rooms with the same alias localpart get distinct names.
+func TestRegisterClashUsesRoomID(t *testing.T) {
+	r := newRunner(nil, func(tea.Msg) {})
+	a := r.register("!one:s", "#review:s")
+	b := r.register("!two:s", "#review:t")
+	require.Equal(t, "&review", a)
+	require.Equal(t, "&two", b)
+}

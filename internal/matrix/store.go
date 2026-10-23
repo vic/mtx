@@ -9,9 +9,9 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix/id"
+	_ "modernc.org/sqlite"
 )
 
 // sidecars are SQLite's WAL files next to the DB; they inherit the DB's security.

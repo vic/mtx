@@ -132,26 +132,34 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 			if st.Type == event.StateMember {
 				m.HandleMemberEvent(ctx, st)
 			}
+			if err := c.handleOnce(ctx, st, h); err != nil {
+				return err
+			}
 		}
 		for i := range room.Timeline.Events {
 			evt := room.Timeline.Events[i]
 			evt.RoomID = roomID
-			done, err := c.delivered(ctx, evt.ID)
-			if err != nil {
-				return err
-			}
-			if done {
-				continue
-			}
-			if err := c.deliver(ctx, evt, h); err != nil {
-				return err
-			}
-			if err := c.markDelivered(ctx, evt.ID); err != nil {
+			if err := c.handleOnce(ctx, evt, h); err != nil {
 				return err
 			}
 		}
 	}
 	return c.store().SaveNextBatch(ctx, c.user, resp.NextBatch)
+}
+
+// handleOnce delivers evt unless it was delivered before, then marks it.
+func (c *Client) handleOnce(ctx context.Context, evt *event.Event, h Handler) error {
+	done, err := c.delivered(ctx, evt.ID)
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
+	}
+	if err := c.deliver(ctx, evt, h); err != nil {
+		return err
+	}
+	return c.markDelivered(ctx, evt.ID)
 }
 
 // deliver decrypts encrypted events and calls h. A handler panic becomes an error.
@@ -161,8 +169,10 @@ func (c *Client) deliver(ctx context.Context, evt *event.Event, h Handler) (err 
 			err = fmt.Errorf("handler panicked on %s: %v", evt.ID, r)
 		}
 	}()
-	if err := evt.Content.ParseRaw(evt.Type); err != nil {
-		return fmt.Errorf("parse %s: %w", evt.ID, err)
+	if evt.Content.Parsed == nil { // state events were parsed for HandleMemberEvent
+		if err := evt.Content.ParseRaw(evt.Type); err != nil {
+			return fmt.Errorf("parse %s: %w", evt.ID, err)
+		}
 	}
 	if evt.Type == event.EventEncrypted {
 		dec, decErr := c.helper.Decrypt(ctx, evt)
@@ -203,3 +213,6 @@ func (c *Client) markDelivered(ctx context.Context, eventID id.EventID) error {
 	_, err := c.db.RawDB.ExecContext(ctx, `INSERT OR IGNORE INTO seen_events(event_id) VALUES(?)`, eventID.String())
 	return err
 }
+
+// MX exposes the mautrix client for room and account calls outside the sync loop.
+func (c *Client) MX() *mautrix.Client { return c.cli }

@@ -66,18 +66,45 @@ func (c *Client) retryPending(ctx context.Context, h Handler) error {
 			return fmt.Errorf("pending %s: %w", r.id, err)
 		}
 		dec, err := c.helper.Decrypt(ctx, &evt)
-		if errors.Is(err, crypto.NoSessionFound) {
-			continue
-		}
+		outcome, err := retryDecision(err)
 		if err != nil {
 			return fmt.Errorf("pending %s: %w", r.id, err)
 		}
+		if outcome == retryKeep {
+			continue
+		}
 		if _, err := c.db.RawDB.ExecContext(ctx, `DELETE FROM pending_events WHERE event_id = ?`, r.id); err != nil {
 			return err
+		}
+		if outcome == retryDrop {
+			c.cli.Log.Warn().Str("event_id", r.id).Msg("key withheld by sender: event dropped")
+			continue
 		}
 		if err := h(WithLate(ctx), dec, nil); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+type retryOutcome int
+
+const (
+	retryDelivered retryOutcome = iota // decrypted: deliver it
+	retryKeep                          // no session yet: stays parked
+	retryDrop                          // the sender withheld the key: final, dropped
+)
+
+// retryDecision classifies a decrypt error from the retry loop. Only an unknown failure is an error,
+// so one bad event cannot stop sync.
+func retryDecision(err error) (retryOutcome, error) {
+	switch {
+	case err == nil:
+		return retryDelivered, nil
+	case errors.Is(err, crypto.NoSessionFound):
+		return retryKeep, nil
+	case errors.Is(err, crypto.ErrGroupSessionWithheld):
+		return retryDrop, nil
+	}
+	return retryKeep, err
 }

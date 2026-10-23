@@ -1,9 +1,13 @@
 package matrix
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+
+	"context"
+	"maunium.net/go/mautrix/crypto"
+
 	"net/http"
 	"testing"
 
@@ -79,4 +83,19 @@ func TestUndecryptableIsShownLateOnce(t *testing.T) {
 	var n int
 	require.NoError(t, bob.db.RawDB.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM pending_events`).Scan(&n))
 	require.Equal(t, 0, n, "delivered late: nothing parked")
+}
+
+// TestRetryDecision: a withheld key is final (dropped, not an error, sync goes on); a missing
+// session stays parked; any other failure is an error.
+func TestRetryDecision(t *testing.T) {
+	keep, err := retryDecision(crypto.NoSessionFound)
+	require.Equal(t, retryKeep, keep)
+	require.NoError(t, err)
+
+	drop, err := retryDecision(fmt.Errorf("group session has been withheld: %w", crypto.ErrGroupSessionWithheld))
+	require.Equal(t, retryDrop, drop)
+	require.NoError(t, err)
+
+	_, err = retryDecision(errors.New("bad mac"))
+	require.Error(t, err)
 }

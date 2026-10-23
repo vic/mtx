@@ -204,7 +204,11 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 	cur := m.Current()
 	ir := append(sugg, inputRows(input, w, h)...) // the suggestion row sits right above the input
 	n := paneRows(w, h, len(ir))
-	lines, of := tailRows(shown, n, off, textWidth(w, h), wrap)
+	k := 0 // thread head rows at the top of the chat column (wide layout only)
+	if wide(w, h) {
+		k = threadRowCount(p.heads, n)
+	}
+	lines, of := tailRows(shown, n-k, off, textWidth(w, h), wrap)
 	code := codeRows(lines, of, shown)
 
 	var rows []string
@@ -264,7 +268,13 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			if p.focus == focusNicks && i == p.sel && i < len(p.nicks) {
 				nc = fit(current, " "+p.nicks[i], nickW)
 			}
-			rows = append(rows, edge(0, "│")+cc+edge(1, "│")+lineRow(lines, of, shown, hit, i, mid, " ", code, q)+
+			midCell := ""
+			if i < k {
+				midCell = fit(cell, threadRow(p.heads[i], p.heads[i].Root == p.thread, mid), mid)
+			} else {
+				midCell = lineRow(lines, of, shown, hit, i-k, mid, " ", code, q)
+			}
+			rows = append(rows, edge(0, "│")+cc+edge(1, "│")+midCell+
 				edge(2, "│")+nc+edge(3, "│"))
 		}
 		rows = append(rows, edge(0, "└")+line(0).Render(strings.Repeat("─", chanW))+edge(1, "┴")+line(1).Render(strings.Repeat("─", mid))+
@@ -550,6 +560,8 @@ type sidePanes struct {
 	focus        paneFocus
 	sel          int
 	q            string
+	heads        []model.Thread // thread heads of the current channel (top rows of the chat column)
+	thread       string         // selected head root
 }
 
 // title is a side pane's title: "▸name query" while it has focus.

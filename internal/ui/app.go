@@ -135,6 +135,8 @@ type App struct {
 	typing    map[string][]string                               // channel -> nicks typing now (TypingMsg); a room's nick pane marks them
 	reply     func(ch string, to model.Line, text string) error // A + send: a reply to a line with an ID; nil = plain send with a quote
 	seen      func(ch string) error                             // the channel's newest line is on screen (read markers); nil = none
+	threads   map[string][]model.Thread                         // per channel: thread heads (ThreadsMsg)
+	thread    string                                            // selected thread root ("" = main chat): the chat pane shows it, sends go to it
 }
 
 // New returns an App over m that sends channel text through send.
@@ -196,6 +198,14 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SessionsMsg:
 		a.m = a.m.WithSessions(msg)
 		a = a.resume()
+	case ThreadsMsg:
+		if a.threads == nil {
+			a.threads = map[string][]model.Thread{}
+		}
+		a.threads[msg.Ch] = msg.Heads
+		if a.thread != "" && !slices.ContainsFunc(msg.Heads, func(h model.Thread) bool { return h.Root == a.thread }) && msg.Ch == a.m.Current().Name {
+			a.thread = "" // the selected thread is gone
+		}
 	case TypingMsg:
 		if a.typing == nil {
 			a.typing = map[string][]string{}
@@ -419,6 +429,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.openPrompt(promptShell), nil
 	case Scroll, HalfPage, Top, Bottom:
 		a = a.scroll(act)
+	case ThreadNext:
+		a = a.nextThread()
 	case ToggleTools, ToggleMentions:
 		a.tools = a.tools != (act.Kind == ToggleTools)
 		a.mentions = a.mentions != (act.Kind == ToggleMentions)
@@ -545,6 +557,10 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 	case strings.HasPrefix(text, "/"):
 		return a.runCmd(text)
 	default:
+		if a.thread != "" && a.reply != nil { // a thread send: the thread relation carries the root
+			to := model.Line{ID: a.thread, Thread: a.thread}
+			return a, func() tea.Msg { return SendResultMsg{Ch: ch, Text: text, Err: a.reply(ch, to, text)} }
+		}
 		if a.quote != nil && a.reply != nil { // a reply: the relation carries the quoted line, the text is sent as typed
 			to := *a.quote
 			a.quote = nil
@@ -782,7 +798,7 @@ func mentionsUser(text, user string) bool {
 func (a App) lines(c model.Channel) []model.Line {
 	var out []model.Line
 	for _, l := range c.Lines.All() {
-		if a.shows(c.Kind, l) {
+		if a.shows(c.Kind, l) && (c.Name != a.m.Current().Name || a.inThread(l)) {
 			out = append(out, l)
 		}
 	}
@@ -1342,7 +1358,7 @@ func (a App) mention(nick string) App {
 func (a App) sides() sidePanes {
 	chans, _ := a.paneItems(focusChans)
 	nicks, _ := a.paneItems(focusNicks)
-	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, q: a.fq}
+	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread}
 }
 
 // lineStep moves the cursor (the reversed line) one line down (to newer) or up,

@@ -171,3 +171,11 @@ func (m Model) WithAgents(ch string, agents []Agent) (Model, error) {
 	}
 	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
 }
+
+// Thread is a thread head: the root message of a thread in a channel.
+type Thread struct {
+	Root  string // root event ID
+	Nick  string
+	Text  string
+	Count int // replies so far
+}

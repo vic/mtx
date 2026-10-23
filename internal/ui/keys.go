@@ -36,6 +36,7 @@ const (
 	Help
 	ToggleTools
 	ToggleMentions
+	ThreadNext
 	FocusPane
 	NextTurn
 	PrevTurn
@@ -145,6 +146,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: ToggleTools}, Normal, ""
 		case "m":
 			return Action{Kind: ToggleMentions}, Normal, ""
+		case "T":
+			return Action{Kind: ThreadNext}, Normal, ""
 		case "?":
 			return Action{Kind: Help}, Normal, ""
 		case ":":

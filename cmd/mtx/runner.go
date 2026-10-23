@@ -30,14 +30,16 @@ type runner struct {
 	emit func(tea.Msg)
 
 	mu     sync.Mutex
-	last   map[id.RoomID]id.EventID // newest message per room (read markers)
-	marked map[id.RoomID]id.EventID // newest message per room already marked read
-	names  map[string]id.RoomID     // "&name" -> room
-	ids    map[id.RoomID]string     // room -> "&name"
+	last   map[id.RoomID]id.EventID     // newest message per room (read markers)
+	marked map[id.RoomID]id.EventID     // newest message per room already marked read
+	heads  map[id.RoomID][]model.Thread // thread heads per room
+	texts  map[id.EventID]text2         // recent message text for thread roots
+	names  map[string]id.RoomID         // "&name" -> room
+	ids    map[id.RoomID]string         // room -> "&name"
 }
 
 func newRunner(mx *mautrix.Client, emit func(tea.Msg)) *runner {
-	return &runner{mx: mx, emit: emit, names: map[string]id.RoomID{}, ids: map[id.RoomID]string{}, last: map[id.RoomID]id.EventID{}, marked: map[id.RoomID]id.EventID{}}
+	return &runner{mx: mx, emit: emit, names: map[string]id.RoomID{}, ids: map[id.RoomID]string{}, last: map[id.RoomID]id.EventID{}, marked: map[id.RoomID]id.EventID{}, heads: map[id.RoomID][]model.Thread{}, texts: map[id.EventID]text2{}}
 }
 
 func callCtx() (context.Context, context.CancelFunc) {
@@ -225,6 +227,8 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 		return nil
 	}
 	r.emit(ui.LineMsg{Old: old, Ch: name, L: model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: dim, ID: evt.ID.String(), Thread: threadOf(evt)}})
+	r.noteText(evt, text)
+	r.noteThread(evt, text)
 	return nil
 }
 

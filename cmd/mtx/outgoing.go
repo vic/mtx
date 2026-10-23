@@ -47,7 +47,10 @@ func (r *runner) reply(ch string, to model.Line, text string) error {
 	if err != nil {
 		return err
 	}
-	if to.ID != "" {
+	if to.Thread != "" { // a thread reply: the relation names the root; the fallback is the newest message
+		root := id.EventID(to.Thread)
+		content.RelatesTo = (&event.RelatesTo{}).SetThread(root, r.threadFallback(room, root))
+	} else if to.ID != "" {
 		content.RelatesTo = &event.RelatesTo{InReplyTo: &event.InReplyTo{EventID: id.EventID(to.ID)}}
 	}
 	return matrix.Retry(ctx, sendAttempts, func() error {

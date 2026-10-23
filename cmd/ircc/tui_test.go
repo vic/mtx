@@ -109,19 +109,19 @@ func TestTUIKeys(t *testing.T) {
 		}
 	}
 
-	at := out.waitFor(t, 0, "NORMAL  #alpha")
+	at := out.waitFor(t, 0, "┬ #alpha")
 	type_("gt")
-	at = out.waitFor(t, at, "NORMAL  #beta")
+	at = out.waitFor(t, at, "┬ #beta")
 	type_("gT")
-	at = out.waitFor(t, at, "NORMAL  #alpha")
+	at = out.waitFor(t, at, "┬ #alpha")
 	type_("i")
-	at = out.waitFor(t, at, "INSERT  #alpha")
+	at = out.waitFor(t, at, "┬ #alpha")
 	// real terminal bytes: ctrl+n, ctrl+p, arrows, esc, then the : prompt
 	for _, step := range []struct{ keys, want string }{
-		{"\x0e", "INSERT  #alpha"}, {"\x10", "INSERT  #alpha"}, {"\x1b", "NORMAL  #alpha"}, // INSERT ctrl+n/p step input history, not channels
-		{"\x0e", "NORMAL  #beta"}, {"\x10", "NORMAL  #alpha"},
-		{"\x1b[A", "NORMAL  #alpha"}, // up selects a line (vic 2026-10-23), the channel stays
-		{":", "send as is"}, {"\x1b", "NORMAL  #alpha"}, {"i", "INSERT  #alpha"}, {"/join &x", "> /join &x"}, {"\r", "INSERT  &x"},
+		{"\x0e", "┬ #alpha"}, {"\x10", "┬ #alpha"}, {"\x1b", "┬ #alpha"}, // INSERT ctrl+n/p step input history, not channels
+		{"\x0e", "┬ #beta"}, {"\x10", "┬ #alpha"},
+		{"\x1b[A", "┬ #alpha"}, // up selects a line (vic 2026-10-23), the channel stays
+		{":", "send as is"}, {"\x1b", "┬ #alpha"}, {"i", "┬ #alpha"}, {"/join &x", "> /join &x"}, {"\r", "┬ &x"},
 	} {
 		type_(step.keys)
 		at = out.waitFor(t, at, step.want)

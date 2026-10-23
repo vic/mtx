@@ -204,13 +204,15 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 	cur := m.Current()
 	ir := append(sugg, inputRows(input, w, h)...) // the suggestion row sits right above the input
 	n := paneRows(w, h, len(ir))
+	details := ml.Left // channel details (members, bypass, unknown, lines/min) are the chat frame title
+	ml.Left = ""
 	tRows, sep := threadBox(p, wide(w, h)) // the threads box above the chat, and its separator line
 	lines, of := tailRows(shown, n-tRows-sep, off, textWidth(w, h), wrap)
 	code := codeRows(lines, of, shown)
 
 	var rows []string
 	if !wide(w, h) {
-		rows = append(rows, fit(title, cur.Name, w))
+		rows = append(rows, fit(title, details, w))
 		for i := 0; i < n; i++ {
 			rows = append(rows, lineRow(lines, of, shown, hit, i, w, "", code, ""))
 		}
@@ -246,7 +248,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			return border
 		}
 		rows = append(rows, edge(0, "┌")+seg(p.title("channels", focusChans), chanW, line(0))+edge(1, "┬")+
-			seg(midTitle(p, cur.Name), mid, line(1))+edge(2, "┬")+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
+			seg(midTitle(p, details), mid, line(1))+edge(2, "┬")+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
 		for i := 0; i < n; i++ {
 			nk := at(p.nicks, i)
 			if nk != "" { // an empty Render still emits escapes
@@ -266,7 +268,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 				nc = fit(current, " "+p.nicks[i], nickW)
 			}
 			if sep == 1 && i == tRows { // the line between the threads box and the chat box
-				rows = append(rows, edge(0, "│")+cc+edge(1, "├")+line(1).Render(strings.Repeat("─", mid))+
+				rows = append(rows, edge(0, "│")+cc+edge(1, "├")+line(1).Render(frameRule(details, mid))+
 					edge(2, "┤")+nc+edge(3, "│"))
 				continue
 			}
@@ -654,3 +656,9 @@ func markHits(s string, st lipgloss.Style, code bool, q string) string {
 
 // gutterBar marks the current message in the lines pane's lead column.
 var gutterBar = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Render("▌") // the cursor color
+
+// frameRule is a horizontal frame line of width w with text in it: "─ text ───".
+func frameRule(text string, w int) string {
+	s := "─ " + text + " "
+	return s + strings.Repeat("─", max(w-lipgloss.Width(s), 0))
+}

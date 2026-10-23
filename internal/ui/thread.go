@@ -40,13 +40,8 @@ func (a App) inThread(l model.Line) bool {
 	return a.thread == "" || l.ID == a.thread || l.Thread == a.thread
 }
 
-// threadRowsMax is how many thread heads the top of the chat column shows.
-const threadRowsMax = 3
-
-// threadRowCount is how many rows the thread heads take in a column of n rows (0 with no heads).
-func threadRowCount(heads []model.Thread, n int) int {
-	return min(len(heads), threadRowsMax, max(n-1, 0))
-}
+// threadRowsMax is how many rows the threads box shows (main thread plus heads).
+const threadRowsMax = 8
 
 // threadRow is one head: "▸" when selected, the sender and text, the reply count, and the unread
 // count when there is one. A head with nothing unread is faded.
@@ -141,4 +136,64 @@ func (a App) lastWithID(i int) (model.Line, bool) {
 		}
 	}
 	return model.Line{}, false
+}
+
+// mainThreadLabel is the first row of the threads box: the channel's main chat (no thread selected).
+const mainThreadLabel = "main thread"
+
+// threadBox is the threads box above the chat in the wide layout: its rows, and the separator
+// line after it. Without threads (or narrow) there is no box.
+func threadBox(p sidePanes, wide bool) (rows, sep int) {
+	if !wide || len(p.heads) == 0 {
+		return 0, 0
+	}
+	return min(len(p.heads)+1, threadRowsMax), 1
+}
+
+// midTitle is the title of the middle column's top row: the threads box when it shows, else the channel.
+func midTitle(p sidePanes, name string) string {
+	if len(p.heads) > 0 {
+		return p.title("threads", focusThreads)
+	}
+	return name
+}
+
+// threadsRow is row i of the threads box, width w: row 0 is the main thread, then the heads.
+func threadsRow(p sidePanes, i, w int) string {
+	focused := p.focus == focusThreads && p.sel == i
+	if i == 0 {
+		return mainThreadRow(p.thread == "" || focused, w)
+	}
+	if i-1 >= len(p.heads) {
+		return fit(cell, "", w)
+	}
+	u := 0
+	if i-1 < len(p.unread) {
+		u = p.unread[i-1]
+	}
+	h := p.heads[i-1]
+	return threadRow(h, h.Root == p.thread || focused, u, w)
+}
+
+// mainThreadRow is the main thread row: marked when selected.
+func mainThreadRow(selected bool, w int) string {
+	mark := "  "
+	if selected {
+		mark = "▸ "
+	}
+	return fit(cell, mark+mainThreadLabel, w)
+}
+
+// nextPane is the pane Tab moves to: chat, channels, nicks, then the threads box when it shows.
+func (a App) nextPane() paneFocus {
+	order := []paneFocus{focusChat, focusChans, focusNicks}
+	if len(a.threads[a.m.Current().Name]) > 0 {
+		order = append(order, focusThreads)
+	}
+	for i, f := range order {
+		if f == a.focus {
+			return order[(i+1)%len(order)]
+		}
+	}
+	return focusChat
 }

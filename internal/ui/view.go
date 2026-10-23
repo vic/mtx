@@ -204,11 +204,8 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 	cur := m.Current()
 	ir := append(sugg, inputRows(input, w, h)...) // the suggestion row sits right above the input
 	n := paneRows(w, h, len(ir))
-	k := 0 // thread head rows at the top of the chat column (wide layout only)
-	if wide(w, h) {
-		k = threadRowCount(p.heads, n)
-	}
-	lines, of := tailRows(shown, n-k, off, textWidth(w, h), wrap)
+	tRows, sep := threadBox(p, wide(w, h)) // the threads box above the chat, and its separator line
+	lines, of := tailRows(shown, n-tRows-sep, off, textWidth(w, h), wrap)
 	code := codeRows(lines, of, shown)
 
 	var rows []string
@@ -249,7 +246,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			return border
 		}
 		rows = append(rows, edge(0, "┌")+seg(p.title("channels", focusChans), chanW, line(0))+edge(1, "┬")+
-			seg(cur.Name, mid, line(1))+edge(2, "┬")+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
+			seg(midTitle(p, cur.Name), mid, line(1))+edge(2, "┬")+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
 		for i := 0; i < n; i++ {
 			nk := at(p.nicks, i)
 			if nk != "" { // an empty Render still emits escapes
@@ -268,15 +265,16 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			if p.focus == focusNicks && i == p.sel && i < len(p.nicks) {
 				nc = fit(current, " "+p.nicks[i], nickW)
 			}
+			if sep == 1 && i == tRows { // the line between the threads box and the chat box
+				rows = append(rows, edge(0, "│")+cc+edge(1, "├")+line(1).Render(strings.Repeat("─", mid))+
+					edge(2, "┤")+nc+edge(3, "│"))
+				continue
+			}
 			midCell := ""
-			if i < k {
-				u := 0
-				if i < len(p.unread) {
-					u = p.unread[i]
-				}
-				midCell = threadRow(p.heads[i], p.heads[i].Root == p.thread || (p.focus == focusThreads && i == p.sel), u, mid)
+			if i < tRows {
+				midCell = threadsRow(p, i, mid)
 			} else {
-				midCell = lineRow(lines, of, shown, hit, i-k, mid, " ", code, q)
+				midCell = lineRow(lines, of, shown, hit, i-tRows-sep, mid, " ", code, q)
 			}
 			rows = append(rows, edge(0, "│")+cc+edge(1, "│")+midCell+
 				edge(2, "│")+nc+edge(3, "│"))

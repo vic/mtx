@@ -1222,6 +1222,7 @@ const (
 // with no query, every row in pane order.
 func (a App) paneItems(f paneFocus) (show, names []string) {
 	if f == focusThreads {
+		names = []string{mainThreadLabel}
 		for _, h := range a.threads[a.m.Current().Name] {
 			names = append(names, threadLabel(h))
 		}
@@ -1265,7 +1266,7 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		a.focus = focusChat
 	case "tab":
-		a.focus, a.fq, a.fsel = (a.focus+1)%4, "", 0
+		a.focus, a.fq, a.fsel = a.nextPane(), "", 0
 	case "up", "ctrl+p":
 		a.fsel = max(a.fsel-1, 0)
 	case "down", "ctrl+n":
@@ -1279,7 +1280,9 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		if a.focus == focusThreads {
-			if h, ok := a.threadAt(names[a.fsel]); ok {
+			if names[a.fsel] == mainThreadLabel {
+				a = a.selectThread("")
+			} else if h, ok := a.threadAt(names[a.fsel]); ok {
 				a = a.selectThread(h.Root)
 			}
 		} else if a.focus == focusChans {

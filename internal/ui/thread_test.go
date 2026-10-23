@@ -57,7 +57,7 @@ func TestThreadsInPickerAndPane(t *testing.T) {
 		t.Fatalf("picker enter: thread %q", a.thread)
 	}
 	a.thread = ""
-	a.focus, a.fsel = focusThreads, 0
+	a.focus, a.fsel = focusThreads, 1 // 0 is the main thread row
 	next, _ = a.paneStep(tea.KeyPressMsg{Code: tea.KeyEnter})
 	a = next.(App)
 	if a.thread != "$a1" || a.focus != focusChat {
@@ -127,5 +127,22 @@ func TestReplyLastKey(t *testing.T) {
 	a, _ = press(t, a, "o")
 	if a.mode != Insert || a.quote == nil || a.quote.ID != "$1" {
 		t.Fatalf("o: mode %v quote %+v", a.mode, a.quote)
+	}
+}
+
+// TestThreadsBoxAboveChat: with heads, a threads box shows 'main thread' then the heads, above a
+// separator and the chat; without heads there is no box.
+func TestThreadsBoxAboveChat(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	s := ansi.Strip(a.screen())
+	if strings.Contains(s, "main thread") {
+		t.Fatalf("no threads: no box expected:\n%s", s)
+	}
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 2}}}
+	s = ansi.Strip(a.screen())
+	mainAt, headAt := strings.Index(s, "main thread"), strings.Index(s, "bob: start")
+	if mainAt < 0 || headAt < 0 || mainAt > headAt {
+		t.Fatalf("threads box: main thread then head expected:\n%s", s)
 	}
 }

@@ -9,6 +9,7 @@ import (
 
 	"go.mau.fi/util/dbutil"
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -129,7 +130,10 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		ctx = WithHistory(ctx)
 	}
 	m := c.helper.Machine()
-	m.ProcessSyncResponse(ctx, resp, since) // room keys, device lists, OTK counts
+	m.ProcessSyncResponse(ctx, resp, since)        // room keys, device lists, OTK counts
+	if err := c.retryPending(ctx, h); err != nil { // keys that just arrived unlock parked events
+		return err
+	}
 	// Invites are accepted by policy: join before the batch's room events are handled.
 	for roomID, inv := range resp.Rooms.Invite {
 		in, err := c.inviteOf(roomID, inv)
@@ -203,6 +207,11 @@ func (c *Client) deliver(ctx context.Context, evt *event.Event, h Handler) (err 
 	if evt.Type == event.EventEncrypted {
 		dec, decErr := c.helper.Decrypt(ctx, evt)
 		if decErr != nil {
+			if errors.Is(decErr, crypto.NoSessionFound) {
+				if err := c.park(ctx, evt); err != nil {
+					return err
+				}
+			}
 			return h(ctx, evt, decErr)
 		}
 		return h(ctx, dec, nil)

@@ -127,6 +127,10 @@ CREATE TABLE IF NOT EXISTS sync_state (
 	filter_id  TEXT,
 	next_batch TEXT
 );
+CREATE TABLE IF NOT EXISTS pending_events (
+	event_id TEXT PRIMARY KEY,
+	body     TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS seen_events (
 	event_id TEXT PRIMARY KEY
 );`)

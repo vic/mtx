@@ -204,6 +204,9 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 		return nil
 	}
 	text, dim, ok := r.messageText(evt, decErr)
+	if matrix.IsLate(ctx) {
+		text = "(late) " + text
+	}
 	if !ok {
 		return nil
 	}

@@ -4,8 +4,8 @@ package matrix
 
 import (
 	"context"
+	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -16,7 +16,8 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-// conduitEnv reads the MTX_CONDUIT_* session of the test users (set by CI or a local run).
+// conduitEnv logs the test user of side in as a fresh device, so each test starts with an empty crypto store
+// and no device keys left on the server from an earlier test.
 func conduitEnv(t *testing.T, side string) Config {
 	t.Helper()
 	get := func(k string) string {
@@ -24,9 +25,11 @@ func conduitEnv(t *testing.T, side string) Config {
 		require.NotEmpty(t, v, k)
 		return v
 	}
-	return Config{Homeserver: get("MTX_CONDUIT_HOMESERVER"), UserID: get("MTX_CONDUIT_" + side + "_USER"),
-		AccessToken: get("MTX_CONDUIT_" + side + "_TOKEN"), DeviceID: get("MTX_CONDUIT_" + side + "_DEVICE"),
-		PickleKey: "pickle-conduit", DBPath: filepath.Join(t.TempDir(), side, "mtx.db")}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	dev := fmt.Sprintf("%s%d", side, time.Now().UnixNano())
+	return loginDevice(t, ctx, get("MTX_CONDUIT_HOMESERVER"), id.UserID(get("MTX_CONDUIT_"+side+"_USER")),
+		get("MTX_CONDUIT_"+side+"_PASSWORD"), dev)
 }
 
 // encryptedRoom creates an encrypted private room from alice's client and invites bob.

@@ -50,19 +50,20 @@ jobs:
           TOK=$(grep -E '^registration_token' .github/conduit.toml | sed -E 's/^[^"]*"([^"]*)".*/\1/')
           reg() {
             curl -s -X POST http://127.0.0.1:6167/_matrix/client/v3/register -H 'content-type: application/json' \
-              -d "{\"username\":\"$1\",\"password\":\"$(head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 20)\",\"initial_device_display_name\":\"ci\",\"auth\":{\"type\":\"m.login.registration_token\",\"token\":\"$TOK\"}}"
+              -d "{\"username\":\"$1\",\"password\":\"$2\",\"initial_device_display_name\":\"ci\",\"auth\":{\"type\":\"m.login.registration_token\",\"token\":\"$TOK\"}}"
           }
           field() { echo "$1" | sed -E "s/.*\"$2\":\"([^\"]*)\".*/\1/"; }
-          A=$(reg "ci_a$RANDOM"); B=$(reg "ci_b$RANDOM")
-          for v in "$(field "$A" access_token)" "$(field "$B" access_token)"; do echo "::add-mask::$v"; done
+          PA=$(head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 20)
+          PB=$(head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 20)
+          A=$(reg "ci_a$RANDOM" "$PA"); B=$(reg "ci_b$RANDOM" "$PB")
+          for v in "$(field "$A" access_token)" "$(field "$B" access_token)" "$PA" "$PB"; do echo "::add-mask::$v"; done
           {
             echo "MTX_CONDUIT_HOMESERVER=http://127.0.0.1:6167"
+            echo "MTX_CONDUIT_REG_TOKEN=$TOK"
             echo "MTX_CONDUIT_A_USER=$(field "$A" user_id)"
-            echo "MTX_CONDUIT_A_TOKEN=$(field "$A" access_token)"
-            echo "MTX_CONDUIT_A_DEVICE=$(field "$A" device_id)"
+            echo "MTX_CONDUIT_A_PASSWORD=$PA"
             echo "MTX_CONDUIT_B_USER=$(field "$B" user_id)"
-            echo "MTX_CONDUIT_B_TOKEN=$(field "$B" access_token)"
-            echo "MTX_CONDUIT_B_DEVICE=$(field "$B" device_id)"
+            echo "MTX_CONDUIT_B_PASSWORD=$PB"
           } >> "$GITHUB_ENV"
       - name: Real-homeserver tests
         run: go test -tags "goolm conduit" -count=1 -timeout 180s -run TestConduit ./internal/matrix/

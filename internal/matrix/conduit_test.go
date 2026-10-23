@@ -4,8 +4,6 @@ package matrix
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -21,16 +19,8 @@ import (
 // alice creates an encrypted room and invites bob. bob's client auto-joins and must receive
 // alice's encrypted message, decrypted.
 func TestConduitEncryptedRoundTrip(t *testing.T) {
-	env := func(k string) string {
-		v := os.Getenv(k)
-		require.NotEmpty(t, v, k)
-		return v
-	}
-	home := env("MTX_CONDUIT_HOMESERVER")
-	cfgA := Config{Homeserver: home, UserID: env("MTX_CONDUIT_A_USER"), AccessToken: env("MTX_CONDUIT_A_TOKEN"),
-		DeviceID: env("MTX_CONDUIT_A_DEVICE"), PickleKey: "pickle-conduit", DBPath: filepath.Join(t.TempDir(), "a", "mtx.db")}
-	cfgB := Config{Homeserver: home, UserID: env("MTX_CONDUIT_B_USER"), AccessToken: env("MTX_CONDUIT_B_TOKEN"),
-		DeviceID: env("MTX_CONDUIT_B_DEVICE"), PickleKey: "pickle-conduit", DBPath: filepath.Join(t.TempDir(), "b", "mtx.db")}
+	cfgA := conduitEnv(t, "A")
+	cfgB := conduitEnv(t, "B")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()

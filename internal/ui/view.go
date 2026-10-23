@@ -515,7 +515,8 @@ var helpSections = []struct {
 
 // helpText renders helpSections with the key column aligned.
 func helpText() string {
-	rows := []string{title.Render("mtx") + dimmed.Render("  Matrix client: & rooms, threads, end-to-end encryption"), ""}
+	head := title.Render("mtx") + dimmed.Render("  Matrix client: & rooms, threads, end-to-end encryption")
+	rows := []string{head, ""}
 	for _, s := range helpSections {
 		rows = append(rows, helpHead.Render(s.head))
 		for _, k := range s.keys {
@@ -523,6 +524,12 @@ func helpText() string {
 		}
 		rows = append(rows, "")
 	}
+	width := 0
+	for _, r := range rows {
+		width = max(width, lipgloss.Width(r))
+	}
+	btns := renderHelpButtons()
+	rows[0] = head + strings.Repeat(" ", max(width-lipgloss.Width(head)-lipgloss.Width(btns), 1)) + btns
 	return strings.Join(append(rows, keyHint("ctrl+c", "quit", "any key", "close help")), "\n")
 }
 

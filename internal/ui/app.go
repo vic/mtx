@@ -311,6 +311,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft && a.help {
+			return a.helpClick(tea.Mouse(msg))
+		}
 		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.prompt == 0 {
 			return a.click(tea.Mouse(msg))
 		}

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"charm.land/lipgloss/v2"
 	"errors"
 
 	"github.com/charmbracelet/x/ansi"
@@ -62,5 +63,28 @@ func TestNickGroupsByRole(t *testing.T) {
 	iAdm, iMod, iMem := strings.Index(s, "admins"), strings.Index(s, "mods"), strings.Index(s, "members")
 	if iAdm < 0 || iMod < 0 || iMem < 0 || !(iAdm < strings.Index(s, "boss") && strings.Index(s, "boss") < iMod && iMod < strings.Index(s, "mod1") && strings.Index(s, "mod1") < iMem) {
 		t.Fatalf("groups: %q", s)
+	}
+}
+
+// TestHelpButtonsOpenLinks: a click on the repo button hits repoURL, on donate hits donateURL, and
+// elsewhere nothing.
+func TestHelpButtonsOpenLinks(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.help = true
+	bl := strings.Split(helpBox(a.h, a.helpOff), "\n")
+	bw := lipgloss.Width(bl[0])
+	top, left := max((a.h-len(bl))/2, 0), max((a.w-bw)/2, 0)
+	row := ansi.Strip(bl[1])
+	x := left + lipgloss.Width(row[:strings.Index(row, "github:vic/mtx")]) + 1
+	if u, ok := a.helpButtonAt(x, top+1); !ok || u != repoURL {
+		t.Fatalf("repo button: %q %v", u, ok)
+	}
+	x = left + lipgloss.Width(row[:strings.Index(row, "donate to @vic")]) + 1
+	if u, ok := a.helpButtonAt(x, top+1); !ok || u != donateURL {
+		t.Fatalf("donate button: %q %v", u, ok)
+	}
+	if _, ok := a.helpButtonAt(0, 0); ok {
+		t.Fatal("click outside buttons hit one")
 	}
 }

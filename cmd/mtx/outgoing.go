@@ -58,3 +58,23 @@ func (r *runner) reply(ch string, to model.Line, text string) error {
 		return err
 	})
 }
+
+// edit replaces my message target (a line with an event ID) with text: an m.replace event.
+func (r *runner) edit(ch string, target model.Line, text string) error {
+	room, err := r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := callCtx()
+	defer cancel()
+	content := &event.MessageEventContent{
+		MsgType:    event.MsgText,
+		Body:       "* " + text,
+		NewContent: &event.MessageEventContent{MsgType: event.MsgText, Body: text},
+		RelatesTo:  (&event.RelatesTo{}).SetReplace(id.EventID(target.ID)),
+	}
+	return matrix.Retry(ctx, sendAttempts, func() error {
+		_, err := r.mx.SendMessageEvent(ctx, room, event.EventMessage, content)
+		return err
+	})
+}

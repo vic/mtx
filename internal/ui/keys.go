@@ -50,9 +50,13 @@ const (
 	PickSpeaker
 	Yank
 	PickInvite
-	ReplyLast
+	NewLine
+	ReplyOwn
+	ReplyOwnQuoted
+	EditOwn
+	ReplyThread
+	ReplyThreadQuoted
 	ThreadStart
-	ReplySelected
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -97,14 +101,18 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 	}
 	if pending == "" {
 		switch k {
-		case "i", "a":
-			return Action{}, Insert, ""
-		case "o":
-			return Action{Kind: ReplyLast}, Insert, ""
+		case "i":
+			return Action{Kind: NewLine}, Insert, ""
+		case "a":
+			return Action{Kind: ReplyOwn}, Insert, ""
 		case "A":
-			return Action{Kind: ReplySelected}, Insert, ""
+			return Action{Kind: ReplyOwnQuoted}, Insert, ""
+		case "C":
+			return Action{Kind: EditOwn}, Insert, ""
+		case "o":
+			return Action{Kind: ReplyThread}, Insert, ""
 		case "O":
-			return Action{Kind: ThreadStart}, Insert, ""
+			return Action{Kind: ReplyThreadQuoted}, Insert, ""
 		case "j":
 			return Action{Scroll, 1}, Normal, ""
 		case "k":
@@ -127,8 +135,6 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: PickSpeaker}, Normal, ""
 		case "y":
 			return Action{Kind: Yank}, Normal, ""
-		case "I":
-			return Action{Kind: PickInvite}, Normal, ""
 		case "up":
 			return Action{Kind: LineUp}, Normal, ""
 		case "down":
@@ -145,6 +151,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: FocusPane}, Normal, ""
 		case "s":
 			return Action{Kind: ToggleStamps}, Normal, ""
+		case "I":
+			return Action{Kind: PickInvite}, Normal, ""
 		case "t":
 			return Action{Kind: ThreadNext}, Normal, ""
 		case "m":

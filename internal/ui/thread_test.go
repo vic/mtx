@@ -121,18 +121,6 @@ func TestCommandWithNoChannel(t *testing.T) {
 	_ = next
 }
 
-// TestReplyLastKey: o quotes the newest message that has an ID and enters INSERT.
-func TestReplyLastKey(t *testing.T) {
-	var log []sent
-	a := newApp(t, &log, nil)
-	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "one", ID: "$1"}})
-	a = next.(App)
-	a, _ = press(t, a, "o")
-	if a.mode != Insert || a.quote == nil || a.quote.ID != "$1" {
-		t.Fatalf("o: mode %v quote %+v", a.mode, a.quote)
-	}
-}
-
 // TestThreadsBoxAboveChat: with heads, a threads box shows 'main thread' then the heads, above a
 // separator and the chat; without heads there is no box.
 func TestThreadsBoxAboveChat(t *testing.T) {
@@ -177,4 +165,42 @@ func TestChannelPickReturnsToMain(t *testing.T) {
 	a = next.(App).focusName("#b")
 	require.Equal(t, "#b", a.Channel())
 	require.Equal(t, "", a.thread)
+}
+
+// TestOwnReplyAndEditKeys: a replies to my newest message (relation only); A quotes it too; C edits
+// it; others' messages are not targets.
+func TestOwnReplyAndEditKeys(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.user = "vic"
+	for _, l := range []model.Line{{Nick: "vic", Text: "mine", ID: "$m1"}, {Nick: "bob", Text: "theirs", ID: "$b1"}} {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	a, _ = press(t, a, "a")
+	require.NotNil(t, a.quote)
+	require.Equal(t, "$m1", a.quote.ID)
+	require.False(t, a.quoteBody)
+
+	a.mode = Normal
+	a.in.Reset()
+	a, _ = press(t, a, "C")
+	require.NotNil(t, a.edit)
+	require.Equal(t, "mine", a.in.Value())
+
+	a = a.prepare(ReplyOwnQuoted)
+	require.True(t, a.quoteBody)
+	require.Equal(t, "$m1", a.quote.ID)
+}
+
+// TestReplyLastThreadKey: o replies in the last thread used; with none, nothing changes.
+func TestReplyLastThreadKey(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1"}}}
+	a = a.prepare(ReplyThread)
+	require.Equal(t, "", a.thread)
+	a.lastThread = "$a1"
+	a = a.prepare(ReplyThread)
+	require.Equal(t, "$a1", a.thread)
 }

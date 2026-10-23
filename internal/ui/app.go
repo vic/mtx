@@ -111,35 +111,38 @@ type App struct {
 	w, h       int
 	prompt     rune // 0 or promptCmd (:): the input line holds a prompt
 	query      string
-	hit        int                                               // index in the current channel of the last search hit, -1 none
-	offs       map[string]int                                    // per channel: lines scrolled back from the newest
-	help       bool                                              // the ? popup is shown; the next key closes it
-	focus      paneFocus                                         // tab: which pane takes keys (chat, channels, nicks)
-	fq         string                                            // query typed in a focused side pane (fuzzy filter)
-	fsel       int                                               // selected row in the focused side pane
-	stamps     bool                                              // s: show "15:04 " before each line
-	pick       bool                                              // ctrl+o or /: the picker is open
-	pickWhat   pickKind                                          // what the picker lists: channels (ctrl+o), lines (/), speakers (S)
-	speakers   []string                                          // S: show only these nicks' lines; none = all
-	grep       string                                            // ctrl+g: show only lines fuzzy-matching this; "" off
-	marks      []string                                          // S picker: nicks marked with space, applied by enter
-	resumeTo   string                                            // channel to focus once it shows up (the last one of the previous run)
-	toasts     []toast                                           // notification cards, newest last; the tick drops old ones
-	helpOff    int                                               // help box scroll (j k, wheel) when it is taller than the screen
-	pq         textinput.Model                                   // picker query (own input: a typed message survives)
-	files      []string                                          // pickFiles: the session's files, from git ls-files (filesMsg)
-	psel       int                                               // picker selection, an index in pickList
-	comp       completion                                        // tab completion state of the INSERT line
-	tools      bool                                              // t: show tool lines
-	mentions   bool                                              // m: show only direct lines (see shows)
-	typing     map[string][]string                               // channel -> nicks typing now (TypingMsg); a room's nick pane marks them
-	reply      func(ch string, to model.Line, text string) error // A + send: a reply to a line with an ID; nil = plain send with a quote
-	seen       func(ch string) error                             // the channel's newest line is on screen (read markers); nil = none
-	threads    map[string][]model.Thread                         // per channel: thread heads (ThreadsMsg)
-	thread     string                                            // selected thread root ("" = main chat): the chat pane shows it, sends go to it
-	lastThread string                                            // the last thread opened (T toggles between main and this)
-	mainUnread map[string]int                                    // per channel: main-thread lines not on screen (main thread row count)
-	seenLive   map[string]int                                    // per thread root: Live replies when it was last read
+	hit        int                                                   // index in the current channel of the last search hit, -1 none
+	offs       map[string]int                                        // per channel: lines scrolled back from the newest
+	help       bool                                                  // the ? popup is shown; the next key closes it
+	focus      paneFocus                                             // tab: which pane takes keys (chat, channels, nicks)
+	fq         string                                                // query typed in a focused side pane (fuzzy filter)
+	fsel       int                                                   // selected row in the focused side pane
+	stamps     bool                                                  // s: show "15:04 " before each line
+	pick       bool                                                  // ctrl+o or /: the picker is open
+	pickWhat   pickKind                                              // what the picker lists: channels (ctrl+o), lines (/), speakers (S)
+	speakers   []string                                              // S: show only these nicks' lines; none = all
+	grep       string                                                // ctrl+g: show only lines fuzzy-matching this; "" off
+	marks      []string                                              // S picker: nicks marked with space, applied by enter
+	resumeTo   string                                                // channel to focus once it shows up (the last one of the previous run)
+	toasts     []toast                                               // notification cards, newest last; the tick drops old ones
+	helpOff    int                                                   // help box scroll (j k, wheel) when it is taller than the screen
+	pq         textinput.Model                                       // picker query (own input: a typed message survives)
+	files      []string                                              // pickFiles: the session's files, from git ls-files (filesMsg)
+	psel       int                                                   // picker selection, an index in pickList
+	comp       completion                                            // tab completion state of the INSERT line
+	tools      bool                                                  // t: show tool lines
+	mentions   bool                                                  // m: show only direct lines (see shows)
+	typing     map[string][]string                                   // channel -> nicks typing now (TypingMsg); a room's nick pane marks them
+	reply      func(ch string, to model.Line, text string) error     // A + send: a reply to a line with an ID; nil = plain send with a quote
+	seen       func(ch string) error                                 // the channel's newest line is on screen (read markers); nil = none
+	threads    map[string][]model.Thread                             // per channel: thread heads (ThreadsMsg)
+	thread     string                                                // selected thread root ("" = main chat): the chat pane shows it, sends go to it
+	lastThread string                                                // the last thread opened (T toggles between main and this)
+	mainUnread map[string]int                                        // per channel: main-thread lines not on screen (main thread row count)
+	edit       *model.Line                                           // C: the message being edited; the next send replaces it
+	editFn     func(ch string, target model.Line, text string) error // the edit hook (WithEdit)
+	quoteBody  bool                                                  // A and O: the quote is also in the body
+	seenLive   map[string]int                                        // per thread root: Live replies when it was last read
 }
 
 // New returns an App over m that sends channel text through send.
@@ -366,7 +369,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return a.sendLine()
 		case act.Kind == None && mode == Normal:
 			a.mode = Normal
-			a.quote = nil // esc drops the reply; the typed text stays
+			a.quote, a.edit, a.quoteBody = nil, nil, false // esc drops the reply or edit; the typed text stays
 			a.in.Blur()
 		case act.Kind == None:
 			var cmd tea.Cmd
@@ -419,32 +422,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if mode == Insert {
 		a.mode = Insert
 		a.in.Focus()
-		if act.Kind == ReplyLast { // o: reply to the newest message
-			if l, ok := a.lastWithID(-1); ok {
-				a.quote = &l
-			}
-		}
-		if act.Kind == ThreadStart { // O: start a thread on the selected message, else the newest; it becomes the thread target
-			if l, ok := a.lastWithID(a.hit); ok {
-				root := l.Thread
-				if root == "" {
-					root = l.ID
-				}
-				a.quote = nil
-				a = a.selectThread(root)
-			}
-		}
-		if act.Kind == ReplySelected { // A: reply to the selected line, else to the last one, which gets selected
-			if ls := a.lines(a.m.Current()); len(ls) > 0 {
-				if a.hit < 0 || a.hit >= len(ls) {
-					a.hit = len(ls) - 1
-				}
-				if l := ls[a.hit]; l.Nick != "" && l.Nick != a.user {
-					a = a.mention(l.Nick)
-					a.quote = &l
-				}
-			}
-		}
+		a = a.prepare(act.Kind)
 	}
 	switch act.Kind {
 	case CmdLine:
@@ -584,13 +562,26 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 		return a.runCmd(text)
 	case text == "" || ch == "":
 	default:
+		if a.edit != nil && a.editFn != nil { // C: the send replaces the message being edited
+			target := *a.edit
+			a.edit = nil
+			return a, func() tea.Msg { return SendResultMsg{Ch: ch, Text: text, Err: a.editFn(ch, target, text)} }
+		}
 		if a.thread != "" && a.reply != nil { // a thread send: the thread relation carries the root
+			if a.quote != nil && a.quoteBody { // O: the quote is in the body too
+				text = quotePrefix(*a.quote) + text
+				a.quote, a.quoteBody = nil, false
+			}
 			to := model.Line{ID: a.thread, Thread: a.thread}
 			return a, func() tea.Msg { return SendResultMsg{Ch: ch, Text: text, Err: a.reply(ch, to, text)} }
 		}
 		if a.quote != nil && a.reply != nil { // a reply: the relation carries the quoted line, the text is sent as typed
 			to := *a.quote
 			a.quote = nil
+			if a.quoteBody { // A: the quote is in the body too
+				text = quotePrefix(to) + text
+				a.quoteBody = false
+			}
 			return a, func() tea.Msg { return SendResultMsg{Ch: ch, Text: text, Err: a.reply(ch, to, text)} }
 		}
 		if a.quote != nil { // the agent sees the line replied to, as markdown quote

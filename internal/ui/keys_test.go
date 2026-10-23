@@ -12,8 +12,8 @@ func TestKey(t *testing.T) {
 		mode    EditMode
 		pend    string
 	}{
-		{"i insert", Normal, "", "i", Action{}, Insert, ""},
-		{"a insert", Normal, "", "a", Action{}, Insert, ""},
+		{"i insert", Normal, "", "i", Action{Kind: NewLine}, Insert, ""},
+		{"a reply own", Normal, "", "a", Action{Kind: ReplyOwn}, Insert, ""},
 		{"j down", Normal, "", "j", Action{Scroll, 1}, Normal, ""},
 		{"k up", Normal, "", "k", Action{Scroll, -1}, Normal, ""},
 		{"ctrl+d", Normal, "", "ctrl+d", Action{HalfPage, 1}, Normal, ""},

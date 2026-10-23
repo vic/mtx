@@ -351,9 +351,9 @@ func TestInsertKeys(t *testing.T) {
 		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "x", Text: txt, ID: "$" + txt[:3]}})
 		a = next.(App)
 	}
-	a, _ = press(t, a, "O")
-	if a.thread != "$@li" { // O: a thread on the newest message that has an ID
-		t.Fatalf("O: thread %q, input %q", a.thread, a.in.Value())
+	a, _ = press(t, a, "O") // O needs a last thread: none opened, so nothing changes
+	if a.thread != "" {
+		t.Fatalf("O with no thread: thread %q", a.thread)
 	}
 }
 

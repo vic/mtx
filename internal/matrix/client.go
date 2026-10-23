@@ -167,30 +167,15 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		if err := c.typingOf(roomID, room.Ephemeral.Events); err != nil {
 			return err
 		}
-		for i := range room.State.Events {
-			st := room.State.Events[i]
-			st.RoomID = roomID
-			st.Type.Class = event.StateEventType // the state section is state-class
-			if err := st.Content.ParseRaw(st.Type); err != nil {
-				continue // a state type this client does not model: nothing to apply, the batch goes on
-			}
-			if st.Type == event.StateMember {
-				m.HandleMemberEvent(rctx, st)
-			}
-			c.cli.StateStoreSyncHandler(rctx, st) // room state (encryption, members) for sends and lookups
-			if err := c.handleOnce(rctx, st, h); err != nil {
-				return err
-			}
+		if err := c.roomEvents(rctx, roomID, room.State.Events, room.Timeline.Events, h); err != nil {
+			return err
 		}
-		for i := range room.Timeline.Events {
-			evt := room.Timeline.Events[i]
-			evt.RoomID = roomID
-			if evt.StateKey != nil {
-				c.cli.StateStoreSyncHandler(rctx, evt)
-			}
-			if err := c.handleOnce(rctx, evt, h); err != nil {
-				return err
-			}
+	}
+	// rooms we were removed from or left: the membership change reaches the handler (a kick shows,
+	// and the client drops the room)
+	for roomID, room := range resp.Rooms.Leave {
+		if err := c.roomEvents(ctx, roomID, room.State.Events, room.Timeline.Events, h); err != nil {
+			return err
 		}
 	}
 	if err := c.markRooms(ctx, newRooms); err != nil {
@@ -291,6 +276,35 @@ func (c *Client) roomKnown(ctx context.Context, room id.RoomID) (bool, error) {
 func (c *Client) markRooms(ctx context.Context, rooms []id.RoomID) error {
 	for _, r := range rooms {
 		if _, err := c.db.RawDB.ExecContext(ctx, `INSERT OR IGNORE INTO rooms_seen(room_id) VALUES(?)`, r.String()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// roomEvents applies one room's state and timeline from a batch, in that order.
+func (c *Client) roomEvents(ctx context.Context, roomID id.RoomID, state, timeline []*event.Event, h Handler) error {
+	m := c.helper.Machine()
+	for _, st := range state {
+		st.RoomID = roomID
+		st.Type.Class = event.StateEventType // the state section is state-class
+		if err := st.Content.ParseRaw(st.Type); err != nil {
+			continue // a state type this client does not model: nothing to apply, the batch goes on
+		}
+		if st.Type == event.StateMember {
+			m.HandleMemberEvent(ctx, st)
+		}
+		c.cli.StateStoreSyncHandler(ctx, st) // room state (encryption, members) for sends and lookups
+		if err := c.handleOnce(ctx, st, h); err != nil {
+			return err
+		}
+	}
+	for _, evt := range timeline {
+		evt.RoomID = roomID
+		if evt.StateKey != nil {
+			c.cli.StateStoreSyncHandler(ctx, evt)
+		}
+		if err := c.handleOnce(ctx, evt, h); err != nil {
 			return err
 		}
 	}

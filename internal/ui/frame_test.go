@@ -64,11 +64,11 @@ func TestHelpAndArrows(t *testing.T) {
 		a := newApp(t, &log, nil)
 		next, _ := a.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
 		a, _ = press(t, next.(App), "?")
-		if v := checkFrame(t, a, sz[0], sz[1]); !strings.Contains(v, "one # channel per Claude session") {
+		if v := checkFrame(t, a, sz[0], sz[1]); !strings.Contains(v, "Matrix client") {
 			t.Fatalf("%v: no help on screen", sz)
 		}
 		a, _ = press(t, a, "esc") // closes help (j k scroll it now)
-		if a.help || strings.Contains(checkFrame(t, a, sz[0], sz[1]), "one # channel per Claude session") {
+		if a.help || strings.Contains(checkFrame(t, a, sz[0], sz[1]), "Matrix client") {
 			t.Fatalf("%v: help still shown", sz)
 		}
 		a, _ = press(t, a, "ctrl+n")
@@ -720,7 +720,7 @@ func TestHelpCommand(t *testing.T) {
 	a, _ := press(t, newApp(t, &log, nil), "i")
 	a = typeText(t, a, "/help")
 	a, cmd := press(t, a, "enter")
-	if !a.help || cmd != nil || !strings.Contains(ansi.Strip(a.screen()), "one # channel per Claude session") {
+	if !a.help || cmd != nil || !strings.Contains(ansi.Strip(a.screen()), "Matrix client") {
 		t.Fatalf("help %v cmd %v", a.help, cmd)
 	}
 }

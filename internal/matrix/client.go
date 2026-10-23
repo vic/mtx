@@ -125,6 +125,9 @@ func (c *Client) Run(ctx context.Context, h Handler) error {
 }
 
 func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string, h Handler) error {
+	if since == "" { // first sync: everything here is history, not new
+		ctx = WithHistory(ctx)
+	}
 	m := c.helper.Machine()
 	m.ProcessSyncResponse(ctx, resp, since) // room keys, device lists, OTK counts
 	// Invites are accepted by policy: join before the batch's room events are handled.
@@ -141,6 +144,11 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		}
 	}
 	for roomID, room := range resp.Rooms.Join {
+		if since == "" && room.Timeline.PrevBatch != "" { // replay older events before the timeline
+			if err := c.backfill(ctx, roomID, room.Timeline.PrevBatch, h); err != nil {
+				return err
+			}
+		}
 		for i := range room.State.Events {
 			st := room.State.Events[i]
 			st.RoomID = roomID

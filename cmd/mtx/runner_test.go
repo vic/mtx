@@ -111,3 +111,18 @@ func TestToastInviteNamesAliasAndInviter(t *testing.T) {
 	require.Equal(t, ui.ToastMsg{Text: "invited to #review:s by @bob:s: joined"}, out[0])
 	require.Equal(t, ui.ToastMsg{Text: "invited to !y:s by @carol:s: joined"}, out[1])
 }
+
+// TestHistoryLinesAreOld: lines replayed on the first sync are scrollback, not unread.
+func TestHistoryLinesAreOld(t *testing.T) {
+	var out []tea.Msg
+	cli, err := mautrix.NewClient("https://mock.test", "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(m tea.Msg) { out = append(out, m) })
+	r.register(testRoom, "#r:mock.test")
+	msg := &event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$h1", Sender: "@bob:mock.test",
+		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "old"}}}
+	require.NoError(t, r.onEvent(matrix.WithHistory(context.Background()), msg, nil))
+	require.NoError(t, r.onEvent(context.Background(), msg, nil))
+	require.True(t, out[0].(ui.LineMsg).Old)
+	require.False(t, out[1].(ui.LineMsg).Old)
+}

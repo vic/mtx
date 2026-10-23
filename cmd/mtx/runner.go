@@ -170,7 +170,8 @@ func (r *runner) canonicalAlias(room id.RoomID) string {
 }
 
 // onEvent is the matrix.Handler: messages become lines, member changes refresh the nick pane.
-func (r *runner) onEvent(_ context.Context, evt *event.Event, decErr error) error {
+func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) error {
+	old := matrix.IsHistory(ctx) // replayed on the first sync: scrollback, no unread count
 	name, ok := r.nameOf(evt.RoomID)
 	if !ok {
 		if err := r.refresh(); err != nil {
@@ -182,13 +183,13 @@ func (r *runner) onEvent(_ context.Context, evt *event.Event, decErr error) erro
 	}
 	if evt.Type == event.StateMember {
 		if text, ok := membershipText(evt); ok {
-			r.emit(ui.LineMsg{Ch: name, L: systemLine(evt, text)})
+			r.emit(ui.LineMsg{Old: old, Ch: name, L: systemLine(evt, text)})
 		}
 		return r.emitMembers(evt.RoomID)
 	}
 	if evt.Type == event.StateTopic {
 		if text, ok := topicText(evt); ok {
-			r.emit(ui.LineMsg{Ch: name, L: systemLine(evt, text)})
+			r.emit(ui.LineMsg{Old: old, Ch: name, L: systemLine(evt, text)})
 		}
 		return nil
 	}
@@ -199,14 +200,14 @@ func (r *runner) onEvent(_ context.Context, evt *event.Event, decErr error) erro
 		return nil // our own lines are echoed locally by the UI when sent
 	}
 	if evt.Type == event.EventRedaction {
-		r.emit(ui.LineMsg{Ch: name, L: systemLine(evt, fmt.Sprintf("%s removed a message", localpart(evt.Sender.String())))})
+		r.emit(ui.LineMsg{Old: old, Ch: name, L: systemLine(evt, fmt.Sprintf("%s removed a message", localpart(evt.Sender.String())))})
 		return nil
 	}
 	text, dim, ok := r.messageText(evt, decErr)
 	if !ok {
 		return nil
 	}
-	r.emit(ui.LineMsg{Ch: name, L: model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: dim}})
+	r.emit(ui.LineMsg{Old: old, Ch: name, L: model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: dim}})
 	return nil
 }
 

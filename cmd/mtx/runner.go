@@ -113,7 +113,10 @@ func (r *runner) rooms() []string {
 	return out
 }
 
-func (r *runner) emitRooms() { r.emit(ui.RoomsMsg(r.rooms())) }
+func (r *runner) emitRooms() {
+	logf("rooms %q", r.rooms())
+	r.emit(ui.RoomsMsg(r.rooms()))
+}
 
 // members returns the joined user localparts of room, sorted.
 func (r *runner) members(room id.RoomID) ([]string, error) {

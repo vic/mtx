@@ -25,8 +25,11 @@ type cmds struct {
 
 // cmd is the ui.App handler: the work runs in the returned tea.Cmd; an error comes back as a dim note.
 func (c *cmds) cmd(ch string, cm model.Cmd) tea.Cmd {
+	logf("cmd %s args=%q focus=%q", cm.Name(), cm.Args(), ch)
 	return func() tea.Msg {
-		if err := c.do(ch, cm); err != nil {
+		err := c.do(ch, cm)
+		logf("cmd %s done err=%v", cm.Name(), err)
+		if err != nil {
 			return ui.ToastMsg{Text: err.Error(), Err: true}
 		}
 		return nil
@@ -268,6 +271,7 @@ func (c *cmds) create(s string) error {
 		return err
 	}
 	alias := "#" + s[1:] + ":" + c.server
+	logf("create %s room=%s", s, resp.RoomID)
 	name := c.r.register(resp.RoomID, alias)
 	c.r.emitRooms()
 	c.r.emit(ui.FocusMsg(name))

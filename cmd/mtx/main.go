@@ -68,6 +68,12 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config, dataHome s
 	_, server, _ := strings.Cut(cfg.UserID, ":")
 	cs := &cmds{r: r, me: id.UserID(cfg.UserID), server: server}
 
+	closeLog, err := openLog()
+	if err != nil {
+		return err
+	}
+	defer closeLog()
+	logf("start user=%s", cfg.UserID)
 	last := filepath.Join(dataHome, "mtx", "last") // the channel mtx was on when it last quit
 	prev, _ := os.ReadFile(last)
 	app := ui.New(m, r.send).WithUser(localpart(cfg.UserID)).WithCmd(cs.cmd).WithLiteral(r.sendLiteral).WithResume(strings.TrimSpace(string(prev))).WithSeen(r.seen).WithReply(r.reply)
@@ -81,6 +87,7 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config, dataHome s
 			return
 		}
 		if err := c.Run(ctx, r.onEvent); err != nil && !errors.Is(err, context.Canceled) {
+			logf("sync stopped: %v", err)
 			syncErr <- err
 			p.Quit()
 		}

@@ -178,28 +178,56 @@ func (r *runner) onEvent(_ context.Context, evt *event.Event, decErr error) erro
 		}
 	}
 	if evt.Type == event.StateMember {
+		if text, ok := membershipText(evt); ok {
+			r.emit(ui.LineMsg{Ch: name, L: systemLine(evt, text)})
+		}
 		return r.emitMembers(evt.RoomID)
 	}
-	if evt.Type != event.EventMessage && evt.Type != event.EventEncrypted {
+	if evt.Type == event.StateTopic {
+		if text, ok := topicText(evt); ok {
+			r.emit(ui.LineMsg{Ch: name, L: systemLine(evt, text)})
+		}
+		return nil
+	}
+	if evt.Type != event.EventMessage && evt.Type != event.EventEncrypted && evt.Type != event.EventRedaction {
 		return nil
 	}
 	if evt.Sender.String() == r.mx.UserID.String() {
 		return nil // our own lines are echoed locally by the UI when sent
 	}
-	text := ""
-	switch {
-	case decErr != nil:
-		text = fmt.Sprintf("[undecryptable: %v]", decErr)
-	case evt.Content.AsMessage() != nil:
-		text = evt.Content.AsMessage().Body
-	default:
+	if evt.Type == event.EventRedaction {
+		r.emit(ui.LineMsg{Ch: name, L: systemLine(evt, fmt.Sprintf("%s removed a message", localpart(evt.Sender.String())))})
 		return nil
 	}
-	r.emit(ui.LineMsg{Ch: name, L: model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: decErr != nil}})
+	text, dim, ok := r.messageText(evt, decErr)
+	if !ok {
+		return nil
+	}
+	r.emit(ui.LineMsg{Ch: name, L: model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: dim}})
 	return nil
 }
 
-// send delivers text to the room of channel ch. E2EE is applied by the client.
+// messageText is the scrollback text of a message: body, an edit (new content), or the decrypt
+// failure. A mention of us in m.mentions is written as @user so the mentions filter sees it.
+func (r *runner) messageText(evt *event.Event, decErr error) (text string, dim, ok bool) {
+	if decErr != nil {
+		return fmt.Sprintf("[undecryptable: %v]", decErr), true, true
+	}
+	m := evt.Content.AsMessage()
+	if m == nil {
+		return "", false, false
+	}
+	body := m.Body
+	if m.NewContent != nil {
+		body = "(edited) " + m.NewContent.Body
+	}
+	me := r.mx.UserID
+	if m.Mentions != nil && slices.Contains(m.Mentions.UserIDs, me) && !strings.Contains(body, "@"+localpart(me.String())) {
+		body = "@" + localpart(me.String()) + " " + body
+	}
+	return body, false, true
+}
+
 func (r *runner) send(ch, text string) error {
 	room, err := r.roomOf(ch)
 	if err != nil {

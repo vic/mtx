@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"ircc/internal/peer"
+	"mtx/internal/peer"
 )
 
 type sent struct{ sock, frame string }

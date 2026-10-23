@@ -9,7 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"ircc/internal/model"
+	"mtx/internal/model"
 )
 
 const (

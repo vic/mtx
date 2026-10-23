@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"ircc/internal/peer"
+	"mtx/internal/peer"
 )
 
 // SessionInfo is the live registry data the modeline shows for one pid.

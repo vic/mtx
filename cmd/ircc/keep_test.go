@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"ircc/internal/rooms"
+	"mtx/internal/rooms"
 	"syscall"
 )
 

@@ -13,7 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"ircc/internal/peer"
+	"mtx/internal/peer"
 )
 
 // maxEncName bounds the percent-encoded name (endpoint path must fit sun_path, 107).

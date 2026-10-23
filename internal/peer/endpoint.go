@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"ircc/internal/registry"
+	"mtx/internal/registry"
 )
 
 // roomPrefix marks a room name (RFC 2811 local channel, D:169-175).

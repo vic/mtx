@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ircc/internal/registry"
+	"mtx/internal/registry"
 )
 
 // writeSession writes one registry file under <claude>/sessions.

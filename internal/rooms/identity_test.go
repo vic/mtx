@@ -3,7 +3,7 @@ package rooms
 import (
 	"testing"
 
-	"ircc/internal/registry"
+	"mtx/internal/registry"
 )
 
 func TestIdentify(t *testing.T) {

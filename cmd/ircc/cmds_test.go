@@ -8,10 +8,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"ircc/internal/model"
-	"ircc/internal/peer"
-	"ircc/internal/rooms"
-	"ircc/internal/ui"
+	"mtx/internal/model"
+	"mtx/internal/peer"
+	"mtx/internal/rooms"
+	"mtx/internal/ui"
 )
 
 // fakeRT is an in-memory cmdRT.

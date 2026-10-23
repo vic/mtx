@@ -6,7 +6,7 @@ import (
 	"slices"
 	"strings"
 
-	"ircc/internal/peer"
+	"mtx/internal/peer"
 )
 
 // SendFunc delivers one frame to a session socket.

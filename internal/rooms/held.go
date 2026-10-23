@@ -1,8 +1,8 @@
 package rooms
 
 import (
-	"ircc/internal/peer"
-	"ircc/internal/transcript"
+	"mtx/internal/peer"
+	"mtx/internal/transcript"
 )
 
 // HeldAt reports whether ev, read from member m's transcript, is a held peer

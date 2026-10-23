@@ -12,7 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"ircc/internal/model"
+	"mtx/internal/model"
 )
 
 // checkFrame fails unless View is exactly h rows of exactly w cells: a taller or

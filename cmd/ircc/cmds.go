@@ -9,10 +9,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"ircc/internal/model"
-	"ircc/internal/peer"
-	"ircc/internal/rooms"
-	"ircc/internal/ui"
+	"mtx/internal/model"
+	"mtx/internal/peer"
+	"mtx/internal/rooms"
+	"mtx/internal/ui"
 )
 
 // cmdRT is the part of roomRT the commands use. setRoom replaces the stored

@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"ircc/internal/peer"
-	"ircc/internal/registry"
-	"ircc/internal/rooms"
+	"mtx/internal/peer"
+	"mtx/internal/registry"
+	"mtx/internal/rooms"
 )
 
 type rtFix struct {

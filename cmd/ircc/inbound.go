@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"ircc/internal/model"
-	"ircc/internal/peer"
-	"ircc/internal/registry"
+	"mtx/internal/model"
+	"mtx/internal/peer"
+	"mtx/internal/registry"
 )
 
 // inboundTimeout bounds one connection: a silent peer cannot hold a goroutine.

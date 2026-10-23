@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"ircc/internal/model"
+	"mtx/internal/model"
 )
 
 func TestSearch(t *testing.T) {

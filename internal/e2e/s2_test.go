@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"ircc/internal/transcript"
+	"mtx/internal/transcript"
 )
 
 const (

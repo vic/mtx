@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"ircc/internal/model"
+	"mtx/internal/model"
 )
 
 var special = map[string]tea.KeyPressMsg{

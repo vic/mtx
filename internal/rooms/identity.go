@@ -3,7 +3,7 @@ package rooms
 import (
 	"strings"
 
-	"ircc/internal/registry"
+	"mtx/internal/registry"
 )
 
 // Identify maps a peer pid (from socket credentials, D:246-250) to a room

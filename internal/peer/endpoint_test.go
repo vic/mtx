@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"testing"
 
-	"ircc/internal/registry"
+	"mtx/internal/registry"
 )
 
 func fakeKeeper(t *testing.T) *os.Process {

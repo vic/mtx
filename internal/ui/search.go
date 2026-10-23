@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"ircc/internal/model"
+	"mtx/internal/model"
 )
 
 // Search finds the next line after from (back false) or before it (back true)

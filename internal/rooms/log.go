@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"ircc/internal/peer"
+	"mtx/internal/peer"
 )
 
 // maxLogRead bounds how much of a room log LoadLog reads, from the end.

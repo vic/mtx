@@ -4,7 +4,7 @@ import (
 	"slices"
 	"strings"
 
-	"ircc/internal/model"
+	"mtx/internal/model"
 )
 
 // completion is tab completion of the last word of an INSERT line.

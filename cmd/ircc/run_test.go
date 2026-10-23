@@ -16,12 +16,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"ircc/internal/model"
-	"ircc/internal/peer"
-	"ircc/internal/registry"
-	"ircc/internal/rooms"
-	"ircc/internal/transcript"
-	"ircc/internal/ui"
+	"mtx/internal/model"
+	"mtx/internal/peer"
+	"mtx/internal/registry"
+	"mtx/internal/rooms"
+	"mtx/internal/transcript"
+	"mtx/internal/ui"
 )
 
 type sink struct {

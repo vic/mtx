@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"ircc/internal/peer"
-	"ircc/internal/transcript"
+	"mtx/internal/peer"
+	"mtx/internal/transcript"
 )
 
 func heldEvent(t *testing.T, level, from string) transcript.Event {

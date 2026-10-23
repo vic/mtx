@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ircc/internal/model"
-	"ircc/internal/registry"
+	"mtx/internal/model"
+	"mtx/internal/registry"
 )
 
 func TestS1(t *testing.T) {

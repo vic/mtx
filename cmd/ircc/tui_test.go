@@ -15,8 +15,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"ircc/internal/registry"
-	"ircc/internal/ui"
+	"mtx/internal/registry"
+	"mtx/internal/ui"
 )
 
 // screen collects the frames the program renders, as plain text. The v2 renderer

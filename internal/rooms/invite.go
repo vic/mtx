@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"ircc/internal/peer"
+	"mtx/internal/peer"
 )
 
 // inviteIntro is the opening of the /invite frame. DESIGN D:240-241 names its content

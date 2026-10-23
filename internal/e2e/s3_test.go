@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"ircc/internal/peer"
+	"mtx/internal/peer"
 )
 
 const hopChain = "ff91b42a87afde0d1a72bfe2" // E10

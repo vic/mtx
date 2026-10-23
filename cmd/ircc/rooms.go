@@ -9,9 +9,9 @@ import (
 	"slices"
 	"sync"
 
-	"ircc/internal/peer"
-	"ircc/internal/rooms"
-	"ircc/internal/ui"
+	"mtx/internal/peer"
+	"mtx/internal/rooms"
+	"mtx/internal/ui"
 )
 
 // errShutdown means the room runtime no longer spawns keepers.

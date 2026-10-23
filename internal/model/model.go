@@ -177,5 +177,6 @@ type Thread struct {
 	Root  string // root event ID
 	Nick  string
 	Text  string
-	Count int // replies so far
+	Count int // replies so far (history included)
+	Live  int // replies received live this session (unread counts are Live minus what was seen)
 }

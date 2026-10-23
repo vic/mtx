@@ -68,3 +68,19 @@ func TestThreadsInPickerAndPane(t *testing.T) {
 		t.Fatalf("tab from nicks: focus %v, want threads", next.(App).focus)
 	}
 }
+
+// TestThreadUnreadCount: live replies not yet read show as [n new]; selecting the thread reads it.
+func TestThreadUnreadCount(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 4, Live: 3}}}
+	a.seenLive = map[string]int{"$a1": 1}
+	s := ansi.Strip(a.screen())
+	if !strings.Contains(s, "[2 new]") {
+		t.Fatalf("unread not on screen:\n%s", s)
+	}
+	a = a.selectThread("$a1")
+	if s := ansi.Strip(a.screen()); strings.Contains(s, "[2 new]") {
+		t.Fatalf("selected thread still shows unread:\n%s", s)
+	}
+}

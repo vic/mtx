@@ -14,7 +14,7 @@ const unknownRoot = "(thread)"
 
 // noteThread counts a thread reply and emits the channel's heads. The head's text comes from the
 // root message when it was seen (r.texts); a root not seen shows unknownRoot.
-func (r *runner) noteThread(evt *event.Event, text string) {
+func (r *runner) noteThread(evt *event.Event, text string, old bool) {
 	root := threadOf(evt)
 	if root == "" {
 		return
@@ -25,11 +25,17 @@ func (r *runner) noteThread(evt *event.Event, text string) {
 	for i := range heads {
 		if heads[i].Root == root {
 			heads[i].Count++
+			if !old {
+				heads[i].Live++
+			}
 			found = true
 		}
 	}
 	if !found {
 		h := model.Thread{Root: root, Nick: unknownRoot, Count: 1}
+		if !old {
+			h.Live = 1
+		}
 		if t, ok := r.texts[id.EventID(root)]; ok {
 			h.Nick, h.Text = t.nick, t.text
 		}

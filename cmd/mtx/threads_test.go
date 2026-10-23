@@ -63,7 +63,7 @@ func TestThreadHeadsAndSendRelation(t *testing.T) {
 
 	last := out[len(out)-1].(ui.ThreadsMsg)
 	require.Equal(t, "&r", last.Ch)
-	require.Equal(t, []model.Thread{{Root: "$root", Nick: "bob", Text: "start", Count: 2}}, last.Heads)
+	require.Equal(t, []model.Thread{{Root: "$root", Nick: "bob", Text: "start", Count: 2, Live: 2}}, last.Heads)
 
 	require.NoError(t, r.reply("&r", model.Line{ID: "$root", Thread: "$root"}, "in thread"))
 	mu.Lock()

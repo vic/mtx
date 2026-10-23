@@ -137,6 +137,7 @@ type App struct {
 	seen      func(ch string) error                             // the channel's newest line is on screen (read markers); nil = none
 	threads   map[string][]model.Thread                         // per channel: thread heads (ThreadsMsg)
 	thread    string                                            // selected thread root ("" = main chat): the chat pane shows it, sends go to it
+	seenLive  map[string]int                                    // per thread root: Live replies when it was last read
 }
 
 // New returns an App over m that sends channel text through send.
@@ -203,6 +204,14 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.threads = map[string][]model.Thread{}
 		}
 		a.threads[msg.Ch] = msg.Heads
+		if a.seenLive == nil {
+			a.seenLive = map[string]int{}
+		}
+		for _, h := range msg.Heads {
+			if _, ok := a.seenLive[h.Root]; !ok || h.Root == a.thread {
+				a.seenLive[h.Root] = h.Live
+			}
+		}
 		if a.thread != "" && !slices.ContainsFunc(msg.Heads, func(h model.Thread) bool { return h.Root == a.thread }) && msg.Ch == a.m.Current().Name {
 			a.thread = "" // the selected thread is gone
 		}
@@ -978,7 +987,7 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			a = a.showHit()
 		} else if a.psel < len(ms) {
 			if h, ok := a.threadAt(ms[a.psel].name); ok { // a thread: the chat pane shows it
-				a.thread, a.hit, a.offs = h.Root, -1, nil
+				a = a.selectThread(h.Root)
 			} else if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok {
 				a.mode = Insert
 				a.in.SetValue(a.in.Value() + "@" + nick + " ")
@@ -1262,7 +1271,7 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		if a.focus == focusThreads {
 			if h, ok := a.threadAt(names[a.fsel]); ok {
-				a.thread, a.hit, a.offs = h.Root, -1, nil
+				a = a.selectThread(h.Root)
 			}
 		} else if a.focus == focusChans {
 			a = a.focusName(names[a.fsel])
@@ -1373,7 +1382,7 @@ func (a App) mention(nick string) App {
 func (a App) sides() sidePanes {
 	chans, _ := a.paneItems(focusChans)
 	nicks, _ := a.paneItems(focusNicks)
-	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread}
+	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread, unread: a.unreadAll()}
 }
 
 // lineStep moves the cursor (the reversed line) one line down (to newer) or up,

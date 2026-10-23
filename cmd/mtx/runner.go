@@ -228,7 +228,7 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 	}
 	r.emit(ui.LineMsg{Old: old, Ch: name, L: model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: dim, ID: evt.ID.String(), Thread: threadOf(evt)}})
 	r.noteText(evt, text)
-	r.noteThread(evt, text)
+	r.noteThread(evt, text, old)
 	return nil
 }
 

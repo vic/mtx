@@ -16,7 +16,7 @@ type ThreadsMsg struct {
 func (a App) nextThread() App {
 	heads := a.threads[a.m.Current().Name]
 	if len(heads) == 0 {
-		a.thread = ""
+		a = a.selectThread("")
 		return a
 	}
 	i := -1
@@ -26,9 +26,9 @@ func (a App) nextThread() App {
 		}
 	}
 	if i+1 >= len(heads) {
-		a.thread = ""
+		a = a.selectThread("")
 	} else {
-		a.thread = heads[i+1].Root
+		a = a.selectThread(heads[i+1].Root)
 	}
 	a.hit, a.offs = -1, nil
 	return a
@@ -47,13 +47,32 @@ func threadRowCount(heads []model.Thread, n int) int {
 	return min(len(heads), threadRowsMax, max(n-1, 0))
 }
 
-// threadRow is one head: "▸" when selected, the root's sender and text, and the reply count.
-func threadRow(h model.Thread, selected bool, w int) string {
+// threadRow is one head: "▸" when selected, the sender and text, the reply count, and the unread
+// count when there is one. A head with nothing unread is faded.
+func threadRow(h model.Thread, selected bool, unread, w int) string {
 	mark := "  "
 	if selected {
 		mark = "▸ "
 	}
-	return fit(cell, fmt.Sprintf("%s%s: %s (%d)", mark, h.Nick, h.Text, h.Count), w)
+	label := fmt.Sprintf("%s%s: %s (%d)", mark, h.Nick, h.Text, h.Count)
+	if unread > 0 {
+		label += fmt.Sprintf(" [%d new]", unread)
+	}
+	row := fit(cell, label, w)
+	if unread == 0 && !selected {
+		return faint.Render(row)
+	}
+	return row
+}
+
+// unreadAll is the unread count of each head of the current channel, in head order.
+func (a App) unreadAll() []int {
+	heads := a.threads[a.m.Current().Name]
+	out := make([]int, len(heads))
+	for i, h := range heads {
+		out[i] = a.unreadOf(h)
+	}
+	return out
 }
 
 // threadLabel is a head as the thread pane and the Ctrl+O picker list it.
@@ -69,4 +88,37 @@ func (a App) threadAt(label string) (model.Thread, bool) {
 		}
 	}
 	return model.Thread{}, false
+}
+
+// selectThread shows root in the chat pane ("" = main chat) and marks it read.
+func (a App) selectThread(root string) App {
+	a.thread, a.hit, a.offs = root, -1, nil
+	if h, ok := a.headOf(root); ok {
+		if a.seenLive == nil {
+			a.seenLive = map[string]int{}
+		}
+		a.seenLive[root] = h.Live
+	}
+	return a
+}
+
+// headOf is the head with root in the current channel.
+func (a App) headOf(root string) (model.Thread, bool) {
+	for _, h := range a.threads[a.m.Current().Name] {
+		if h.Root == root {
+			return h, true
+		}
+	}
+	return model.Thread{}, false
+}
+
+// unreadOf is the live replies of h not yet read. A head seen for the first time counts as read.
+func (a App) unreadOf(h model.Thread) int {
+	if h.Root == a.thread {
+		return 0
+	}
+	if s, ok := a.seenLive[h.Root]; ok {
+		return max(h.Live-s, 0)
+	}
+	return 0
 }

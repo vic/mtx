@@ -270,7 +270,11 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			}
 			midCell := ""
 			if i < k {
-				midCell = fit(cell, threadRow(p.heads[i], p.heads[i].Root == p.thread || (p.focus == focusThreads && i == p.sel), mid), mid)
+				u := 0
+				if i < len(p.unread) {
+					u = p.unread[i]
+				}
+				midCell = threadRow(p.heads[i], p.heads[i].Root == p.thread || (p.focus == focusThreads && i == p.sel), u, mid)
 			} else {
 				midCell = lineRow(lines, of, shown, hit, i-k, mid, " ", code, q)
 			}
@@ -562,6 +566,7 @@ type sidePanes struct {
 	q            string
 	heads        []model.Thread // thread heads of the current channel (top rows of the chat column)
 	thread       string         // selected head root
+	unread       []int          // per head: live replies not yet read (same order as heads)
 }
 
 // title is a side pane's title: "▸name query" while it has focus.

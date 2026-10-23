@@ -148,10 +148,20 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 			c.onInvite(in)
 		}
 	}
+	var newRooms []id.RoomID
 	for roomID, room := range resp.Rooms.Join {
-		if since == "" && room.Timeline.PrevBatch != "" { // replay older events before the timeline
-			if err := c.backfill(ctx, roomID, room.Timeline.PrevBatch, h); err != nil {
-				return err
+		rctx := ctx
+		known, err := c.roomKnown(ctx, roomID)
+		if err != nil {
+			return err
+		}
+		if !known { // a room this store has not seen: its older events are history, from prev_batch
+			rctx = WithHistory(ctx)
+			newRooms = append(newRooms, roomID)
+			if room.Timeline.PrevBatch != "" {
+				if err := c.backfill(rctx, roomID, room.Timeline.PrevBatch, h); err != nil {
+					return err
+				}
 			}
 		}
 		if err := c.typingOf(roomID, room.Ephemeral.Events); err != nil {
@@ -164,10 +174,10 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 				return fmt.Errorf("parse state %s: %w", st.ID, err)
 			}
 			if st.Type == event.StateMember {
-				m.HandleMemberEvent(ctx, st)
+				m.HandleMemberEvent(rctx, st)
 			}
-			c.cli.StateStoreSyncHandler(ctx, st) // room state (encryption, members) for sends and lookups
-			if err := c.handleOnce(ctx, st, h); err != nil {
+			c.cli.StateStoreSyncHandler(rctx, st) // room state (encryption, members) for sends and lookups
+			if err := c.handleOnce(rctx, st, h); err != nil {
 				return err
 			}
 		}
@@ -175,12 +185,15 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 			evt := room.Timeline.Events[i]
 			evt.RoomID = roomID
 			if evt.StateKey != nil {
-				c.cli.StateStoreSyncHandler(ctx, evt)
+				c.cli.StateStoreSyncHandler(rctx, evt)
 			}
-			if err := c.handleOnce(ctx, evt, h); err != nil {
+			if err := c.handleOnce(rctx, evt, h); err != nil {
 				return err
 			}
 		}
+	}
+	if err := c.markRooms(ctx, newRooms); err != nil {
+		return err
 	}
 	if err := pruneSeen(ctx, c.db.RawDB); err != nil {
 		return err
@@ -262,3 +275,23 @@ func (c *Client) markDelivered(ctx context.Context, eventID id.EventID) error {
 
 // MX exposes the mautrix client for room and account calls outside the sync loop.
 func (c *Client) MX() *mautrix.Client { return c.cli }
+
+// roomKnown reports whether the store has seen room in a sync before.
+func (c *Client) roomKnown(ctx context.Context, room id.RoomID) (bool, error) {
+	var one int
+	err := c.db.RawDB.QueryRowContext(ctx, `SELECT 1 FROM rooms_seen WHERE room_id = ?`, room.String()).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
+// markRooms records rooms as seen. Called before the token is saved, so a failed batch is replayed.
+func (c *Client) markRooms(ctx context.Context, rooms []id.RoomID) error {
+	for _, r := range rooms {
+		if _, err := c.db.RawDB.ExecContext(ctx, `INSERT OR IGNORE INTO rooms_seen(room_id) VALUES(?)`, r.String()); err != nil {
+			return err
+		}
+	}
+	return nil
+}

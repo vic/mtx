@@ -120,7 +120,7 @@ func (s *SyncStore) LoadNextBatch(ctx context.Context, user id.UserID) (string, 
 }
 
 // schemaVersion is PRAGMA user_version. Each step is one migration; a newer DB than this is an error.
-const schemaVersion = 1
+const schemaVersion = 2 // 2: rooms_seen (a room first seen in a sync gets its history)
 
 // migrate brings mtx's own tables to schemaVersion. cryptohelper creates its tables on Init.
 func migrate(ctx context.Context, db *sql.DB) error {
@@ -146,6 +146,9 @@ CREATE TABLE IF NOT EXISTS pending_events (
 );
 CREATE TABLE IF NOT EXISTS seen_events (
 	event_id TEXT PRIMARY KEY
+);
+CREATE TABLE IF NOT EXISTS rooms_seen (
+	room_id TEXT PRIMARY KEY
 );`); err != nil {
 		return err
 	}

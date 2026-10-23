@@ -48,7 +48,7 @@ func fg(c string) lipgloss.Style { return cell.Foreground(lipgloss.Color(c)) }
 func badge(mode string, bypass bool) string {
 	bg := "5"
 	if mode == "INSERT" {
-		bg = "2"
+		bg = "6" // cyan
 	}
 	if bypass {
 		bg = "9"

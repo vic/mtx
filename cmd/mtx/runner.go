@@ -215,9 +215,6 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 	if evt.Type != event.EventMessage && evt.Type != event.EventEncrypted && evt.Type != event.EventRedaction {
 		return nil
 	}
-	if evt.Sender.String() == r.mx.UserID.String() {
-		return nil // our own lines are echoed locally by the UI when sent
-	}
 	if evt.Type == event.EventRedaction {
 		r.emit(ui.LineMsg{Old: old, Ch: name, L: systemLine(evt, fmt.Sprintf("%s removed a message", localpart(evt.Sender.String())))})
 		return nil
@@ -273,12 +270,11 @@ func (r *runner) send(ch, text string) error {
 	})
 }
 
-// sendLiteral sends a : line as is. There is no local echo for it, so the line is shown here.
+// sendLiteral sends a : line as is. Our own lines come back in sync and are shown from there.
 func (r *runner) sendLiteral(ch, text string) error {
 	if err := r.send(ch, text); err != nil {
 		return err
 	}
-	r.emit(ui.LineMsg{Ch: ch, L: model.Line{At: time.Now(), Nick: localpart(r.mx.UserID.String()), Text: text}})
 	return nil
 }
 

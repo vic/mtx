@@ -88,9 +88,11 @@ func TestRunnerJoinSendReceive(t *testing.T) {
 		}
 	}
 	require.Equal(t, ui.FocusMsg("&r"), focus)
-	require.Len(t, lines, 1, "own echo is not shown again")
+	require.Len(t, lines, 2, "own message comes back in sync and is shown once")
 	require.Equal(t, "bob", lines[0].Nick)
 	require.Equal(t, "yo", lines[0].Text)
+	require.Equal(t, "alice", lines[1].Nick)
+	require.Equal(t, "hi", lines[1].Text)
 }
 
 // TestRegisterClashUsesRoomID: two rooms with the same alias localpart get distinct names.

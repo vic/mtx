@@ -348,12 +348,12 @@ func TestInsertKeys(t *testing.T) {
 	a := newApp(t, &log, nil)
 	a.user = "vic"
 	for _, txt := range []string{"ask @lib1", "@lib2 and @vic please"} {
-		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "x", Text: txt}})
+		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "x", Text: txt, ID: "$" + txt[:3]}})
 		a = next.(App)
 	}
 	a, _ = press(t, a, "O")
-	if a.in.Value() != "@lib2 " { // newest mention that is not the user
-		t.Fatalf("O: %q", a.in.Value())
+	if a.thread != "$@li" { // O: a thread on the newest message that has an ID
+		t.Fatalf("O: thread %q, input %q", a.thread, a.in.Value())
 	}
 }
 

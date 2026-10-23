@@ -411,10 +411,19 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if mode == Insert {
 		a.mode = Insert
 		a.in.Focus()
-		if act.Kind == ReplyMention {
-			if n := a.lastMention(); n != "" {
-				a.in.SetValue("@" + n + " ")
-				a.in.MoveToEnd()
+		if act.Kind == ReplyLast { // o: reply to the newest message
+			if l, ok := a.lastWithID(-1); ok {
+				a.quote = &l
+			}
+		}
+		if act.Kind == ThreadStart { // O: start a thread on the selected message, else the newest; it becomes the thread target
+			if l, ok := a.lastWithID(a.hit); ok {
+				root := l.Thread
+				if root == "" {
+					root = l.ID
+				}
+				a.quote = nil
+				a = a.selectThread(root)
 			}
 		}
 		if act.Kind == ReplySelected { // A: reply to the selected line, else to the last one, which gets selected

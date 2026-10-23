@@ -127,3 +127,18 @@ func (a App) unreadOf(h model.Thread) int {
 
 // unreadMark is the channel unread count style (the number next to a channel with unread lines).
 var unreadMark = unread
+
+// lastWithID is the message at index i of the current channel's shown lines, or the newest one
+// before it when that line has no event ID (local echoes have none). i < 0 means the newest.
+func (a App) lastWithID(i int) (model.Line, bool) {
+	ls := a.lines(a.m.Current())
+	if i < 0 || i >= len(ls) {
+		i = len(ls) - 1
+	}
+	for ; i >= 0; i-- {
+		if ls[i].ID != "" {
+			return ls[i], true
+		}
+	}
+	return model.Line{}, false
+}

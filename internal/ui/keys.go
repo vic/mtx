@@ -50,7 +50,8 @@ const (
 	PickSpeaker
 	Yank
 	PickInvite
-	ReplyMention
+	ReplyLast
+	ThreadStart
 	ReplySelected
 )
 
@@ -96,12 +97,14 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 	}
 	if pending == "" {
 		switch k {
-		case "i", "a", "o":
+		case "i", "a":
 			return Action{}, Insert, ""
+		case "o":
+			return Action{Kind: ReplyLast}, Insert, ""
 		case "A":
 			return Action{Kind: ReplySelected}, Insert, ""
 		case "O":
-			return Action{Kind: ReplyMention}, Insert, ""
+			return Action{Kind: ThreadStart}, Insert, ""
 		case "j":
 			return Action{Scroll, 1}, Normal, ""
 		case "k":

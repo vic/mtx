@@ -117,3 +117,15 @@ func TestCommandWithNoChannel(t *testing.T) {
 	require.Nil(t, cmd, "plain text with no channel is dropped")
 	_ = next
 }
+
+// TestReplyLastKey: o quotes the newest message that has an ID and enters INSERT.
+func TestReplyLastKey(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "one", ID: "$1"}})
+	a = next.(App)
+	a, _ = press(t, a, "o")
+	if a.mode != Insert || a.quote == nil || a.quote.ID != "$1" {
+		t.Fatalf("o: mode %v quote %+v", a.mode, a.quote)
+	}
+}

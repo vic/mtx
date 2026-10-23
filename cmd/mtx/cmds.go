@@ -143,7 +143,8 @@ func (c *cmds) topic(ch, text string) error {
 }
 
 func (c *cmds) invite(nick, ch string) error {
-	if !strings.HasPrefix(nick, "@") {
+	uid, err := c.fullUser(nick)
+	if err != nil {
 		return errors.New("usage: /invite <user-id> &room")
 	}
 	room, err := c.r.roomOf(ch)
@@ -152,12 +153,13 @@ func (c *cmds) invite(nick, ch string) error {
 	}
 	ctx, cancel := c.ctx()
 	defer cancel()
-	_, err = c.r.mx.InviteUser(ctx, room, &mautrix.ReqInviteUser{UserID: id.UserID(nick)})
+	_, err = c.r.mx.InviteUser(ctx, room, &mautrix.ReqInviteUser{UserID: uid})
 	return err
 }
 
 func (c *cmds) kick(ch, nick string) error {
-	if !strings.HasPrefix(nick, "@") {
+	uid, err := c.fullUser(nick)
+	if err != nil {
 		return errors.New("usage: /kick <user-id>")
 	}
 	room, err := c.r.roomOf(ch)
@@ -166,7 +168,7 @@ func (c *cmds) kick(ch, nick string) error {
 	}
 	ctx, cancel := c.ctx()
 	defer cancel()
-	_, err = c.r.mx.KickUser(ctx, room, &mautrix.ReqKickUser{UserID: id.UserID(nick)})
+	_, err = c.r.mx.KickUser(ctx, room, &mautrix.ReqKickUser{UserID: uid})
 	return err
 }
 
@@ -185,10 +187,11 @@ func (c *cmds) names(ch string) error {
 
 // msg: /msg <user-id> <text> sends to the DM with that user, creating it when missing.
 func (c *cmds) msg(user, text string) error {
-	if !strings.HasPrefix(user, "@") {
+	uid, err := c.fullUser(user)
+	if err != nil {
 		return errors.New("usage: /msg <user-id> <text>")
 	}
-	room, err := c.dmRoom(id.UserID(user))
+	room, err := c.dmRoom(uid)
 	if err != nil {
 		return err
 	}
@@ -235,12 +238,13 @@ func (c *cmds) dmRoom(user id.UserID) (id.RoomID, error) {
 
 // whois shows the Matrix profile of a user.
 func (c *cmds) whois(user string) error {
-	if !strings.HasPrefix(user, "@") {
+	uid, err := c.fullUser(user)
+	if err != nil {
 		return errors.New("usage: /whois <user-id>")
 	}
 	ctx, cancel := c.ctx()
 	defer cancel()
-	p, err := c.r.mx.GetProfile(ctx, id.UserID(user))
+	p, err := c.r.mx.GetProfile(ctx, uid)
 	if err != nil {
 		return err
 	}
@@ -276,4 +280,15 @@ func (c *cmds) create(s string) error {
 	c.r.emitRooms()
 	c.r.emit(ui.FocusMsg(name))
 	return nil
+}
+
+// fullUser is a user ID typed as @local or @local:server. A bare @local gets our server.
+func (c *cmds) fullUser(s string) (id.UserID, error) {
+	if !strings.HasPrefix(s, "@") || len(s) < 2 {
+		return "", fmt.Errorf("expected @user, got %q", s)
+	}
+	if !strings.Contains(s, ":") {
+		s += ":" + c.server
+	}
+	return id.UserID(s), nil
 }

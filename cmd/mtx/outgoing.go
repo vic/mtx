@@ -8,6 +8,9 @@ import (
 
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"mtx/internal/matrix"
+	"mtx/internal/model"
 )
 
 // content builds the m.room.message for text. A joined member written as @localpart is a mention
@@ -30,4 +33,25 @@ func (r *runner) content(ctx context.Context, room id.RoomID, text string) (*eve
 		c.Mentions = &event.Mentions{UserIDs: mentioned}
 	}
 	return c, nil
+}
+
+// reply sends text as a reply to to (a line with an event ID). A line without one is a plain send.
+func (r *runner) reply(ch string, to model.Line, text string) error {
+	room, err := r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := callCtx()
+	defer cancel()
+	content, err := r.content(ctx, room, text)
+	if err != nil {
+		return err
+	}
+	if to.ID != "" {
+		content.RelatesTo = &event.RelatesTo{InReplyTo: &event.InReplyTo{EventID: id.EventID(to.ID)}}
+	}
+	return matrix.Retry(ctx, sendAttempts, func() error {
+		_, err := r.mx.SendMessageEvent(ctx, room, event.EventMessage, content)
+		return err
+	})
 }

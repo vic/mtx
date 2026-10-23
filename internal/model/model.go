@@ -31,6 +31,7 @@ type Line struct {
 	Nick, Text string
 	Dim        bool
 	Kind       LineKind
+	ID         string // producer's event ID (a reply target); not shown
 }
 
 // ChanKind tells a session channel (#) from a room (&).

@@ -70,7 +70,7 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config, dataHome s
 
 	last := filepath.Join(dataHome, "mtx", "last") // the channel mtx was on when it last quit
 	prev, _ := os.ReadFile(last)
-	app := ui.New(m, r.send).WithUser(localpart(cfg.UserID)).WithCmd(cs.cmd).WithLiteral(r.sendLiteral).WithResume(strings.TrimSpace(string(prev))).WithSeen(r.seen)
+	app := ui.New(m, r.send).WithUser(localpart(cfg.UserID)).WithCmd(cs.cmd).WithLiteral(r.sendLiteral).WithResume(strings.TrimSpace(string(prev))).WithSeen(r.seen).WithReply(r.reply)
 	p = tea.NewProgram(app)
 
 	syncErr := make(chan error, 1)

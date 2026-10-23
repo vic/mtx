@@ -562,9 +562,9 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 	a.in.Reset()
 	ch := a.m.Current().Name
 	switch {
-	case text == "" || ch == "":
-	case strings.HasPrefix(text, "/"):
+	case strings.HasPrefix(text, "/"): // commands run with no channel too (/create makes the first one)
 		return a.runCmd(text)
+	case text == "" || ch == "":
 	default:
 		if a.thread != "" && a.reply != nil { // a thread send: the thread relation carries the root
 			to := model.Line{ID: a.thread, Thread: a.thread}

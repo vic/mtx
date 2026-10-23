@@ -101,3 +101,19 @@ func TestCtrlOKeepsChannelsAndNicks(t *testing.T) {
 		t.Fatalf("ctrl+o source lacks @nicks: %v", src)
 	}
 }
+
+// TestCommandWithNoChannel: with no rooms, a /command typed in INSERT still runs (it is how the first
+// room is made); plain text is dropped.
+func TestCommandWithNoChannel(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.m = model.Model{}
+	a.in.SetValue("/create &first")
+	next, cmd := a.sendLine()
+	_ = next
+	require.NotNil(t, cmd, "a command with no channel must still be dispatched")
+	a.in.SetValue("plain")
+	next, cmd = a.sendLine()
+	require.Nil(t, cmd, "plain text with no channel is dropped")
+	_ = next
+}

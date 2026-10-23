@@ -107,10 +107,14 @@ func (c *Client) Run(ctx context.Context, h Handler) error {
 			if errors.Is(err, mautrix.MUnknownToken) || ctx.Err() != nil {
 				return err
 			}
-			select { // transient: back off, retry
+			wait, limited := retryAfter(err)
+			if !limited {
+				wait = failedBackof // transient: back off, retry
+			}
+			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(failedBackof):
+			case <-time.After(wait):
 			}
 			continue
 		}

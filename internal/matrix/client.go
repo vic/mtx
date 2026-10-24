@@ -56,6 +56,15 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("crypto init: %w", err)
 	}
+	// Own devices may ask for room keys; the default policy wants cross-signing trust, which
+	// unverified devices of this account never have. Other users keep the default policy.
+	defaultShare := helper.Machine().AllowKeyShare
+	helper.Machine().AllowKeyShare = func(ctx context.Context, dev *id.Device, evt event.RequestedKeyInfo) *crypto.KeyShareRejection {
+		if dev.UserID == cli.UserID && dev.DeviceID != cli.DeviceID && dev.Trust != id.TrustStateBlacklisted {
+			return nil
+		}
+		return defaultShare(ctx, dev, evt)
+	}
 	cli.Crypto = helper
 	if cli.Crypto == nil { // a send without Crypto goes out in plaintext; never allow it
 		_ = db.Close()

@@ -75,9 +75,9 @@ func testConfig(t *testing.T, url string, tok string, dev string) Config {
 }
 
 func TestLoadConfigMissingNamesVariable(t *testing.T) {
-	env := map[string]string{"MTX_HOMESERVER": "https://h.example", "MTX_USER_ID": "@a:h.example", "MTX_ACCESS_TOKEN": "t", "MTX_PICKLE_KEY": "p"}
+	env := map[string]string{"MTX_HOMESERVER": "https://h.example", "MTX_USER_ID": "@a:h.example", "MTX_ACCESS_TOKEN": "t"}
 	_, err := LoadConfig(func(k string) string { return env[k] }, "/data")
-	require.ErrorContains(t, err, "MTX_DEVICE_ID")
+	require.ErrorContains(t, err, "MTX_PICKLE_KEY")
 }
 
 func TestLoadConfigDefaultDB(t *testing.T) {

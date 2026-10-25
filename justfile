@@ -7,11 +7,16 @@ test:
 fmt:
     nix-shell -p go --run 'go fmt ./...'
 
+login:
+    nix-shell -p go --run 'go run -tags goolm ./cmd/mtx login'
+
 run:
     nix-shell -p go --run 'go run -tags goolm ./cmd/mtx'
 
 vet:
     nix-shell -p go --run 'go vet -tags goolm ./...'
+
+ci: vet test conduit
 
 conduit:
     #!/usr/bin/env bash
@@ -39,4 +44,3 @@ conduit:
     export MTX_CONDUIT_B_USER=$(field "$b" user_id) MTX_CONDUIT_B_PASSWORD=$pb
     timeout 300 nix-shell -p go --run 'go test -tags "goolm conduit" -count=1 -timeout 180s -run TestConduit ./internal/matrix/'
 
-ci: vet test conduit

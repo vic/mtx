@@ -26,28 +26,20 @@ The `goolm` build tag selects the pure-Go Olm implementation. The SQLite store u
 
 ## Use
 
-mtx is configured only by environment variables. No positional arguments, no prompts.
+Start `mtx` with no arguments.
 
-| Variable | Required | Meaning |
-|---|---|---|
-| `MTX_HOMESERVER` | yes | homeserver base URL, e.g. `https://matrix.example.org` |
-| `MTX_USER_ID` | yes | your Matrix user ID, e.g. `@alice:example.org` |
-| `MTX_ACCESS_TOKEN` | yes | access token for this device; never stored |
-| `MTX_DEVICE_ID` | yes | device ID bound to the token; checked against the server at start |
-| `MTX_PICKLE_KEY` | yes | secret that encrypts E2EE keys in the store; yours to keep, mtx never stores it |
-| `MTX_DB` | no | store path, default `$XDG_DATA_HOME/mtx/mtx.db` (`~/.local/share/mtx/mtx.db`) |
-| `MTX_LOG` | no | append a log file for TUI activity |
+**`mtx login`:** asks you to type `yes`, deletes the store, and runs the first-run
+screen again. Lost: E2EE keys and sync state. The old device stays on the server
+until you remove it there.
+
+Once you logged store `MTX_PICKLE_KEY` as a secret and use it as an env-var:
 
 ```sh
-export MTX_HOMESERVER=https://matrix.example.org
-export MTX_USER_ID=@alice:example.org
-export MTX_DEVICE_ID=ABCDEFGHIJ
-export MTX_PICKLE_KEY="$(head -c 32 /dev/urandom | base64 -w0)"  # keep this value: lose it, lose the store
-read -s -P 'access token: ' MTX_ACCESS_TOKEN && export MTX_ACCESS_TOKEN
-./mtx
+env MTX_PICKLE_KEY='...' mtx # secret: lose it, lose the store
 ```
 
-The store holds E2EE keys and sync state. It is created with directory mode 0700 and
+The store `$XDG_DATA_HOME/mtx/mtx.db` (`~/.local/share/mtx/mtx.db`)
+holds E2EE keys and sync state. It is created with directory mode 0700 and
 file mode 0600. mtx refuses to start if an existing store file or its WAL files are
 not 0600. Keep the pickle key and the store out of git.
 

@@ -1,4 +1,5 @@
-// Command mtx is a terminal Matrix client. Config comes from MTX_* env only.
+// Command mtx is a terminal Matrix client. Config comes from MTX_* env, or from the first-run
+// screen when no env is set and no store exists.
 package main
 
 import (
@@ -21,9 +22,9 @@ import (
 
 const ringCap = 1000
 
-func main() { os.Exit(run()) }
+func main() { os.Exit(run(os.Args[1:])) }
 
-func run() int {
+func run(args []string) int {
 	dataHome := os.Getenv("XDG_DATA_HOME")
 	if dataHome == "" {
 		home, err := os.UserHomeDir()
@@ -33,7 +34,7 @@ func run() int {
 		}
 		dataHome = filepath.Join(home, ".local", "share")
 	}
-	cfg, err := matrix.LoadConfig(os.Getenv, dataHome)
+	cfg, err := startConfig(args, dataHome)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "mtx:", err)
 		return 1

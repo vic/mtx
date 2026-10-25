@@ -1,6 +1,7 @@
 package matrix
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -30,10 +31,33 @@ type Client struct {
 	onTyping func(id.RoomID, []id.UserID)
 }
 
-// New opens the store, checks the device against the server, and starts E2EE.
+// New opens the store, checks the device against the server, and starts E2EE. With no
+// MTX_ACCESS_TOKEN, the token and device come from the stored session; a good start saves them.
 func New(ctx context.Context, cfg Config) (*Client, error) {
 	db, err := OpenDB(cfg.DBPath)
 	if err != nil {
+		return nil, err
+	}
+	s, ok, err := loadSession(ctx, db.RawDB, cfg.PickleKey)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if !ok && (cfg.Homeserver == "" || cfg.UserID == "" || cfg.AccessToken == "") {
+		_ = db.Close()
+		return nil, errors.New("no stored session: run mtx login, or set MTX_HOMESERVER, MTX_USER_ID and MTX_ACCESS_TOKEN")
+	}
+	// env wins; the stored session fills what env leaves empty
+	cfg.Homeserver = cmp.Or(cfg.Homeserver, s.Homeserver)
+	cfg.UserID = cmp.Or(cfg.UserID, s.UserID)
+	cfg.AccessToken = cmp.Or(cfg.AccessToken, s.AccessToken)
+	cfg.DeviceID = cmp.Or(cfg.DeviceID, s.DeviceID)
+	if err := ValidateHomeserver(cfg.Homeserver); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := ValidateUserID(cfg.UserID); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 	cli, err := mautrix.NewClient(cfg.Homeserver, id.UserID(cfg.UserID), cfg.AccessToken)
@@ -46,6 +70,10 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	if err := checkDevice(ctx, cli, cfg.DeviceID); err != nil {
 		_ = db.Close()
 		return nil, err
+	}
+	if err := saveSession(ctx, db.RawDB, cfg.PickleKey, savedSession{Homeserver: cfg.Homeserver, UserID: cfg.UserID, AccessToken: cfg.AccessToken, DeviceID: string(cli.DeviceID)}); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("save session: %w", err)
 	}
 	helper, err := cryptohelper.NewCryptoHelper(cli, []byte(cfg.PickleKey), db)
 	if err != nil {
@@ -73,7 +101,8 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	return &Client{cli: cli, helper: helper, db: db, user: cli.UserID}, nil
 }
 
-// checkDevice fails when the token's user or device differs from the env values.
+// checkDevice fails when the token's user differs from MTX_USER_ID, or when MTX_DEVICE_ID is set
+// and differs from the token's device. The device then comes from the server.
 func checkDevice(ctx context.Context, cli *mautrix.Client, wantDevice string) error {
 	resp, err := cli.Whoami(ctx)
 	if err != nil {
@@ -82,9 +111,10 @@ func checkDevice(ctx context.Context, cli *mautrix.Client, wantDevice string) er
 	if resp.UserID != cli.UserID {
 		return fmt.Errorf("user mismatch: server %q != MTX_USER_ID %q", resp.UserID, cli.UserID)
 	}
-	if resp.DeviceID != id.DeviceID(wantDevice) {
+	if wantDevice != "" && resp.DeviceID != id.DeviceID(wantDevice) {
 		return fmt.Errorf("device mismatch: server %q != MTX_DEVICE_ID %q", resp.DeviceID, wantDevice)
 	}
+	cli.DeviceID = resp.DeviceID
 	return nil
 }
 

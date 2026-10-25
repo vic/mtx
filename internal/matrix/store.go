@@ -120,7 +120,7 @@ func (s *SyncStore) LoadNextBatch(ctx context.Context, user id.UserID) (string, 
 }
 
 // schemaVersion is PRAGMA user_version. Each step is one migration; a newer DB than this is an error.
-const schemaVersion = 2 // 2: rooms_seen (a room first seen in a sync gets its history)
+const schemaVersion = 3 // 2: rooms_seen (a room first seen in a sync gets its history); 3: session (sealed login)
 
 // migrate brings mtx's own tables to schemaVersion. cryptohelper creates its tables on Init.
 func migrate(ctx context.Context, db *sql.DB) error {
@@ -147,6 +147,10 @@ CREATE TABLE IF NOT EXISTS pending_events (
 CREATE TABLE IF NOT EXISTS seen_events (
 	event_id TEXT PRIMARY KEY
 );
+CREATE TABLE IF NOT EXISTS session (
+	id     INTEGER PRIMARY KEY CHECK (id = 1),
+	sealed BLOB NOT NULL
+);
 CREATE TABLE IF NOT EXISTS rooms_seen (
 	room_id TEXT PRIMARY KEY
 );`); err != nil {
@@ -164,4 +168,22 @@ const seenKeep = 10000
 func pruneSeen(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `DELETE FROM seen_events WHERE rowid NOT IN (SELECT rowid FROM seen_events ORDER BY rowid DESC LIMIT ?)`, seenKeep)
 	return err
+}
+
+// RemoveStore deletes the store at path and its WAL sidecars. Missing files are fine.
+func RemoveStore(path string) error {
+	for _, p := range append([]string{path}, withSuffix(path, sidecars)...) {
+		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("remove %s: %w", p, err)
+		}
+	}
+	return nil
+}
+
+func withSuffix(path string, suffixes []string) []string {
+	out := make([]string, 0, len(suffixes))
+	for _, s := range suffixes {
+		out = append(out, path+s)
+	}
+	return out
 }

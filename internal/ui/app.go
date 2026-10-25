@@ -137,6 +137,8 @@ type App struct {
 	query      string
 	hit        int                                                   // index in the current channel of the last search hit, -1 none
 	rows       *rowCache                                             // wrapped rows per line: scrolling reuses them
+	lc         *linesCache                                           // shown lines of the current channel, see lines
+	sc         *sideCache                                            // side panes between frames, see sides
 	offs       map[string]int                                        // per channel: lines scrolled back from the newest
 	help       bool                                                  // the ? popup is shown; the next key closes it
 	focus      paneFocus                                             // tab: which pane takes keys (chat, channels, nicks)
@@ -176,7 +178,7 @@ func New(m model.Model, send func(ch, text string) error) App {
 	in.Prompt = ""
 	in.ShowLineNumbers = false
 	in.SetWidth(1 << 16) // no soft wrap in the buffer: render wraps it
-	return App{m: m, in: in, send: send, user: "me", now: time.Now, w: defaultW, h: defaultH, hit: -1, histAt: -1, rows: &rowCache{m: map[rowKey][]string{}}}
+	return App{m: m, in: in, send: send, user: "me", now: time.Now, w: defaultW, h: defaultH, hit: -1, histAt: -1, rows: &rowCache{m: map[rowKey][]string{}}, lc: &linesCache{}, sc: &sideCache{}}
 }
 
 // Init starts the 1 s tick: it drops old toasts and keeps the clock current.
@@ -877,15 +879,6 @@ func mentionsUser(text, user string) bool {
 }
 
 // lines is the part of c's scrollback the toggles show; render, scroll and search all use it.
-func (a App) lines(c model.Channel) []model.Line {
-	var out []model.Line
-	for _, l := range c.Lines.All() {
-		if a.shows(c.Kind, l) && (c.Name != a.m.Current().Name || a.inThread(l)) {
-			out = append(out, l)
-		}
-	}
-	return out
-}
 
 func onOff(b bool) string {
 	if b {
@@ -1453,17 +1446,6 @@ func (a App) mention(nick string) App {
 	return a
 }
 
-func (a App) sides() sidePanes {
-	chans, _ := a.paneItems(focusChans)
-	nicks, _ := a.paneItems(focusNicks)
-	_, rowOf := a.nickRows()
-	nickSel := -1
-	if a.fsel >= 0 && a.fsel < len(rowOf) {
-		nickSel = rowOf[a.fsel]
-	}
-	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, nickSel: nickSel, chanTop: a.ptop[focusChans], nickTop: a.ptop[focusNicks], q: a.fq, heads: a.threads[a.m.Current().Name], threadTop: threadTopOf(len(a.threads[a.m.Current().Name])+1, a.fsel, a.focus == focusThreads), thread: a.thread, unread: a.unreadAll(), mainUnread: a.mainUnread[a.m.Current().Name]}
-}
-
 // lineStep moves the cursor (the reversed line) one line down (to newer) or up,
 // and scrolls just enough to keep it in view (vic 2026-10-23). Up with no cursor
 // starts at the newest line; down past the newest clears it.
@@ -1825,4 +1807,91 @@ func (a App) wheel(m tea.MouseWheelMsg, n int) App {
 		return a.paneWheel(p, step)
 	}
 	return a.scroll(Action{Scroll, step})
+}
+
+// linesCache keeps the shown lines of the current channel between frames. Scrolling and typing
+// change neither the lines nor the filters, so they reuse it instead of copying and filtering the ring.
+type linesCache struct {
+	key   linesKey
+	lines []model.Line
+}
+
+// linesKey is everything the shown lines depend on.
+type linesKey struct {
+	ch, grep, user, thread, speakers string
+	kind                             model.ChanKind
+	tools, mentions                  bool
+	ver                              uint64
+	n                                int
+}
+
+// lines are the lines of c that the view shows (filters and thread applied), cached until they change.
+func (a App) lines(c model.Channel) []model.Line {
+	k := linesKey{ch: c.Name, grep: a.grep, user: a.user, thread: a.thread, speakers: strings.Join(a.speakers, "\x00"),
+		kind: c.Kind, tools: a.tools, mentions: a.mentions, ver: c.Lines.Version(), n: c.Lines.Len()}
+	if a.lc != nil && a.lc.key == k {
+		return a.lc.lines
+	}
+	var out []model.Line
+	for _, l := range c.Lines.All() {
+		if a.shows(c.Kind, l) && (c.Name != a.m.Current().Name || a.inThread(l)) {
+			out = append(out, l)
+		}
+	}
+	if a.lc != nil {
+		a.lc.key, a.lc.lines = k, out
+	}
+	return out
+}
+
+// sideCache keeps the side panes between frames: a frame that changed no channel, focus, filter or
+// thread reuses them. Unread counts and the threads box position are cheap and always recomputed.
+type sideCache struct {
+	key sideKey
+	val sidePanes
+}
+
+// sideKey is what the side panes depend on (session busy marks are not cached: see sides).
+type sideKey struct {
+	ver                                 uint64
+	cur, fq, thread, user, grep, typing string
+	focus                               paneFocus
+	fsel, mainUnread                    int
+	tools, mentions                     bool
+	heads                               []model.Thread
+}
+
+func (k sideKey) same(o sideKey) bool {
+	return k.ver == o.ver && k.cur == o.cur && k.fq == o.fq && k.thread == o.thread && k.user == o.user &&
+		k.grep == o.grep && k.typing == o.typing && k.focus == o.focus && k.fsel == o.fsel &&
+		k.mainUnread == o.mainUnread && k.tools == o.tools && k.mentions == o.mentions && slices.Equal(k.heads, o.heads)
+}
+
+// sides are the side panes of the current frame.
+func (a App) sides() sidePanes {
+	cur := a.m.Current().Name
+	heads := a.threads[cur]
+	k := sideKey{ver: a.m.Version(), cur: cur, fq: a.fq, thread: a.thread, user: a.user, grep: a.grep,
+		typing: a.in.Value(), focus: a.focus, fsel: a.fsel, mainUnread: a.mainUnread[cur], tools: a.tools,
+		mentions: a.mentions, heads: slices.Clone(heads)}
+	p, hit := sidePanes{}, false
+	if a.sc != nil && len(a.info) == 0 && a.sc.key.same(k) {
+		p, hit = a.sc.val, true
+	}
+	if !hit {
+		chans, _ := a.paneItems(focusChans)
+		nicks, _ := a.paneItems(focusNicks)
+		_, rowOf := a.nickRows()
+		nickSel := -1
+		if a.fsel >= 0 && a.fsel < len(rowOf) {
+			nickSel = rowOf[a.fsel]
+		}
+		p = sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, nickSel: nickSel, chanTop: a.ptop[focusChans], nickTop: a.ptop[focusNicks], q: a.fq, heads: heads, thread: a.thread, mainUnread: a.mainUnread[cur]}
+		if a.sc != nil && len(a.info) == 0 {
+			a.sc.key, a.sc.val = k, p
+		}
+	}
+	p.unread = a.unreadAll()
+	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads)
+	return p
 }

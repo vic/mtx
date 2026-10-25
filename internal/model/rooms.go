@@ -25,6 +25,7 @@ func (m Model) WithRooms(names []string) Model {
 	}
 	n := m
 	n.chans, n.cur = out, 0
+	n.ver++
 	for i, c := range out {
 		if c.Name == focus {
 			n.cur = i

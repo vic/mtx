@@ -12,6 +12,7 @@ var ErrBadCap = errors.New("model: ring capacity must be >= 1")
 type Ring[T any] struct {
 	buf      []T
 	start, n int
+	ver      uint64 // bumped by every change: a reader can tell the ring moved
 }
 
 // Cap is a validated ring capacity (>= 1 when made by NewCap).
@@ -40,6 +41,7 @@ func NewRing[T any](n int) (Ring[T], error) {
 
 // Push appends v, evicting the oldest item when full.
 func (r *Ring[T]) Push(v T) {
+	r.ver++
 	if len(r.buf) == 0 {
 		return
 	}
@@ -72,6 +74,7 @@ func (r Ring[T]) clone() Ring[T] {
 
 // Replace applies f to every item that match selects, in place.
 func (r *Ring[T]) Replace(match func(T) bool, f func(T) T) {
+	r.ver++
 	for i := 0; i < r.n; i++ {
 		j := (r.start + i) % len(r.buf)
 		if match(r.buf[j]) {
@@ -79,3 +82,6 @@ func (r *Ring[T]) Replace(match func(T) bool, f func(T) T) {
 		}
 	}
 }
+
+// Version changes whenever the ring's content changes (Push, Replace).
+func (r *Ring[T]) Version() uint64 { return r.ver }

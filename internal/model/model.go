@@ -63,6 +63,7 @@ type Model struct {
 	chans []Channel
 	cur   int
 	cap   Cap
+	ver   uint64 // bumped by every change to channels or the current one
 }
 
 // New returns an empty model whose channels keep n lines each.
@@ -138,6 +139,7 @@ func (m Model) WithSessions(ss []Session) Model {
 	}
 	n := m
 	n.chans = out
+	n.ver++
 	if m.cur < len(m.chans) { // keep focus on the same channel after reordering
 		c := m.chans[m.cur]
 		for i, x := range n.chans {
@@ -182,3 +184,6 @@ type Thread struct {
 	Live  int       // replies received live this session (unread counts are Live minus what was seen)
 	At    time.Time // newest reply: its time shows at the left of the row
 }
+
+// Version changes whenever the channels or the current channel change.
+func (m Model) Version() uint64 { return m.ver }

@@ -52,6 +52,7 @@ func (m Model) Focus(i int) (Model, error) {
 	c.Unread = 0
 	n := m.withChan(i, c)
 	n.cur = i
+	n.ver++
 	return n, nil
 }
 
@@ -66,6 +67,7 @@ func (m Model) Current() Channel {
 func (m Model) withChan(i int, c Channel) Model {
 	m.chans = append([]Channel(nil), m.chans...)
 	m.chans[i] = c
+	m.ver++
 	return m
 }
 
@@ -90,6 +92,7 @@ func clean(s string) string {
 func (m Model) toFront(i int) Model {
 	c := m.chans[i]
 	m.chans = append([]Channel{c}, slices.Delete(slices.Clone(m.chans), i, i+1)...)
+	m.ver++
 	switch {
 	case m.cur == i:
 		m.cur = 0

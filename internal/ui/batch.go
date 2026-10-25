@@ -8,7 +8,7 @@ import (
 
 // frameEvery is the coalescing window: at most one batch per frame (~60 fps). Like jjui's
 // debounce, a burst of events from sync and history is one update and one render, not one each.
-const frameEvery = 16 * time.Millisecond
+const frameEvery = 60 * time.Millisecond
 
 // BatchMsg carries the updates that arrived within one frame. Update applies them in order, then
 // the view renders once.

@@ -63,8 +63,8 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 		return err
 	}
 	var p *tea.Program
-	out := ui.Coalesce(func(msg tea.Msg) { p.Send(msg) }) // one batch per frame: runner events and wheel
-	r := newRunner(c.MX(), out)
+	in := ui.Coalesce(func(msg tea.Msg) { p.Send(msg) }) // human keys and wheel only, one batch per window
+	r := newRunner(c.MX(), func(msg tea.Msg) { p.Send(msg) })
 	r.loadHistory = func(room id.RoomID) {
 		go func() {
 			c.LoadRoom(ctx, room, r.onEvent)
@@ -88,7 +88,7 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 	p = tea.NewProgram(app, tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
 		switch msg.(type) {
 		case tea.MouseWheelMsg, tea.KeyPressMsg: // in order, summed per frame: one render
-			out(msg)
+			in(msg)
 			return nil
 		}
 		return msg

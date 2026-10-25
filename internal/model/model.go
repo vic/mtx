@@ -178,6 +178,7 @@ type Thread struct {
 	Root  string // root event ID
 	Nick  string
 	Text  string
-	Count int // replies so far (history included)
-	Live  int // replies received live this session (unread counts are Live minus what was seen)
+	Count int       // replies so far (history included)
+	Live  int       // replies received live this session (unread counts are Live minus what was seen)
+	At    time.Time // newest reply: its time shows at the left of the row
 }

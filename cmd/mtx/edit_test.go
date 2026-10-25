@@ -35,8 +35,8 @@ func TestEditSendsReplace(t *testing.T) {
 	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
 	require.NoError(t, err)
 	r := newRunner(cli, func(tea.Msg) {})
-	r.register(testRoom, "#r:mock.test")
-	require.NoError(t, r.edit("&r", model.Line{ID: "$m1", Nick: "alice", Text: "old"}, "new"))
+	r.register(testRoom, "r")
+	require.NoError(t, r.edit("r", model.Line{ID: "$m1", Nick: "alice", Text: "old"}, "new"))
 
 	mu.Lock()
 	defer mu.Unlock()

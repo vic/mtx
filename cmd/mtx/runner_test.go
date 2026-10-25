@@ -49,7 +49,7 @@ func fakeRooms(ts *mockserver.MockServer, sent *[]string, mu *sync.Mutex) {
 	})
 }
 
-// TestRunnerJoinSendReceive: /join &r focuses the room, send reaches the server, a received
+// TestRunnerJoinSendReceive: /join r focuses the room, send reaches the server, a received
 // message becomes a line for the room, and our own echo is not shown twice.
 func TestRunnerJoinSendReceive(t *testing.T) {
 	ctx := context.Background()
@@ -65,8 +65,8 @@ func TestRunnerJoinSendReceive(t *testing.T) {
 	r := newRunner(cli, func(m tea.Msg) { outMu.Lock(); out = append(out, m); outMu.Unlock() })
 	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
 
-	require.NoError(t, cs.join("&r"))
-	require.NoError(t, r.send("&r", "hi"))
+	require.NoError(t, cs.join("r"))
+	require.NoError(t, r.send("r", "hi"))
 	require.Equal(t, []string{"hi"}, sent)
 
 	require.NoError(t, r.onEvent(ctx, &event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$b1", Sender: "@bob:mock.test",
@@ -83,11 +83,11 @@ func TestRunnerJoinSendReceive(t *testing.T) {
 		case ui.FocusMsg:
 			focus = v
 		case ui.LineMsg:
-			require.Equal(t, "&r", v.Ch)
+			require.Equal(t, "r", v.Ch)
 			lines = append(lines, v.L)
 		}
 	}
-	require.Equal(t, ui.FocusMsg("&r"), focus)
+	require.Equal(t, ui.FocusMsg("r"), focus)
 	require.Len(t, lines, 2, "own message comes back in sync and is shown once")
 	require.Equal(t, "bob", lines[0].Nick)
 	require.Equal(t, "yo", lines[0].Text)
@@ -98,10 +98,10 @@ func TestRunnerJoinSendReceive(t *testing.T) {
 // TestRegisterClashUsesRoomID: two rooms with the same alias localpart get distinct names.
 func TestRegisterClashUsesRoomID(t *testing.T) {
 	r := newRunner(nil, func(tea.Msg) {})
-	a := r.register("!one:s", "#review:s")
-	b := r.register("!two:s", "#review:t")
-	require.Equal(t, "&review", a)
-	require.Equal(t, "&two", b)
+	a := r.register("!one:s", "review")
+	b := r.register("!two:s", "review")
+	require.Equal(t, "review", a)
+	require.Equal(t, "two", b)
 }
 
 // TestToastInviteNamesAliasAndInviter: the toast names the alias when there is one, and the inviter.
@@ -114,17 +114,27 @@ func TestToastInviteNamesAliasAndInviter(t *testing.T) {
 	require.Equal(t, ui.ToastMsg{Text: "invited to !y:s by carol: joined"}, out[1])
 }
 
-// TestHistoryLinesAreOld: lines replayed on the first sync are scrollback, not unread.
+// TestRoomLabelPrefersRoomName: the channel takes the room name as Element shows it, else the alias.
+func TestRoomLabelPrefersRoomName(t *testing.T) {
+	require.Equal(t, "mi-sala", roomLabel(roomMeta{name: "  Mi   Sala ", alias: "#x:s"}))
+	require.Equal(t, "x", roomLabel(roomMeta{alias: "#x:s"}))
+}
+
+// TestHistoryLinesAreOld: history is batched per room and sent as scrollback, not unread;
+// a live line is still a LineMsg.
 func TestHistoryLinesAreOld(t *testing.T) {
 	var out []tea.Msg
 	cli, err := mautrix.NewClient("https://mock.test", "@alice:mock.test", "tok")
 	require.NoError(t, err)
 	r := newRunner(cli, func(m tea.Msg) { out = append(out, m) })
-	r.register(testRoom, "#r:mock.test")
+	r.register(testRoom, "r")
 	msg := &event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$h1", Sender: "@bob:mock.test",
 		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "old"}}}
 	require.NoError(t, r.onEvent(matrix.WithHistory(context.Background()), msg, nil))
+	require.Empty(t, out, "history waits for the batch")
+	r.flushHistory("r")
+	require.Len(t, out, 1)
+	require.Len(t, out[0].(ui.HistoryLinesMsg).L, 1)
 	require.NoError(t, r.onEvent(context.Background(), msg, nil))
-	require.True(t, out[0].(ui.LineMsg).Old)
 	require.False(t, out[1].(ui.LineMsg).Old)
 }

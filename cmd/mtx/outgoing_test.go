@@ -36,9 +36,9 @@ func TestSendMentionsMembersOnly(t *testing.T) {
 	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
 	require.NoError(t, err)
 	r := newRunner(cli, func(tea.Msg) {})
-	r.register(testRoom, "#r:mock.test")
-	require.NoError(t, r.send("&r", "hi @bob and @bo"))
-	require.NoError(t, r.send("&r", "no mention"))
+	r.register(testRoom, "r")
+	require.NoError(t, r.send("r", "hi @bob and @bo"))
+	require.NoError(t, r.send("r", "no mention"))
 
 	mu.Lock()
 	defer mu.Unlock()

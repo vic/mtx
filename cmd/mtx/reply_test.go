@@ -38,10 +38,10 @@ func TestReplyCarriesInReplyTo(t *testing.T) {
 	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
 	require.NoError(t, err)
 	r := newRunner(cli, func(tea.Msg) {})
-	r.register(testRoom, "#r:mock.test")
+	r.register(testRoom, "r")
 
-	require.NoError(t, r.reply("&r", model.Line{ID: "$m1", Nick: "bob", Text: "hi"}, "yes"))
-	require.NoError(t, r.reply("&r", model.Line{Nick: "bob", Text: "local"}, "plain"))
+	require.NoError(t, r.reply("r", model.Line{ID: "$m1", Nick: "bob", Text: "hi"}, "yes"))
+	require.NoError(t, r.reply("r", model.Line{Nick: "bob", Text: "local"}, "plain"))
 
 	mu.Lock()
 	defer mu.Unlock()

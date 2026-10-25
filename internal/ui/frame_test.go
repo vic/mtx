@@ -89,7 +89,7 @@ func TestHelpAndArrows(t *testing.T) {
 func TestWheelScrollsAndNickPane(t *testing.T) {
 	a := scrollApp(t) // 12 lines in #a, page 6
 	wheel := func(b tea.MouseButton) {
-		next, _ := a.Update(tea.MouseWheelMsg{Button: b})
+		next, _ := a.Update(tea.MouseWheelMsg{Button: b, X: 40, Y: 5}) // over the chat pane
 		a = next.(App)
 	}
 	wheel(tea.MouseWheelUp)
@@ -590,27 +590,6 @@ func TestSpeakerFilter(t *testing.T) {
 	}
 }
 
-func TestResumeLastChannel(t *testing.T) {
-	m, err := model.New(20)
-	if err != nil {
-		t.Fatal(err)
-	}
-	a := New(m, func(string, string) error { return nil }).WithResume("&r")
-	next, _ := a.Update(SessionsMsg{{PID: 1, Name: "a"}})
-	if a = next.(App); a.Channel() != "#a" { // not there yet: first channel
-		t.Fatalf("before: %s", a.Channel())
-	}
-	next, _ = a.Update(RoomsMsg{"&r"})
-	if a = next.(App); a.Channel() != "&r" {
-		t.Fatalf("resume: %s", a.Channel())
-	}
-	a, _ = press(t, a, "ctrl+n")
-	next, _ = a.Update(RoomsMsg{"&r"}) // NEG: only once
-	if a = next.(App); a.Channel() == "&r" {
-		t.Fatal("resumed twice")
-	}
-}
-
 func TestSameAgentNameInTwoSessions(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil) // #a #b #c, focus #a
@@ -1056,5 +1035,16 @@ func TestSearchDownMovesHit(t *testing.T) {
 	a, _ = press(t, a, "up")
 	if a.hit != 0 {
 		t.Fatalf("up: hit %d", a.hit)
+	}
+}
+
+func TestWithPickerOpensChannelPickerAtStart(t *testing.T) {
+	m, err := model.New(20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := New(m, func(string, string) error { return nil }).WithPicker()
+	if !a.pick || a.pickWhat != pickChans {
+		t.Fatalf("picker not open at start: pick=%v what=%v", a.pick, a.pickWhat)
 	}
 }

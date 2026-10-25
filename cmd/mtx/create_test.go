@@ -18,7 +18,7 @@ import (
 	"mtx/internal/ui"
 )
 
-// TestCreateRoomAliasAndFocus: /create &r asks for alias r, encrypted, and focuses the new room.
+// TestCreateRoomAliasAndFocus: /create r asks for alias r, encrypted, and focuses the new room.
 func TestCreateRoomAliasAndFocus(t *testing.T) {
 	ts := mockserver.Create(t)
 	var mu sync.Mutex
@@ -36,15 +36,15 @@ func TestCreateRoomAliasAndFocus(t *testing.T) {
 	r := newRunner(cli, func(m tea.Msg) { out = append(out, m) })
 	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
 
-	require.NoError(t, cs.create("&review"))
+	require.NoError(t, cs.create("review"))
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, "review", req["room_alias_name"])
 	require.Equal(t, "private_chat", req["preset"])
-	require.Equal(t, ui.FocusMsg("&review"), out[len(out)-1])
+	require.Equal(t, ui.FocusMsg("review"), out[len(out)-1])
 	name, ok := r.nameOf(testRoom)
 	require.True(t, ok)
-	require.Equal(t, "&review", name)
+	require.Equal(t, "review", name)
 }
 
 // TestCreateFocusesInApp: the whole UI path: CmdMsg -> command -> RoomsMsg and FocusMsg -> focus.
@@ -62,7 +62,7 @@ func TestCreateFocusesInApp(t *testing.T) {
 	require.NoError(t, err)
 	app := ui.New(m, r.send).WithCmd(cs.cmd)
 
-	cm, err := model.ParseCmd("/create &review")
+	cm, err := model.ParseCmd("/create review")
 	require.NoError(t, err)
 	next, cmd := app.Update(ui.CmdMsg{Cmd: cm})
 	app = next.(ui.App)
@@ -72,5 +72,5 @@ func TestCreateFocusesInApp(t *testing.T) {
 		next, _ := app.Update(msg)
 		app = next.(ui.App)
 	}
-	require.Equal(t, "&review", app.Channel())
+	require.Equal(t, "review", app.Channel())
 }

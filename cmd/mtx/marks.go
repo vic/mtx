@@ -35,6 +35,11 @@ func (r *runner) noteLast(evt *event.Event) {
 
 // seen sends the read markers of channel ch to its newest message, once per message.
 func (r *runner) seen(ch string) error {
+	if r.loadHistory != nil {
+		if room, err := r.roomOf(ch); err == nil {
+			r.loadHistory(room)
+		}
+	}
 	room, err := r.roomOf(ch)
 	if err != nil {
 		return err

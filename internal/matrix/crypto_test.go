@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -86,12 +87,21 @@ func TestEncryptedSendReceive(t *testing.T) {
 
 	addEncryptedSync(ts, encAny, cancel)
 
-	var got []string
+	// the placeholder comes first; the decrypted text is delivered after, from a goroutine
+	got := make(chan string, 4)
 	err = bob.Run(ctx, func(_ context.Context, evt *event.Event, decErr error) error {
+		if decErr == ErrPending {
+			return nil
+		}
 		require.NoError(t, decErr)
-		got = append(got, evt.Content.AsMessage().Body)
+		got <- evt.Content.AsMessage().Body
 		return nil
 	})
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, []string{"hello bob"}, got)
+	select {
+	case body := <-got:
+		require.Equal(t, "hello bob", body)
+	case <-time.After(10 * time.Second):
+		t.Fatal("decrypted message never delivered")
+	}
 }

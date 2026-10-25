@@ -57,9 +57,9 @@ func TestJoinLaterGetsHistory(t *testing.T) {
 		hist = append(hist, IsHistory(hctx))
 		return nil
 	}), context.Canceled)
-	require.Equal(t, []string{"$h1", "$t1", "$t2"}, ids)
-	require.Equal(t, []bool{true, true, false}, hist)
+	require.Equal(t, []string{"$t1", "$t2"}, ids) // no startup backfill: $h1 loads when the room is opened
+	require.Equal(t, []bool{true, false}, hist)
 	mu.Lock()
 	defer mu.Unlock()
-	require.Equal(t, []string{"p0"}, froms, "backfill starts from prev_batch, once")
+	require.Empty(t, froms, "no backfill at join: history loads when the room opens")
 }

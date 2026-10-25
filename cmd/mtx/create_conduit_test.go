@@ -29,7 +29,7 @@ func TestConduitCreate(t *testing.T) {
 	cs := &cmds{r: r, me: id.UserID(user), server: "oeiuwq.com"}
 	name := os.Getenv("MTX_CONDUIT_ROOM")
 	if name == "" {
-		name = fmt.Sprintf("&tst%d", time.Now().UnixNano()%1e6)
+		name = fmt.Sprintf("tst%d", time.Now().UnixNano()%1e6)
 	}
 	err = cs.create(name)
 	t.Logf("CREATE %s err=%v msgs=%d", name, err, len(out))

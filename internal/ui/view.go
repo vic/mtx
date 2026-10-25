@@ -222,7 +222,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			byName[c.Name] = c
 		}
 		var chans []model.Channel
-		for _, n := range p.chans {
+		for _, n := range p.chans[min(p.chanTop, len(p.chans)):] {
 			chans = append(chans, byName[n])
 		}
 		mid := w - chanW - nickW - 4 // four border columns
@@ -250,7 +250,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		rows = append(rows, edge(0, "┌")+seg(p.title("channels", focusChans), chanW, line(0))+edge(1, "┬")+
 			seg(midTitle(p, details), mid, line(1))+edge(2, "┬")+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
 		for i := 0; i < n; i++ {
-			nk := at(p.nicks, i)
+			nk := at(p.nicks, i+p.nickTop)
 			label := strings.HasPrefix(nk, nickLabel) // a group label: dim, not a nick
 			if label {
 				nk = dimmed.Render(strings.TrimPrefix(nk, nickLabel))
@@ -268,7 +268,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 				cc = fit(current, " "+chans[i].Name, chanW)
 			}
 			if p.focus == focusNicks && i == p.nickSel {
-				nc = fit(current, " "+p.nicks[i], nickW)
+				nc = fit(current, " "+p.nicks[min(i+p.nickTop, len(p.nicks)-1)], nickW)
 			}
 			if sep == 1 && i == tRows { // the line between the threads box and the chat box
 				rows = append(rows, edge(0, "│")+cc+edge(1, "├")+line(1).Render(frameRule(details, mid))+
@@ -576,15 +576,17 @@ func wrapStamped(l model.Line, width int) []string {
 // sidePanes is what the channel and nick panes show: rows in order (filtered when
 // focused), which pane has focus, its selected row and the query typed in it.
 type sidePanes struct {
-	chans, nicks []string
-	focus        paneFocus
-	sel          int
-	nickSel      int // row of the selected nick (-1 none), labels are not selectable
-	q            string
-	heads        []model.Thread // thread heads of the current channel (top rows of the chat column)
-	thread       string         // selected head root
-	unread       []int          // per head: live replies not yet read (same order as heads)
-	mainUnread   int            // main-thread lines not on screen (the main thread row)
+	chans, nicks     []string
+	focus            paneFocus
+	sel              int
+	nickSel          int // row of the selected nick (-1 none), labels are not selectable
+	q                string
+	heads            []model.Thread // thread heads of the current channel (top rows of the chat column)
+	thread           string         // selected head root
+	unread           []int          // per head: live replies not yet read (same order as heads)
+	mainUnread       int            // main-thread lines not on screen (the main thread row)
+	threadTop        int            // first shown row of the threads box (its main thread is the last row)
+	chanTop, nickTop int            // first shown row of the channel and nick panes
 }
 
 // title is a side pane's title: "▸name query" while it has focus.

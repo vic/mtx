@@ -69,3 +69,13 @@ func (r Ring[T]) clone() Ring[T] {
 	r.buf = append([]T(nil), r.buf...)
 	return r
 }
+
+// Replace applies f to every item that match selects, in place.
+func (r *Ring[T]) Replace(match func(T) bool, f func(T) T) {
+	for i := 0; i < r.n; i++ {
+		j := (r.start + i) % len(r.buf)
+		if match(r.buf[j]) {
+			r.buf[j] = f(r.buf[j])
+		}
+	}
+}

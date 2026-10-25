@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -24,6 +25,21 @@ type SessionsMsg []model.Session
 
 // LineMsg appends L to channel Ch; an unknown channel (including "") is reported as a
 // note. Old is history replayed at attach: no unread count, no move to the front.
+// ThreadRootMsg fills in the text of a thread head whose root was not seen this session.
+type ThreadRootMsg struct{ Ch, Root, Nick, Text string }
+
+// ReplaceLineMsg swaps a placeholder line (same ID) for the decrypted one.
+type ReplaceLineMsg struct {
+	Ch, ID string
+	L      model.Line
+}
+
+// HistoryLinesMsg is a batch of history lines for one channel: one update, one render.
+type HistoryLinesMsg struct {
+	Ch string
+	L  []model.Line
+}
+
 type LineMsg struct {
 	Old bool
 	Ch  string
@@ -31,6 +47,13 @@ type LineMsg struct {
 }
 
 // NoteMsg adds L to the focused channel (producer notes with no channel of their own).
+// ProgressMsg is a status toast: the one with the same ID is updated in place, with a bar when Total > 0.
+type ProgressMsg struct {
+	ID, Text    string
+	Done, Total int
+	Finished    bool
+}
+
 type NoteMsg struct{ L model.Line }
 
 // NickMsg sets the user's nick after the endpoint took a fallback name.
@@ -113,18 +136,19 @@ type App struct {
 	prompt     rune // 0 or promptCmd (:): the input line holds a prompt
 	query      string
 	hit        int                                                   // index in the current channel of the last search hit, -1 none
+	rows       *rowCache                                             // wrapped rows per line: scrolling reuses them
 	offs       map[string]int                                        // per channel: lines scrolled back from the newest
 	help       bool                                                  // the ? popup is shown; the next key closes it
 	focus      paneFocus                                             // tab: which pane takes keys (chat, channels, nicks)
 	fq         string                                                // query typed in a focused side pane (fuzzy filter)
 	fsel       int                                                   // selected row in the focused side pane
+	ptop       [focusThreads]int                                     // first shown row of the channel and nick panes (wheel scrolls it)
 	stamps     bool                                                  // s: show "15:04 " before each line
 	pick       bool                                                  // ctrl+o or /: the picker is open
 	pickWhat   pickKind                                              // what the picker lists: channels (ctrl+o), lines (/), speakers (S)
 	speakers   []string                                              // S: show only these nicks' lines; none = all
 	grep       string                                                // ctrl+g: show only lines fuzzy-matching this; "" off
 	marks      []string                                              // S picker: nicks marked with space, applied by enter
-	resumeTo   string                                                // channel to focus once it shows up (the last one of the previous run)
 	toasts     []toast                                               // notification cards, newest last; the tick drops old ones
 	helpOff    int                                                   // help box scroll (j k, wheel) when it is taller than the screen
 	pq         textinput.Model                                       // picker query (own input: a typed message survives)
@@ -152,7 +176,7 @@ func New(m model.Model, send func(ch, text string) error) App {
 	in.Prompt = ""
 	in.ShowLineNumbers = false
 	in.SetWidth(1 << 16) // no soft wrap in the buffer: render wraps it
-	return App{m: m, in: in, send: send, user: "me", now: time.Now, w: defaultW, h: defaultH, hit: -1, histAt: -1}
+	return App{m: m, in: in, send: send, user: "me", now: time.Now, w: defaultW, h: defaultH, hit: -1, histAt: -1, rows: &rowCache{m: map[rowKey][]string{}}}
 }
 
 // Init starts the 1 s tick: it drops old toasts and keeps the clock current.
@@ -166,9 +190,13 @@ type tickMsg struct{}
 const toastFor = 4 * time.Second
 
 type toast struct {
-	text string
-	err  bool
-	at   time.Time
+	text    string
+	err     bool
+	at      time.Time
+	id      string // status toasts: the ProgressMsg ID that updates this one
+	done    int
+	total   int
+	running bool // a status still in progress: no expiry
 }
 
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -207,7 +235,6 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case SessionsMsg:
 		a.m = a.m.WithSessions(msg)
-		a = a.resume()
 	case ThreadsMsg:
 		if a.threads == nil {
 			a.threads = map[string][]model.Thread{}
@@ -229,6 +256,28 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.typing = map[string][]string{}
 		}
 		a.typing[msg.Ch] = msg.Nicks
+	case BatchMsg:
+		var cmds []tea.Cmd
+		for _, m := range coalesceRuns(msg) {
+			next, c := a.Update(m)
+			a = next.(App)
+			cmds = append(cmds, c)
+		}
+		return a, tea.Batch(cmds...)
+	case ThreadRootMsg:
+		for i := range a.threads[msg.Ch] {
+			if h := &a.threads[msg.Ch][i]; h.Root == msg.Root {
+				h.Nick, h.Text = msg.Nick, msg.Text
+			}
+		}
+	case ReplaceLineMsg:
+		if m, err := a.m.ReplaceLine(msg.Ch, msg.ID, msg.L); err == nil {
+			a.m = m
+		}
+	case HistoryLinesMsg:
+		if m, err := a.m.AddHistoryLines(msg.Ch, msg.L); err == nil {
+			a.m = m
+		}
 	case LineMsg:
 		if msg.Old {
 			if m, err := a.m.AddHistory(msg.Ch, msg.L); err == nil {
@@ -244,12 +293,13 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case RoomsMsg:
 		a.m = a.m.WithRooms(msg)
-		a = a.resume()
 	case CmdMsg:
 		if a.cmdf == nil {
 			return a.note("no command handler installed"), nil
 		}
 		return a, a.cmdf(a.m.Current().Name, msg.Cmd)
+	case ProgressMsg:
+		a = a.progressToast(msg)
 	case NoteMsg:
 		a = a.toast(msg.L.Text, false) // runtime notes are notifications, not scrollback
 	case NickMsg:
@@ -258,7 +308,7 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a = a.toast(msg.Text, msg.Err)
 	case tickMsg:
 		now := a.now()
-		a.toasts = slices.DeleteFunc(slices.Clone(a.toasts), func(t toast) bool { return now.Sub(t.at) >= toastFor })
+		a.toasts = slices.DeleteFunc(slices.Clone(a.toasts), func(t toast) bool { return !t.running && now.Sub(t.at) >= toastFor })
 		return a, tick()
 	case fileBlockMsg:
 		if msg.Err != nil {
@@ -318,19 +368,19 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a.click(tea.Mouse(msg))
 		}
 	case tea.MouseWheelMsg:
-		if a.help { // the wheel scrolls the help box while it is open
-			step := wheelRows
-			if msg.Button == tea.MouseWheelUp {
-				step = -wheelRows
-			}
-			return a.helpScroll(step), nil
+		if n := notch(msg.Button); n != 0 {
+			return a.wheel(msg, n), nil
 		}
-		switch msg.Button {
-		case tea.MouseWheelUp:
-			a = a.scroll(Action{Scroll, -wheelRows})
-		case tea.MouseWheelDown:
-			a = a.scroll(Action{Scroll, wheelRows})
+	case KeyRun:
+		var cmds []tea.Cmd
+		for range msg.N {
+			next, c := a.key(msg.M)
+			a = next.(App)
+			cmds = append(cmds, c)
 		}
+		return a, tea.Batch(cmds...)
+	case WheelMsg:
+		return a.wheel(msg.M, msg.N), nil
 	case tea.KeyPressMsg: // v2 decodes one key per event, also when one read holds "gt"
 		return a.key(msg)
 	}
@@ -751,7 +801,7 @@ func (a App) sent(r SendResultMsg) App {
 	if r.Err != nil {
 		return a.note("send failed: " + r.Err.Error())
 	}
-	if strings.HasPrefix(r.Ch, "&") {
+	if chanKind(r.Ch) == model.RoomChan {
 		return a // room lines are echoed by the room runtime, which also logs them
 	}
 	if m, err := a.m.AddLine(r.Ch, model.Line{At: a.now(), Nick: a.user, Text: r.Text}); err == nil {
@@ -859,12 +909,6 @@ func (a App) sendLiteral(text string) (tea.Model, tea.Cmd) {
 }
 
 // wrap is the row wrapper the s toggle selects.
-func (a App) wrap() wrapFunc {
-	if a.stamps {
-		return wrapStamped
-	}
-	return wrapLine
-}
 
 func (a App) chanNames() []string {
 	var out []string
@@ -1119,12 +1163,12 @@ func (a App) suggest() []string {
 	return []string{ansi.Truncate(dimmed.Render("tab ")+strings.Join(parts, "  "), max(a.w-6, 1), "…")} // fits in the box
 }
 
-// chanKind is the kind a channel name has: & rooms, else # sessions.
+// chanKind is the kind a channel name has: # sessions, else rooms.
 func chanKind(name string) model.ChanKind {
-	if strings.HasPrefix(name, "&") {
-		return model.RoomChan
+	if strings.HasPrefix(name, "#") {
+		return model.SessionChan
 	}
-	return model.SessionChan
+	return model.RoomChan
 }
 
 // lastMention is the newest @nick in the current channel's shown lines that is
@@ -1236,10 +1280,11 @@ const (
 // with no query, every row in pane order.
 func (a App) paneItems(f paneFocus) (show, names []string) {
 	if f == focusThreads {
-		names = []string{mainThreadLabel}
+		names = nil // the heads, then the main thread last
 		for _, h := range a.threads[a.m.Current().Name] {
 			names = append(names, threadLabel(h))
 		}
+		names = append(names, mainThreadLabel)
 		show = names
 	} else if f == focusChans {
 		names = a.chanNames()
@@ -1416,7 +1461,7 @@ func (a App) sides() sidePanes {
 	if a.fsel >= 0 && a.fsel < len(rowOf) {
 		nickSel = rowOf[a.fsel]
 	}
-	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, nickSel: nickSel, q: a.fq, heads: a.threads[a.m.Current().Name], thread: a.thread, unread: a.unreadAll(), mainUnread: a.mainUnread[a.m.Current().Name]}
+	return sidePanes{chans: chans, nicks: nicks, focus: a.focus, sel: a.fsel, nickSel: nickSel, chanTop: a.ptop[focusChans], nickTop: a.ptop[focusNicks], q: a.fq, heads: a.threads[a.m.Current().Name], threadTop: threadTopOf(len(a.threads[a.m.Current().Name])+1, a.fsel, a.focus == focusThreads), thread: a.thread, unread: a.unreadAll(), mainUnread: a.mainUnread[a.m.Current().Name]}
 }
 
 // lineStep moves the cursor (the reversed line) one line down (to newer) or up,
@@ -1474,21 +1519,6 @@ var cursorOn, cursorOff = func() (string, string) {
 	parts := strings.SplitN(cursor.Render("\x00"), "\x00", 2)
 	return parts[0], parts[1]
 }()
-
-// WithResume makes ch current as soon as it shows up in the channel list, once:
-// ircc starts on the channel it was on when it last quit (vic 2026-10-23).
-func (a App) WithResume(ch string) App {
-	a.resumeTo = ch
-	return a
-}
-
-func (a App) resume() App {
-	if a.resumeTo == "" || !slices.Contains(a.chanNames(), a.resumeTo) {
-		return a
-	}
-	a, a.resumeTo = a.focusName(a.resumeTo), ""
-	return a
-}
 
 // Channel is the current channel's name ("" when there is none).
 func (a App) Channel() string { return a.m.Current().Name }
@@ -1691,4 +1721,108 @@ func (a App) WithSeen(f func(ch string) error) App {
 func (a App) WithReply(f func(ch string, to model.Line, text string) error) App {
 	a.reply = f
 	return a
+}
+
+// WithPicker opens the ctrl+o channel picker at start.
+func (a App) WithPicker() App { return a.openPick(pickChans) }
+
+// progressToast updates the status toast with p.ID, or adds it. A finished one expires like any toast.
+func (a App) progressToast(p ProgressMsg) App {
+	ts := slices.Clone(a.toasts)
+	i := slices.IndexFunc(ts, func(t toast) bool { return t.id == p.ID })
+	if i < 0 {
+		ts = append(ts, toast{id: p.ID})
+		i = len(ts) - 1
+	}
+	ts[i].text, ts[i].done, ts[i].total = p.Text, p.Done, p.Total
+	ts[i].running = !p.Finished
+	if p.Finished {
+		ts[i].at = a.now()
+	}
+	a.toasts = ts
+	return a
+}
+
+// wrap is the row wrapper of the chat pane, memoized: a scroll frame reuses the rows of lines it
+// showed before, instead of wrapping every line above the view again.
+func (a App) wrap() wrapFunc {
+	base := wrapLine
+	if a.stamps {
+		base = wrapStamped
+	}
+	if a.rows == nil {
+		return base
+	}
+	return a.rows.memo(base, a.stamps)
+}
+
+// rowKey is what a wrapped row depends on.
+type rowKey struct {
+	at                     int64
+	nick, text, id, thread string
+	kind                   model.LineKind
+	dim, stamped           bool
+	width                  int
+}
+
+// rowCache holds wrapped rows; it is shared by copies of App, so it lives behind a pointer.
+type rowCache struct {
+	mu sync.Mutex
+	m  map[rowKey][]string
+}
+
+const rowCacheMax = 50000 // rows; the cache is cleared when it is full
+
+func (c *rowCache) memo(base wrapFunc, stamped bool) wrapFunc {
+	return func(l model.Line, width int) []string {
+		k := rowKey{at: l.At.UnixNano(), nick: l.Nick, text: l.Text, id: l.ID, thread: l.Thread,
+			kind: l.Kind, dim: l.Dim, stamped: stamped, width: width}
+		c.mu.Lock()
+		rs, ok := c.m[k]
+		c.mu.Unlock()
+		if ok {
+			return rs
+		}
+		rs = base(l, width)
+		c.mu.Lock()
+		if len(c.m) >= rowCacheMax {
+			c.m = map[rowKey][]string{}
+		}
+		c.m[k] = rs
+		c.mu.Unlock()
+		return rs
+	}
+}
+
+// paneAt is the side pane under column x in the wide layout, or focusChat.
+func paneAt(x, w, h int) paneFocus {
+	if !wide(w, h) {
+		return focusChat
+	}
+	switch {
+	case x < chanW+2:
+		return focusChans
+	case x >= w-nickW-2:
+		return focusNicks
+	}
+	return focusChat
+}
+
+// paneWheel scrolls pane p's list by delta rows. The selection stays where it is.
+func (a App) paneWheel(p paneFocus, delta int) App {
+	_, names := a.paneItems(p)
+	a.ptop[p] = max(min(a.ptop[p]+delta, len(names)-1), 0)
+	return a
+}
+
+// wheel scrolls what is under the wheel by n notches: help box, side pane, or chat.
+func (a App) wheel(m tea.MouseWheelMsg, n int) App {
+	step := n * wheelRows
+	if a.help {
+		return a.helpScroll(step)
+	}
+	if p := paneAt(m.X, a.w, a.h); p != focusChat {
+		return a.paneWheel(p, step)
+	}
+	return a.scroll(Action{Scroll, step})
 }

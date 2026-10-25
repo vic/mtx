@@ -38,14 +38,14 @@ func TestTypingExcludesMeAndSeenSendsReadMarkers(t *testing.T) {
 	require.NoError(t, err)
 	var out []tea.Msg
 	r := newRunner(cli, func(m tea.Msg) { out = append(out, m) })
-	r.register(testRoom, "#r:mock.test")
+	r.register(testRoom, "r")
 
 	r.onTyping(testRoom, []id.UserID{"@alice:mock.test", "@bob:mock.test"})
-	require.Equal(t, ui.TypingMsg{Ch: "&r", Nicks: []string{"bob"}}, out[0])
+	require.Equal(t, ui.TypingMsg{Ch: "r", Nicks: []string{"bob"}}, out[0])
 
 	r.noteLast(&event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$m9"})
-	require.NoError(t, r.seen("&r"))
-	require.NoError(t, r.seen("&r"), "same newest message: no second receipt")
+	require.NoError(t, r.seen("r"))
+	require.NoError(t, r.seen("r"), "same newest message: no second receipt")
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []map[string]string{{"m.read": "$m9", "m.fully_read": "$m9"}}, markers)

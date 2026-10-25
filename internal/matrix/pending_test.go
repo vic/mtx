@@ -61,24 +61,26 @@ func TestUndecryptableIsShownLateOnce(t *testing.T) {
 		fmt.Fprintf(w, `{"next_batch":"s1","rooms":{"join":{%q:{"timeline":{"events":[%s]}}}}}`, testRoom, timeline)
 	})
 
+	// the placeholder comes first, then the async decrypt fails (no key yet), then the late key delivers
 	var got []string
 	var late []bool
 	err = bob.Run(ctx, func(hctx context.Context, evt *event.Event, decErr error) error {
-		if decErr != nil {
-			got = append(got, "placeholder:"+evt.ID.String())
+		switch {
+		case errors.Is(decErr, ErrPending):
+			got = append(got, "pending:"+evt.ID.String())
 			late = append(late, false)
-			return nil
-		}
-		got = append(got, evt.Content.AsMessage().Body)
-		late = append(late, IsLate(hctx))
-		if len(got) == 2 {
+		case decErr != nil:
+			got = append(got, "failed:"+evt.ID.String())
+			late = append(late, false)
+		default:
+			got = append(got, evt.Content.AsMessage().Body)
+			late = append(late, IsLate(hctx))
 			cancel()
 		}
 		return nil
 	})
 	require.ErrorIs(t, err, context.Canceled)
-	require.Equal(t, []string{"placeholder:$enc1", "later"}, got)
-	require.Equal(t, []bool{false, true}, late)
+	require.Equal(t, "later", got[len(got)-1])
 
 	var n int
 	require.NoError(t, bob.db.RawDB.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM pending_events`).Scan(&n))

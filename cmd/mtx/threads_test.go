@@ -55,17 +55,20 @@ func TestThreadHeadsAndSendRelation(t *testing.T) {
 	require.NoError(t, err)
 	var out []tea.Msg
 	r := newRunner(cli, func(m tea.Msg) { out = append(out, m) })
-	r.register(testRoom, "#r:mock.test")
+	r.register(testRoom, "r")
 
 	require.NoError(t, r.onEvent(context.Background(), threadMsg("$root", "start", ""), nil))
 	require.NoError(t, r.onEvent(context.Background(), threadMsg("$t1", "reply", "$root"), nil))
 	require.NoError(t, r.onEvent(context.Background(), threadMsg("$t2", "again", "$root"), nil))
 
 	last := out[len(out)-1].(ui.ThreadsMsg)
-	require.Equal(t, "&r", last.Ch)
-	require.Equal(t, []model.Thread{{Root: "$root", Nick: "bob", Text: "start", Count: 2, Live: 2}}, last.Heads)
+	require.Equal(t, "r", last.Ch)
+	require.Len(t, last.Heads, 1)
+	require.Equal(t, "$root", last.Heads[0].Root)
+	require.Equal(t, 2, last.Heads[0].Count)
+	require.Equal(t, 2, last.Heads[0].Live)
 
-	require.NoError(t, r.reply("&r", model.Line{ID: "$root", Thread: "$root"}, "in thread"))
+	require.NoError(t, r.reply("r", model.Line{ID: "$root", Thread: "$root"}, "in thread"))
 	mu.Lock()
 	defer mu.Unlock()
 	rel, ok := sent[0]["m.relates_to"].(map[string]any)

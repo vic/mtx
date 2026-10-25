@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"go.mau.fi/util/dbutil"
@@ -29,6 +30,10 @@ type Client struct {
 	user     id.UserID
 	onInvite func(Invite)
 	onTyping func(id.RoomID, []id.UserID)
+	progress func(Progress)
+	mu       sync.Mutex          // one event at a time: see lock
+	loaded   sync.Map            // rooms whose history LoadRoom has started
+	shown    map[id.EventID]bool // events this run has handed to the UI, history or live
 }
 
 // New opens the store, checks the device against the server, and starts E2EE. With no
@@ -98,7 +103,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		_ = db.Close()
 		return nil, errors.New("crypto not set on client")
 	}
-	return &Client{cli: cli, helper: helper, db: db, user: cli.UserID}, nil
+	return &Client{cli: cli, helper: helper, db: db, user: cli.UserID, shown: map[id.EventID]bool{}}, nil
 }
 
 // checkDevice fails when the token's user differs from MTX_USER_ID, or when MTX_DEVICE_ID is set
@@ -197,23 +202,18 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		if !known { // a room this store has not seen: its older events are history, from prev_batch
 			rctx = WithHistory(ctx)
 			newRooms = append(newRooms, roomID)
-			if room.Timeline.PrevBatch != "" {
-				if err := c.backfill(rctx, roomID, room.Timeline.PrevBatch, h); err != nil {
-					return err
-				}
-			}
 		}
 		if err := c.typingOf(roomID, room.Ephemeral.Events); err != nil {
 			return err
 		}
-		if err := c.roomEvents(rctx, roomID, room.State.Events, room.Timeline.Events, h); err != nil {
+		if err := c.roomEvents(rctx, roomID, room.State.Events, room.Timeline.Events, h, false); err != nil {
 			return err
 		}
 	}
 	// rooms we were removed from or left: the membership change reaches the handler (a kick shows,
 	// and the client drops the room)
 	for roomID, room := range resp.Rooms.Leave {
-		if err := c.roomEvents(ctx, roomID, room.State.Events, room.Timeline.Events, h); err != nil {
+		if err := c.roomEvents(ctx, roomID, room.State.Events, room.Timeline.Events, h, false); err != nil {
 			return err
 		}
 	}
@@ -227,19 +227,6 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 }
 
 // handleOnce delivers evt unless it was delivered before, then marks it.
-func (c *Client) handleOnce(ctx context.Context, evt *event.Event, h Handler) error {
-	done, err := c.delivered(ctx, evt.ID)
-	if err != nil {
-		return err
-	}
-	if done {
-		return nil
-	}
-	if err := c.deliver(ctx, evt, h); err != nil {
-		return err
-	}
-	return c.markDelivered(ctx, evt.ID)
-}
 
 // deliver decrypts encrypted events and calls h. A handler panic becomes an error.
 func (c *Client) deliver(ctx context.Context, evt *event.Event, h Handler) (err error) {
@@ -254,16 +241,12 @@ func (c *Client) deliver(ctx context.Context, evt *event.Event, h Handler) (err 
 		}
 	}
 	if evt.Type == event.EventEncrypted {
-		dec, decErr := c.helper.Decrypt(ctx, evt)
-		if decErr != nil {
-			if errors.Is(decErr, crypto.NoSessionFound) {
-				if err := c.park(ctx, evt); err != nil {
-					return err
-				}
-			}
-			return h(ctx, evt, decErr)
+		// show a placeholder now; the decrypt runs beside the UI and calls h again with the result
+		if err := h(ctx, evt, ErrPending); err != nil {
+			return err
 		}
-		return h(ctx, dec, nil)
+		c.decryptAsync(evt, h)
+		return nil
 	}
 	return h(ctx, evt, nil)
 }
@@ -322,7 +305,11 @@ func (c *Client) markRooms(ctx context.Context, rooms []id.RoomID) error {
 }
 
 // roomEvents applies one room's state and timeline from a batch, in that order.
-func (c *Client) roomEvents(ctx context.Context, roomID id.RoomID, state, timeline []*event.Event, h Handler) error {
+func (c *Client) roomEvents(ctx context.Context, roomID id.RoomID, state, timeline []*event.Event, h Handler, replay bool) error {
+	once := c.handleOnce
+	if replay {
+		once = c.handleHistory
+	}
 	m := c.helper.Machine()
 	for _, st := range state {
 		st.RoomID = roomID
@@ -334,7 +321,7 @@ func (c *Client) roomEvents(ctx context.Context, roomID id.RoomID, state, timeli
 			m.HandleMemberEvent(ctx, st)
 		}
 		c.cli.StateStoreSyncHandler(ctx, st) // room state (encryption, members) for sends and lookups
-		if err := c.handleOnce(ctx, st, h); err != nil {
+		if err := once(ctx, st, h); err != nil {
 			return err
 		}
 	}
@@ -343,9 +330,70 @@ func (c *Client) roomEvents(ctx context.Context, roomID id.RoomID, state, timeli
 		if evt.StateKey != nil {
 			c.cli.StateStoreSyncHandler(ctx, evt)
 		}
-		if err := c.handleOnce(ctx, evt, h); err != nil {
+		if err := once(ctx, evt, h); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// handleOnce delivers a live event unless it was delivered before, then marks it. Each event goes
+// to the UI once per run: shown is the in-memory record, seen_events survives restarts.
+func (c *Client) handleOnce(ctx context.Context, evt *event.Event, h Handler) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.shown[evt.ID] {
+		return nil
+	}
+	done, err := c.delivered(ctx, evt.ID)
+	if err != nil {
+		return err
+	}
+	if done {
+		return nil
+	}
+	if err := c.deliver(ctx, evt, h); err != nil {
+		return err
+	}
+	c.shown[evt.ID] = true
+	return c.markDelivered(ctx, evt.ID)
+}
+
+// handleHistory delivers a history event unless this run already showed it. seen_events is not
+// consulted: after a restart the UI has no scrollback, so old events must come again.
+func (c *Client) handleHistory(ctx context.Context, evt *event.Event, h Handler) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.shown[evt.ID] {
+		return nil
+	}
+	if err := c.deliver(ctx, evt, h); err != nil {
+		return err
+	}
+	c.shown[evt.ID] = true
+	return nil
+}
+
+// ErrPending is the decrypt error a placeholder carries: the event is shown, its text is coming.
+var ErrPending = errors.New("decrypting")
+
+// decryptAsync decrypts evt off the UI path and delivers the result (or its failure) to h with the
+// same event ID, so the UI replaces the placeholder. h runs under c.mu, like every delivery.
+func (c *Client) decryptAsync(evt *event.Event, h Handler) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		out, decErr := c.helper.Decrypt(ctx, evt)
+		if decErr != nil && errors.Is(decErr, crypto.NoSessionFound) {
+			decErr = errors.Join(decErr, c.park(ctx, evt))
+		}
+		if decErr != nil {
+			out = evt
+		}
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if err := h(ctx, out, decErr); err != nil {
+			c.report(Progress{ID: "decrypt", Text: fmt.Sprintf("decrypt %s: %v", evt.ID, err), Finished: true})
+		}
+	}()
 }

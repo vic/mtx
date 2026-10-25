@@ -75,19 +75,19 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 
 func (c *cmds) ctx() (context.Context, context.CancelFunc) { return callCtx() }
 
-// join: /join &name joins #name:<server> and focuses it.
+// join: /join name joins #name:<server> and focuses it.
 func (c *cmds) join(s string) error {
-	if !strings.HasPrefix(s, "&") || len(s) < 2 {
-		return errors.New("usage: /join &room")
+	if s == "" {
+		return errors.New("usage: /join room")
 	}
-	alias := "#" + s[1:] + ":" + c.server
+	alias := "#" + s + ":" + c.server
 	ctx, cancel := c.ctx()
 	defer cancel()
 	resp, err := c.r.mx.JoinRoom(ctx, alias, nil)
 	if err != nil {
 		return err
 	}
-	name := c.r.register(resp.RoomID, alias)
+	name := c.r.register(resp.RoomID, localpart(alias))
 	c.r.emitRooms()
 	if err := c.r.emitMembers(resp.RoomID); err != nil {
 		return err
@@ -145,7 +145,7 @@ func (c *cmds) topic(ch, text string) error {
 func (c *cmds) invite(nick, ch string) error {
 	uid, err := c.fullUser(nick)
 	if err != nil {
-		return errors.New("usage: /invite <user-id> &room")
+		return errors.New("usage: /invite <user-id> room")
 	}
 	room, err := c.r.roomOf(ch)
 	if err != nil {
@@ -257,13 +257,13 @@ func ptr[T any](v T) *T { return &v }
 // create: /create &name makes an encrypted private room with alias #name:<server>, invites nobody,
 // and focuses it.
 func (c *cmds) create(s string) error {
-	if !strings.HasPrefix(s, "&") || len(s) < 2 {
-		return errors.New("usage: /create &room")
+	if s == "" {
+		return errors.New("usage: /create room")
 	}
 	ctx, cancel := c.ctx()
 	defer cancel()
 	resp, err := c.r.mx.CreateRoom(ctx, &mautrix.ReqCreateRoom{
-		RoomAliasName: s[1:],
+		RoomAliasName: s,
 		Preset:        "private_chat",
 		InitialState: []*event.Event{{
 			Type:     event.StateEncryption,
@@ -274,9 +274,9 @@ func (c *cmds) create(s string) error {
 	if err != nil {
 		return err
 	}
-	alias := "#" + s[1:] + ":" + c.server
+	alias := "#" + s + ":" + c.server
 	logf("create %s room=%s", s, resp.RoomID)
-	name := c.r.register(resp.RoomID, alias)
+	name := c.r.register(resp.RoomID, localpart(alias))
 	c.r.emitRooms()
 	c.r.emit(ui.FocusMsg(name))
 	return nil

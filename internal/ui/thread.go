@@ -2,7 +2,7 @@ package ui
 
 import (
 	"fmt"
-	"strconv"
+	"time"
 
 	"mtx/internal/model"
 )
@@ -44,22 +44,6 @@ const threadRowsMax = 8
 
 // threadRow is one head: "▸" when selected, the sender and text, the reply count, and the unread
 // count when there is one. A head with nothing unread is faded.
-func threadRow(h model.Thread, selected bool, unread, w int) string {
-	mark := "  "
-	if selected {
-		mark = "▸ "
-	}
-	label := fmt.Sprintf("%s%s: %s (%d)", mark, h.Nick, h.Text, h.Count)
-	if unread == 0 {
-		row := fit(cell, label, w)
-		if selected {
-			return row
-		}
-		return faint.Render(row)
-	}
-	// the channel unread marker: the count, styled as channels style theirs
-	return fit(cell, label, w-3) + fit(cell, unreadMark.Render(strconv.Itoa(unread)), 3)
-}
 
 // unreadAll is the unread count of each head of the current channel, in head order.
 func (a App) unreadAll() []int {
@@ -160,25 +144,6 @@ func midTitle(p sidePanes, name string) string {
 	return name
 }
 
-// threadsRow is row i of the threads box, width w: row 0 is the main thread, then the heads.
-func threadsRow(p sidePanes, i, w int) string {
-	focused := p.focus == focusThreads && p.sel == i
-	if i == 0 {
-		return mainThreadRow(p.thread == "" || focused, p.mainUnread, w)
-	}
-	if i-1 >= len(p.heads) {
-		return fit(cell, "", w)
-	}
-	u := 0
-	if i-1 < len(p.unread) {
-		u = p.unread[i-1]
-	}
-	h := p.heads[i-1]
-	return threadRow(h, h.Root == p.thread || focused, u, w)
-}
-
-// mainThreadRow is the main thread row: marked when selected.
-
 // nextPane is the pane Tab moves to: chat, channels, nicks, then the threads box when it shows.
 func (a App) nextPane() paneFocus {
 	order := []paneFocus{focusChat, focusChans, focusNicks}
@@ -191,19 +156,6 @@ func (a App) nextPane() paneFocus {
 		}
 	}
 	return focusChat
-}
-
-// mainThreadRow is the main thread row: marked when selected, with its unread count.
-func mainThreadRow(selected bool, unread, w int) string {
-	mark := "  "
-	if selected {
-		mark = "▸ "
-	}
-	label := mark + mainThreadLabel
-	if unread > 0 {
-		return fit(cell, label, w-3) + fit(cell, unreadMark.Render(strconv.Itoa(unread)), 3)
-	}
-	return fit(cell, label, w)
 }
 
 // bumpMain counts one more main-thread line in channel ch.
@@ -221,4 +173,75 @@ func threadState(root string) string {
 		return ""
 	}
 	return "open"
+}
+
+// threadStampW is the width of a thread row's left column: time, then unread count.
+const threadStampW = 10
+
+// threadStamp is the left column of a thread row: the newest reply's time and its unread count.
+func threadStamp(at time.Time, unread int) string {
+	t := "     "
+	if !at.IsZero() {
+		t = at.Format("15:04")
+	}
+	u := "   "
+	if unread > 0 {
+		u = unreadMark.Render(fmt.Sprintf("%3d", unread))
+	}
+	return fit(cell, t+" "+u, threadStampW)
+}
+
+// threadRow is a head of the threads box: stamp, then "nick: text (replies)".
+func threadRow(h model.Thread, selected bool, unread, w int) string {
+	mark := "  "
+	if selected {
+		mark = "▸ "
+	}
+	body := fit(cell, fmt.Sprintf("%s%s: %s (%d)", mark, h.Nick, h.Text, h.Count), w-threadStampW)
+	if unread == 0 && !selected {
+		body = faint.Render(body)
+	}
+	return threadStamp(h.At, unread) + body
+}
+
+// mainThreadRow is the last row of the threads box: the channel's main chat.
+func mainThreadRow(selected bool, unread, w int) string {
+	mark := "  "
+	if selected {
+		mark = "▸ "
+	}
+	return threadStamp(time.Time{}, unread) + fit(cell, mark+mainThreadLabel, w-threadStampW)
+}
+
+// threadsRow is row i of the threads box, width w: the heads, then the main thread last.
+func threadsRow(p sidePanes, i, w int) string {
+	j := p.threadTop + i
+	focused := p.focus == focusThreads && p.sel == j
+	if j == len(p.heads) {
+		return mainThreadRow(p.thread == "" || focused, p.mainUnread, w)
+	}
+	if j > len(p.heads) {
+		return fit(cell, "", w)
+	}
+	u := 0
+	if j < len(p.unread) {
+		u = p.unread[j]
+	}
+	h := p.heads[j]
+	return threadRow(h, h.Root == p.thread || focused, u, w)
+}
+
+// threadTopOf is the first shown row of a threads box of n rows (heads plus the main thread):
+// it starts at the bottom, so the main thread shows, and follows the selection sel.
+func threadTopOf(n, sel int, focused bool) int {
+	vis := min(n, threadRowsMax)
+	top := n - vis
+	if focused {
+		if sel < top {
+			top = sel
+		} else if sel >= top+vis {
+			top = sel - vis + 1
+		}
+	}
+	return top
 }

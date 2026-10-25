@@ -109,3 +109,36 @@ func cleanText(s string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// AddHistoryLines appends ls to channel ch as history, cloning the ring once for the whole batch.
+func (m Model) AddHistoryLines(ch string, ls []Line) (Model, error) {
+	for i, c := range m.chans {
+		if c.Name != ch {
+			continue
+		}
+		c.Lines = c.Lines.clone()
+		for _, l := range ls {
+			l.Nick, l.Text = clean(l.Nick), cleanText(l.Text)
+			c.Lines.Push(l)
+		}
+		return m.withChan(i, c), nil
+	}
+	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
+}
+
+// ReplaceLine swaps the line with the given ID in channel ch for l (a decrypted placeholder).
+// No line with that ID is a no-op.
+func (m Model) ReplaceLine(ch, id string, l Line) (Model, error) {
+	for i, c := range m.chans {
+		if c.Name != ch {
+			continue
+		}
+		c.Lines = c.Lines.clone()
+		c.Lines.Replace(func(old Line) bool { return old.ID == id }, func(Line) Line {
+			l.Nick, l.Text = clean(l.Nick), cleanText(l.Text)
+			return l
+		})
+		return m.withChan(i, c), nil
+	}
+	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
+}

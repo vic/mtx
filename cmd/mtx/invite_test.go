@@ -35,11 +35,11 @@ func TestInviteFullUserID(t *testing.T) {
 	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
 	require.NoError(t, err)
 	r := newRunner(cli, func(tea.Msg) {})
-	r.register(testRoom, "#r:mock.test")
+	r.register(testRoom, "r")
 	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
 
-	require.NoError(t, cs.invite("@bob", "&r"))
-	require.NoError(t, cs.invite("@carol:other.test", "&r"))
+	require.NoError(t, cs.invite("@bob", "r"))
+	require.NoError(t, cs.invite("@carol:other.test", "r"))
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []string{"@bob:mock.test", "@carol:other.test"}, sent)

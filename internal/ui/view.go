@@ -625,7 +625,8 @@ var helpSections = []struct {
 		{":", "run a command (:join, :react, :help...); :!text sends text as is"},
 		{"$", "run a shell command locally (suspends mtx; Enter returns)"},
 		{"!", "run a shell command, insert its output as a fenced block"},
-		{"m", "mentions only (direct lines) / all lines"},
+		{"M", "mentions only (direct lines) / all lines"},
+		{"m", "recent chats and threads (fuzzy): type, enter"},
 		{"s", "show / hide times (15:04)"},
 	}},
 	{"INSERT", [][2]string{

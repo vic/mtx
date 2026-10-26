@@ -59,6 +59,7 @@ const (
 	ThreadStart
 	ReactRow
 	Leader
+	PickRecent
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -162,6 +163,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		case "t":
 			return Action{Kind: ThreadNext}, Normal, ""
 		case "m":
+			return Action{Kind: PickRecent}, Normal, ""
+		case "M":
 			return Action{Kind: ToggleMentions}, Normal, ""
 		case "T":
 			return Action{Kind: ThreadStart}, Insert, ""

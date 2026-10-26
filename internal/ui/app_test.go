@@ -723,3 +723,37 @@ func TestSponsorDocsCommands(t *testing.T) {
 		t.Fatalf("handler got %v", calls)
 	}
 }
+
+// TestRecentPicker: m opens the recent picker (chats most recent first); typing and enter goes there.
+func TestRecentPicker(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, "m")
+	if !a.pick || a.pickWhat != pickRecent {
+		t.Fatalf("picker not open: pick %v what %v", a.pick, a.pickWhat)
+	}
+	a = typeText(t, a, "b")
+	a, _ = press(t, a, "enter")
+	if cur(a) != "#b" {
+		t.Fatalf("current %q", cur(a))
+	}
+}
+
+// TestPickGroups: the ctrl+o matches group into threads, channels, then people, each with its heading.
+func TestPickGroups(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(ThreadsMsg{Ch: "#a", Heads: []model.Thread{{Root: "$r", Nick: "bob", Text: "hi"}}})
+	a = next.(App)
+	a = a.openPick(pickChans)
+	ms := a.pickMatches()
+	first := map[string]int{}
+	for i, m := range ms {
+		if _, ok := first[m.group]; !ok {
+			first[m.group] = i
+		}
+	}
+	if ms[0].group != "threads" || first["channels"] >= first["people"] || first["people"] == 0 && first["channels"] == 0 {
+		t.Fatalf("groups %v", first)
+	}
+}

@@ -140,7 +140,7 @@ func TestToggles(t *testing.T) {
 	if got := shown(); got != "hi|thinking out loud" || a.tools {
 		t.Fatalf("t %q tools %v", got, a.tools)
 	}
-	a, _ = press(t, a, "m")
+	a, _ = press(t, a, "M")
 	if got := shown(); got != "hi" || strings.Contains(a.screen(), "thinking out loud") {
 		t.Fatalf("m %q", got)
 	}
@@ -322,7 +322,7 @@ func TestMentionsInRooms(t *testing.T) {
 		next, _ = a.Update(LineMsg{Ch: "&r", L: l})
 		a = next.(App)
 	}
-	a, _ = press(t, a, "m")
+	a, _ = press(t, a, "M")
 	var got []string
 	for _, c := range a.m.Channels() {
 		if c.Name == "&r" {

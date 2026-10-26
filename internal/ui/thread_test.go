@@ -111,8 +111,8 @@ func TestCommandWithNoChannel(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	a.m = model.Model{}
-	a.in.SetValue("/create &first")
-	next, cmd := a.sendLine()
+	a.in.SetValue(":create &first") // commands run from the : prompt, not sendLine
+	next, cmd := a.runCmd(":create &first")
 	_ = next
 	require.NotNil(t, cmd, "a command with no channel must still be dispatched")
 	a.in.SetValue("plain")

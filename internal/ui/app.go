@@ -611,7 +611,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.yank()
 	case PickInvite:
 		if a.m.Current().Kind != model.RoomChan {
-			return a.toast("invite works in a & room: /join &name first", true), nil
+			return a.toast("invite works in a & room: :join &name first", true), nil
 		}
 		return a.openPick(pickInvite), nil
 	case PickSpeaker:
@@ -667,7 +667,13 @@ func (a App) promptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if kind == promptShell {
 			return a.runShell(v)
 		}
-		return a.sendLiteral(v) // : sends as is
+		if strings.HasPrefix(v, "!") { // :!text goes to the session as is
+			return a.sendLiteral(v)
+		}
+		if strings.TrimSpace(v) == "" {
+			return a, nil
+		}
+		return a.runCmd(":" + v)
 	default:
 		var cmd tea.Cmd
 		a.in, cmd = a.in.Update(msg)
@@ -733,8 +739,6 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 	a.in.Blur()
 	ch := a.m.Current().Name
 	switch {
-	case strings.HasPrefix(text, "/"): // commands run with no channel too (/create makes the first one)
-		return a.runCmd(text)
 	case text == "" || ch == "":
 	default:
 		if a.edit != nil && a.editFn != nil { // C: the send replaces the message being edited
@@ -770,7 +774,8 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 }
 
 func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
-	if word, rest, _ := strings.Cut(line, " "); word == "/react" { // the target is the cursor line
+	line = "/" + strings.TrimPrefix(strings.TrimPrefix(line, ":"), "/") // one form inside: the rewrites below and ParseCmd take "/word"
+	if word, rest, _ := strings.Cut(line, " "); word == "/react" {      // the target is the cursor line
 		l, ok := a.lastWithID(a.hit)
 		if !ok {
 			return a.note("react: no message with an ID here"), nil
@@ -820,7 +825,10 @@ func (a App) toast(text string, err bool) App {
 func (a App) inputLine() (label, input, hint string) {
 	switch {
 	case a.prompt == promptCmd:
-		return "NORMAL", ": " + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "send as is", "C-t", "files", "C-f", "file block", "esc", "cancel")
+		if u := a.cmdUsage(); u != "" {
+			return "NORMAL", ": " + withCursor(a.in.Value(), inputPos(a.in)), u
+		}
+		return "NORMAL", ": " + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "run", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.prompt == promptCapture:
 		return "NORMAL", "! " + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "run, insert output", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.prompt == promptShell:
@@ -830,13 +838,10 @@ func (a App) inputLine() (label, input, hint string) {
 		if a.quote != nil { // RE: while replying; the quote is dropped once the input is empty
 			prompt = "RE: "
 		}
-		if u := a.cmdUsage(); u != "" { // typing a /command: its usage is the hint (vic 2026-10-23)
-			return "INSERT", prompt + withCursor(a.in.Value(), inputPos(a.in)), u
-		}
 		if a.edit != nil { // C: the input is the edited text; enter saves it
 			return "EDIT", prompt + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "save edit", "esc", "cancel")
 		}
-		hint := keyHint("enter", "send", "/", "command", "@", "mention", "tab", "complete", "↑↓", "line", "C-t", "files", "C-f", "file block", "C-o", "pick", "esc", "normal")
+		hint := keyHint("enter", "send", "@", "mention", "tab", "complete", "↑↓", "line", "C-t", "files", "C-f", "file block", "C-o", "pick", "esc", "normal")
 		if a.quote != nil { // the replied-to line is shown here, not in the input
 			hint = keyHint("re", "<"+a.quote.Nick+"> "+a.quote.Text) + "   " + hint
 		}
@@ -856,7 +861,7 @@ func (a App) inputLine() (label, input, hint string) {
 func (a App) footer() string {
 	// states first: on a narrow screen the keys fall off the end (they are in ? help)
 	return fit(cell, " "+keyHint("t", "thread:"+cmp.Or(threadState(a.thread), "main"), "m", "mentions:"+onOff(a.mentions), "s", "time:"+onOff(a.stamps),
-		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "C", "edit", "O", "thread reply", ":", "literal"), max(a.w, 1)) // one row
+		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "C", "edit", "O", "thread reply", ":", "command"), max(a.w, 1)) // one row
 }
 
 // View is the full-screen frame; screen is its text.
@@ -1718,9 +1723,12 @@ func (a App) helpScroll(n int) App {
 // cmdUsage is the usage of the /command being typed in INSERT, as hint text: every
 // command that matches the first word, or "" when the line is not a command.
 func (a App) cmdUsage() string {
+	if a.prompt != promptCmd {
+		return ""
+	}
 	word, _, _ := strings.Cut(a.in.Value(), " ")
-	rest, ok := strings.CutPrefix(word, "/")
-	if !ok {
+	rest := word
+	if rest == "" || strings.HasPrefix(rest, "!") {
 		return ""
 	}
 	us := model.Usages(rest)

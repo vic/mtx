@@ -94,8 +94,8 @@ func TestAppChannelKeys(t *testing.T) {
 func TestAppQuit(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a, _ = press(t, a, "i")
-	a = typeText(t, a, "/quit")
+	a, _ = press(t, a, ":")
+	a = typeText(t, a, "quit")
 	_, cmd := press(t, a, "enter")
 	if cmd == nil || cmd() != tea.Quit() {
 		t.Fatalf("want tea.Quit, got %v", cmd)
@@ -105,8 +105,8 @@ func TestAppQuit(t *testing.T) {
 func TestAppCommandMsgAndErrors(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a, _ = press(t, a, "i")
-	a = typeText(t, a, "/join &x")
+	a, _ = press(t, a, ":")
+	a = typeText(t, a, "join &x")
 	a, cmd := press(t, a, "enter")
 	if cmd == nil {
 		t.Fatal("no cmd")
@@ -115,8 +115,8 @@ func TestAppCommandMsgAndErrors(t *testing.T) {
 		t.Fatalf("got %#v", cmd())
 	}
 	// NEG: unknown command -> error line, no cmd, no send
-	a, _ = press(t, a, "esc", "i")
-	a = typeText(t, a, "/bogus")
+	a, _ = press(t, a, "esc", ":")
+	a = typeText(t, a, "bogus")
 	a, cmd = press(t, a, "enter")
 	if cmd != nil || len(log) != 0 {
 		t.Fatalf("cmd %v log %v", cmd, log)
@@ -163,9 +163,9 @@ func TestAppInsertSend(t *testing.T) {
 	if a.in.Value() != "" {
 		t.Fatalf("input not cleared: %q", a.in.Value())
 	}
-	// "/quit" in insert mode is a command, not a send
-	a, _ = press(t, a, "i") // RET left INSERT; back in it for the command
-	a = typeText(t, a, "/quit")
+	// :quit runs from the : prompt (a /quit typed in INSERT is plain text)
+	a, _ = press(t, a, ":") // RET left INSERT; commands run from the : prompt
+	a = typeText(t, a, "quit")
 	a, cmd = press(t, a, "enter")
 	if len(log) != 1 || cmd == nil || cmd() != tea.Quit() {
 		t.Fatalf("log %v cmd %v", log, cmd)
@@ -517,16 +517,17 @@ func TestAppPasteIsText(t *testing.T) {
 	}
 }
 
-func TestColonSendsLiteral(t *testing.T) {
+// TestColonBangSendsLiteral: :!text sends the text to the session as is; it is neither a command nor wrapped.
+func TestColonBangSendsLiteral(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	var lit []sent
 	a = a.WithLiteral(func(ch, text string) error { lit = append(lit, sent{ch, text}); return nil })
 	a, _ = press(t, a, ":")
-	a = typeText(t, a, "/join &x")
+	a = typeText(t, a, "!hello")
 	a, cmd := press(t, a, "enter")
 	a = finish(t, a, cmd)
-	if len(lit) != 1 || lit[0] != (sent{"#a", "/join &x"}) || len(log) != 0 { // literal, not a command, not a wrapped send
+	if len(lit) != 1 || lit[0] != (sent{"#a", "!hello"}) || len(log) != 0 { // literal, not a command, not a wrapped send
 		t.Fatalf("literal %v sends %v", lit, log)
 	}
 	if len(curLines(a)) != 0 { // no local echo: the transcript shows it

@@ -93,7 +93,7 @@ func arity(n CmdName) (count int, raw, ok bool) {
 	return 0, false, false
 }
 
-// ParseCmd parses a line starting with `/` or `:`. `:q` is `quit`. A raw
+// ParseCmd parses a command typed as `:word` (a `/` start is accepted too). `:q` is `quit`. A raw
 // last arg (/msg body, /topic text) keeps its inner whitespace.
 func ParseCmd(line string) (Cmd, error) {
 	if !strings.HasPrefix(line, "/") && !strings.HasPrefix(line, ":") {
@@ -140,32 +140,32 @@ func ParseCmd(line string) (Cmd, error) {
 
 // usage is shown when a command gets the wrong arguments (vic 2026-10-23).
 var usage = map[CmdName]string{
-	CmdJoin:     "/join &room",
-	CmdCreate:   "/create &room",
-	CmdPart:     "/part [&room]",
-	CmdClose:    "/close [&room] (or /rm)",
-	CmdInvite:   "/invite <nick> &room",
-	CmdKick:     "/kick <nick>",
-	CmdTopic:    "/topic <text>",
-	CmdRename:   "/name <text>",
-	CmdTag:      "/tag fav|low|none",
-	CmdWhois:    "/whois <nick>",
-	CmdNick:     "/nick <display name>",
-	CmdIgnore:   "/ignore <user>",
-	CmdUnignore: "/unignore <user>",
-	CmdNames:    "/names [&room]",
-	CmdMsg:      "/msg <nick> <text>",
-	CmdMe:       "/me <action>",
-	CmdOpen:     "/open (the selected line's media)",
-	CmdUpload:   "/upload <path>",
-	CmdRecover:  "/recover <recovery key>",
-	CmdAccept:   "/accept [room]",
-	CmdReject:   "/reject [room]",
-	CmdInvites:  "/invites",
-	CmdReact:    "/react <emoji> (on the selected line)",
-	CmdRedact:   "/redact [reason] (on my selected line)",
-	CmdQuit:     "/quit",
-	CmdHelp:     "/help",
+	CmdJoin:     ":join &room",
+	CmdCreate:   ":create &room",
+	CmdPart:     ":part [&room]",
+	CmdClose:    ":close [&room] (or /rm)",
+	CmdInvite:   ":invite <nick> &room",
+	CmdKick:     ":kick <nick>",
+	CmdTopic:    ":topic <text>",
+	CmdRename:   ":name <text>",
+	CmdTag:      ":tag fav|low|none",
+	CmdWhois:    ":whois <nick>",
+	CmdNick:     ":nick <display name>",
+	CmdIgnore:   ":ignore <user>",
+	CmdUnignore: ":unignore <user>",
+	CmdNames:    ":names [&room]",
+	CmdMsg:      ":msg <nick> <text>",
+	CmdMe:       ":me <action>",
+	CmdOpen:     ":open (the selected line's media)",
+	CmdUpload:   ":upload <path>",
+	CmdRecover:  ":recover <recovery key>",
+	CmdAccept:   ":accept [room]",
+	CmdReject:   ":reject [room]",
+	CmdInvites:  ":invites",
+	CmdReact:    ":react <emoji> (on the selected line)",
+	CmdRedact:   ":redact [reason] (on my selected line)",
+	CmdQuit:     ":quit",
+	CmdHelp:     ":help",
 }
 
 // Usages lists the usage of every command whose word starts with prefix (no "/"),

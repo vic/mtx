@@ -696,8 +696,8 @@ func TestChannelPanePreviews(t *testing.T) {
 
 func TestHelpCommand(t *testing.T) {
 	var log []sent
-	a, _ := press(t, newApp(t, &log, nil), "i")
-	a = typeText(t, a, "/help")
+	a, _ := press(t, newApp(t, &log, nil), ":")
+	a = typeText(t, a, "help")
 	a, cmd := press(t, a, "enter")
 	if !a.help || cmd != nil || !strings.Contains(ansi.Strip(a.screen()), "Matrix client") {
 		t.Fatalf("help %v cmd %v", a.help, cmd)
@@ -752,18 +752,18 @@ func TestHelpScrolls(t *testing.T) {
 
 func TestCmdUsageHint(t *testing.T) {
 	var log []sent
-	a, _ := press(t, newApp(t, &log, nil), "i")
+	a, _ := press(t, newApp(t, &log, nil), ":")
 	hint := func() string { _, _, h := a.inputLine(); return ansi.Strip(h) }
-	a = typeText(t, a, "/inv")
-	if hint() != "usage /invite <nick> &room  ·  /invites" {
+	a = typeText(t, a, "inv")
+	if hint() != "usage :invite <nick> &room  ·  :invites" {
 		t.Fatalf("inv %q", hint())
 	}
 	a = typeText(t, a, " dave &r") // the usage stays while typing the args
-	if hint() != "usage /invite <nick> &room  ·  /invites" {
+	if hint() != "usage :invite <nick> &room  ·  :invites" {
 		t.Fatalf("args %q", hint())
 	}
-	a, _ = press(t, newApp(t, &log, nil), "i")
-	a = typeText(t, a, "/zz")
+	a, _ = press(t, newApp(t, &log, nil), ":")
+	a = typeText(t, a, "zz")
 	if hint() != "unknown command" {
 		t.Fatalf("zz %q", hint())
 	}

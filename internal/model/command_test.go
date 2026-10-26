@@ -68,7 +68,7 @@ func TestCmdWordsAllParse(t *testing.T) {
 }
 
 func TestUsageOnBadArgs(t *testing.T) {
-	for line, want := range map[string]string{"/join": "usage: /join &room", "/invite dave": "usage: /invite <nick> &room", "/msg": "usage: /msg <nick> <text>"} {
+	for line, want := range map[string]string{"/join": "usage: :join &room", "/invite dave": "usage: :invite <nick> &room", "/msg": "usage: :msg <nick> <text>"} {
 		if _, err := ParseCmd(line); err == nil || err.Error() != want {
 			t.Errorf("%s: %v", line, err)
 		}

@@ -36,6 +36,9 @@ func (r *runner) content(ctx context.Context, room id.RoomID, text string) (*eve
 		slices.Sort(mentioned)
 		c.Mentions = &event.Mentions{UserIDs: mentioned}
 	}
+	if c.Mentions != nil && len(c.Mentions.UserIDs) == 0 { // markdown leaves an empty object: no mention, no field
+		c.Mentions = nil
+	}
 	return c, nil
 }
 

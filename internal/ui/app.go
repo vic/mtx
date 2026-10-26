@@ -43,6 +43,9 @@ type ReplaceLineMsg struct {
 // ReadMsg says another member read channel Ch up to the line with event ID; own lines up to it show read.
 type ReadMsg struct{ Ch, ID string }
 
+// FullyReadMsg is the event my read marker points at in channel Ch (room account data m.fully_read).
+type FullyReadMsg struct{ Ch, ID string }
+
 // ReactsMsg sets the reaction summary of the line with event ID ID.
 type ReactsMsg struct{ Ch, ID, Reacts string }
 
@@ -216,6 +219,7 @@ type App struct {
 	confirmDel  bool                                                  // d: waiting for y to delete the selected message
 	lastLineCmd string                                                // the last :react command run on a line, for .
 	readAt      map[string]time.Time                                  // per channel: newest line another member has read (ReadMsg)
+	fullyRead   map[string]string                                     // per channel: the event my fully-read marker points at (FullyReadMsg)
 	tscroll     int                                                   // wheel offset of the threads box, negative = up; 0 on a channel switch
 	lastThread  string                                                // the last thread opened (T toggles between main and this)
 	mainUnread  map[string]int                                        // per channel: main-thread lines not on screen (main thread row count)
@@ -378,6 +382,11 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a = a.note("line for unknown channel " + msg.Ch)
 		}
+	case FullyReadMsg:
+		if a.fullyRead == nil {
+			a.fullyRead = map[string]string{}
+		}
+		a.fullyRead[msg.Ch] = msg.ID
 	case ReadMsg:
 		c, ok := a.chanByName(msg.Ch)
 		if !ok {
@@ -555,6 +564,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return a.openPick(pickUsers), nil
 			case it.do == "thread":
 				a = a.nextThread()
+			case it.do == "jumpunread":
+				a = a.jumpUnread()
 			case strings.HasSuffix(it.do, " "):
 				a = a.openPrompt(promptCmd)
 				a.in.SetValue(strings.TrimPrefix(it.do, ":"))
@@ -1380,6 +1391,22 @@ func (a App) pickHit() App {
 		return a.showHit()
 	}
 	return a
+}
+
+// jumpUnread selects the first shown line after my read marker and scrolls to it.
+func (a App) jumpUnread() App {
+	ls := a.lines(a.m.Current())
+	id := a.fullyRead[a.m.Current().Name]
+	for i, l := range ls {
+		if id != "" && l.ID == id {
+			if i+1 < len(ls) {
+				a.hit = i + 1
+				return a.showHit()
+			}
+			return a.toast("no unread messages", false)
+		}
+	}
+	return a.toast("read marker not loaded here", true)
 }
 
 // showHit scrolls so the first row of the hit line is the top row of the lines pane.
@@ -2291,7 +2318,7 @@ var menus = map[string][]menuItem{
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
 		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
-	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}},
+	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
 }
 
 // jumpKeys are the f labels, home row first; jumpTargets are the shown lines they name, top to bottom.

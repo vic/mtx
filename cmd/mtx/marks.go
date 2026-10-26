@@ -42,6 +42,18 @@ func (r *runner) seen(ch string) error {
 	}
 	if room, err := r.roomOf(ch); err == nil && r.mx != nil {
 		r.threadsOnce(room)
+		if _, done := r.fullyAsked.LoadOrStore(room, true); !done {
+			go func() {
+				ctx, cancel := callCtx()
+				defer cancel()
+				var fr struct {
+					EventID string `json:"event_id"`
+				}
+				if err := r.mx.GetRoomAccountData(ctx, room, "m.fully_read", &fr); err == nil && fr.EventID != "" {
+					r.emit(ui.FullyReadMsg{Ch: ch, ID: fr.EventID})
+				}
+			}()
+		}
 	}
 	room, err := r.roomOf(ch)
 	if err != nil {

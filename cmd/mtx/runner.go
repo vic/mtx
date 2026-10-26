@@ -37,6 +37,7 @@ type runner struct {
 	memberBusy   map[id.RoomID]bool                                 // a nick-list fetch is running for the room
 	memberAgain  map[id.RoomID]bool                                 // the room changed while a fetch ran: fetch once more
 	placeholder  map[string]bool                                    // event IDs shown as decrypting and not yet replaced
+	fullyAsked   sync.Map                                           // rooms whose m.fully_read was fetched
 	reactOrder   map[id.EventID][]string                            // per reacted event: emoji in first-seen order
 	reactBy      map[id.EventID]map[string]map[id.UserID]id.EventID // target -> key -> reactor -> reaction event; guarded by mu
 	reactOf      map[id.EventID]reactRef                            // reaction event -> what it reacted to; guarded by mu

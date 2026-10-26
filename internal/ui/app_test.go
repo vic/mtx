@@ -735,6 +735,28 @@ func TestRecentPicker(t *testing.T) {
 }
 
 // TestJumpLine: f labels the visible lines; a label key selects its line; esc cancels.
+// TestJumpUnread: space R j selects the line after my fully-read marker; a marker on the last line says so.
+func TestJumpUnread(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	for i := 1; i <= 3; i++ {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "line " + strconv.Itoa(i), ID: "$" + strconv.Itoa(i)}})
+		a = next.(App)
+	}
+	next, _ := a.Update(FullyReadMsg{Ch: "#a", ID: "$1"})
+	a = next.(App).jumpUnread()
+	if got := a.lines(a.m.Current())[a.hit].ID; got != "$2" {
+		t.Fatalf("hit line %q want $2", got)
+	}
+
+	next, _ = a.Update(FullyReadMsg{Ch: "#a", ID: "$3"})
+	a = next.(App).jumpUnread()
+	if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "no unread messages" {
+		t.Fatalf("toasts %+v", a.toasts)
+	}
+}
+
 func TestJumpLine(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)

@@ -631,6 +631,7 @@ var helpSections = []struct {
 		{"Y", "copy a matrix.to link to the selected message"},
 		{"# @ % ^", "open a room, user, thread or pinned message (fuzzy)"},
 		{"space o p", "pinned messages of this room"},
+		{"space R j", "jump to the first unread message"},
 		{"enter", "on a selected line: menu of everything you can do with it"},
 		{"e", "edit my selected message"},
 		{"d y", "delete my selected message"},

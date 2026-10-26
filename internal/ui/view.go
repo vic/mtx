@@ -612,6 +612,7 @@ var helpSections = []struct {
 		{"gg G", "top / bottom"},
 		{"/", "search: highlights matches, up/down picks the current hit"},
 		{"i", "type a new message to the main chat"},
+		{"+ 1-9", "quick reaction on the selected line: 👍 ❤️ 😂 🎉 😮 😢 🙏 🔥 👀"},
 		{"a", "reply to my last or selected message"},
 		{"A", "reply to my last or selected message, quoted in the text"},
 		{"C", "edit my last or selected message"},

@@ -645,3 +645,29 @@ func TestColonSuggests(t *testing.T) {
 		t.Fatalf("suggest %q", s)
 	}
 }
+
+// TestQuickReact: + opens the quick reaction row; a digit reacts to the cursor line with that emoji; any
+// other key just closes the row.
+func TestQuickReact(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$1"}})
+	a = next.(App)
+	a, _ = press(t, a, "+")
+	if !a.reactRow || !strings.Contains(strings.Join(a.suggest(), ""), "👍") {
+		t.Fatalf("row not open: %v %q", a.reactRow, a.suggest())
+	}
+	a, cmd := press(t, a, "1")
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdReact || a.reactRow {
+		t.Fatalf("react: %#v open %v", cmd(), a.reactRow)
+	}
+	if args := cm.Cmd.Args(); len(args) != 2 || args[0] != "👍" || args[1] != "$1" {
+		t.Fatalf("args %q", args)
+	}
+	a, _ = press(t, a, "+")
+	a, cmd = press(t, a, "x")
+	if cmd != nil || a.reactRow {
+		t.Fatalf("x should only close the row: cmd %v open %v", cmd, a.reactRow)
+	}
+}

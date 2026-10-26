@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -206,6 +207,7 @@ type App struct {
 	tagsVer    int                                                   // bumped by TagsMsg: the side pane cache key
 	typingFn   func(ch string)                                       // tells the room I am typing; must not block; nil = off
 	typedAt    time.Time                                             // last typing notice sent
+	reactRow   bool                                                  // +: the quick reaction row is open; the next key picks
 	readAt     map[string]time.Time                                  // per channel: newest line another member has read (ReadMsg)
 	tscroll    int                                                   // wheel offset of the threads box, negative = up; 0 on a channel switch
 	lastThread string                                                // the last thread opened (T toggles between main and this)
@@ -495,6 +497,13 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if k == "ctrl+c" {
 		return a, tea.Quit
 	}
+	if a.reactRow {
+		a.reactRow = false
+		if n := int(k[0] - '0'); len(k) == 1 && n >= 1 && n <= len(quickReacts) {
+			return a.runCmd(":react " + quickReacts[n-1])
+		}
+		return a, nil
+	}
 	if a.focus != focusChat && a.mode == Normal && a.prompt == 0 && !a.pick && !a.help {
 		return a.paneKey(msg)
 	}
@@ -589,6 +598,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a = a.prepare(act.Kind)
 	}
 	switch act.Kind {
+	case ReactRow:
+		a.reactRow = true
+		return a, nil
 	case CmdLine:
 		return a.openPrompt(promptCmd), nil
 	case CaptureLine:
@@ -1286,6 +1298,13 @@ func (a App) nickPool() []string {
 
 // suggest is the completion row above an INSERT line (0 or 1 row): what tab puts in.
 func (a App) suggest() []string {
+	if a.reactRow {
+		var parts []string
+		for i, e := range quickReacts {
+			parts = append(parts, shortcut.Bold(true).Render(strconv.Itoa(i+1))+" "+e)
+		}
+		return []string{dimmed.Render("react ") + strings.Join(parts, "  ") + dimmed.Render("  esc cancel")}
+	}
 	if a.prompt == promptCmd { // the : line: the commands that match the word being typed, with what they do
 		word, rest, _ := strings.Cut(a.in.Value(), " ")
 		if word == "" || rest != "" || strings.HasPrefix(word, "!") {
@@ -1383,6 +1402,9 @@ const (
 )
 
 // statusMarks lists every mark, for the view to split it from the nick.
+// quickReacts is the + row: + then 1-9 reacts to the cursor line with that emoji.
+var quickReacts = []string{"👍", "❤️", "😂", "🎉", "😮", "😢", "🙏", "🔥", "👀"}
+
 var statusMarks = []string{busyMark, typingMark, idleMark}
 
 // paneNicks is chanNicks with a status mark before each nick.

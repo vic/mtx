@@ -13,6 +13,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/crypto"
 	"maunium.net/go/mautrix/crypto/cryptohelper"
+	"maunium.net/go/mautrix/crypto/verificationhelper"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
@@ -33,9 +34,12 @@ type Client struct {
 	onPresence  func(id.UserID, string)
 	onReceipt   func(id.RoomID, id.EventID, id.UserID)
 	progress    func(Progress)
-	mu          sync.Mutex          // one event at a time: see lock
-	loaded      sync.Map            // rooms whose history LoadRoom has started
-	shown       map[id.EventID]bool // events this run has handed to the UI, history or live
+	mu          sync.Mutex                             // one event at a time: see lock
+	loaded      sync.Map                               // rooms whose history LoadRoom has started
+	shown       map[id.EventID]bool                    // events this run has handed to the UI, history or live
+	vh          *verificationhelper.VerificationHelper // device verification (SAS), see verify.go
+	onVerify    func(VerifyEvent)
+	started     sync.Map // verification transactions this device started
 	decryptOnce sync.Once
 	decryptSem  chan struct{} // bounds decrypts in flight; see decryptSlot
 }
@@ -107,7 +111,14 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		_ = db.Close()
 		return nil, errors.New("crypto not set on client")
 	}
-	return &Client{cli: cli, helper: helper, db: db, user: cli.UserID, shown: map[id.EventID]bool{}}, nil
+	c := &Client{cli: cli, helper: helper, db: db, user: cli.UserID, shown: map[id.EventID]bool{}}
+	vh := verificationhelper.NewVerificationHelper(cli, helper.Machine(), verificationhelper.NewInMemoryVerificationStore(), verifyCallbacks{c}, false, false, true)
+	if err := vh.Init(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("verification: %w", err)
+	}
+	c.vh = vh
+	return c, nil
 }
 
 // checkDevice fails when the token's user differs from MTX_USER_ID, or when MTX_DEVICE_ID is set
@@ -179,8 +190,9 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		ctx = WithHistory(ctx)
 	}
 	m := c.helper.Machine()
-	m.ProcessSyncResponse(ctx, resp, since)        // room keys, device lists, OTK counts
-	if err := c.retryPending(ctx, h); err != nil { // keys that just arrived unlock parked events
+	m.ProcessSyncResponse(ctx, resp, since)           // room keys, device lists, OTK counts
+	c.dispatchVerification(ctx, resp.ToDevice.Events) // the verification events the helper listens for
+	if err := c.retryPending(ctx, h); err != nil {    // keys that just arrived unlock parked events
 		return err
 	}
 	c.presenceOf(resp.Presence.Events)

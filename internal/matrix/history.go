@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -69,4 +70,29 @@ func (c *Client) LoadRoom(ctx context.Context, room id.RoomID, h Handler) {
 		return
 	}
 	c.report(Progress{ID: pid, Text: "history loaded", Finished: true})
+}
+
+// threadLimit is how many replies of a thread one load fetches.
+const threadLimit = 100
+
+// LoadThread fetches thread root's event and its newest replies (read only) and delivers them oldest
+// first as history, once per thread per run.
+func (c *Client) LoadThread(ctx context.Context, room id.RoomID, root id.EventID, h Handler) error {
+	key := "thread:" + string(root)
+	if _, loaded := c.loaded.LoadOrStore(key, true); loaded {
+		return nil
+	}
+	ev, err := c.cli.GetEvent(ctx, room, root)
+	if err != nil {
+		c.loaded.Delete(key)
+		return fmt.Errorf("thread root %s: %w", root, err)
+	}
+	rel, err := c.cli.GetRelations(ctx, room, root, &mautrix.ReqGetRelations{RelationType: event.RelThread, Dir: mautrix.DirectionBackward, Limit: threadLimit})
+	if err != nil {
+		c.loaded.Delete(key)
+		return fmt.Errorf("thread %s: %w", root, err)
+	}
+	evs := append([]*event.Event{ev}, rel.Chunk...)
+	slices.Reverse(evs[1:]) // backward is newest first; the root stays first
+	return c.roomEvents(WithHistory(ctx), room, nil, evs, h, true)
 }

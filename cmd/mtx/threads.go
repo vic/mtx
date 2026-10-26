@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"slices"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
+	"mtx/internal/matrix"
 	"mtx/internal/model"
 	"mtx/internal/ui"
 )
@@ -168,5 +170,23 @@ func (r *runner) fetchThreads(room id.RoomID) {
 func (r *runner) threadsOnce(room id.RoomID) {
 	if _, done := r.threadsAsked.LoadOrStore(room, true); !done {
 		go r.fetchThreads(room)
+	}
+}
+
+// openThread loads thread root of channel ch in the background; its lines arrive as history.
+func (r *runner) openThread(load func(context.Context, id.RoomID, id.EventID, matrix.Handler) error) func(ch, root string) {
+	return func(ch, root string) {
+		room, err := r.roomOf(ch)
+		if err != nil {
+			return
+		}
+		go func() {
+			ctx, cancel := callCtx()
+			defer cancel()
+			if err := load(ctx, room, id.EventID(root), r.onEvent); err != nil {
+				r.emit(ui.ToastMsg{Text: "thread: " + err.Error(), Err: true})
+			}
+			r.flushHistory(ch)
+		}()
 	}
 }

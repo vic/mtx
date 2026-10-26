@@ -209,6 +209,7 @@ type App struct {
 	typedAt     time.Time                                             // last typing notice sent
 	reactRow    bool                                                  // +: the quick reaction row is open; the next key picks
 	menu        string                                                // the open leader menu ("" none)
+	threadOpen  func(ch, root string)                                 // loads a thread's history when it is opened; must not block; nil = off
 	jump        bool                                                  // f: line labels are shown; the next key picks a line
 	confirmDel  bool                                                  // d: waiting for y to delete the selected message
 	lastLineCmd string                                                // the last :react command run on a line, for .
@@ -2284,4 +2285,10 @@ func (a App) jumpTargets() []int {
 		}
 	}
 	return out
+}
+
+// WithThreadOpen sets the hook that loads a thread's history when the thread is opened (it must not block).
+func (a App) WithThreadOpen(f func(ch, root string)) App {
+	a.threadOpen = f
+	return a
 }

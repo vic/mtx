@@ -73,6 +73,9 @@ func (a App) threadAt(label string) (model.Thread, bool) {
 // selectThread shows root in the chat pane ("" = main chat) and marks it read.
 func (a App) selectThread(root string) App {
 	a.thread, a.hit, a.offs = root, -1, nil
+	if root != "" && a.threadOpen != nil {
+		a.threadOpen(a.m.Current().Name, root)
+	}
 	if root != "" {
 		a.lastThread = root
 	}

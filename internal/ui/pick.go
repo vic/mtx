@@ -14,7 +14,6 @@ type pickMatch struct {
 	idx   int // position in the list given to pickList
 	at    []int
 	score int
-	group string // a heading the picker box shows above the first match of each group; "" none
 }
 
 // fuzzy matches q as a case-insensitive subsequence of s. Runs of matched runes and
@@ -59,9 +58,6 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 	for i, m := range ms {
 		if i >= max(h-6, 1) {
 			break
-		}
-		if m.group != "" && (i == 0 || ms[i-1].group != m.group) {
-			rows = append(rows, dimmed.Render(m.group))
 		}
 		mark, st := " ", dimmed
 		if i == sel {

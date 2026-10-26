@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
@@ -23,6 +24,9 @@ func IsHistory(ctx context.Context) bool {
 	return v
 }
 
+// pageTokens holds, per room, the /messages end token of the oldest page loaded: LoadOlder continues from it.
+var pageTokens sync.Map
+
 // backfillLimit is how many recent events a room's history loads.
 const backfillLimit = 100
 
@@ -33,6 +37,7 @@ func (c *Client) backfillRoom(ctx context.Context, room id.RoomID, h Handler) er
 	if err != nil {
 		return fmt.Errorf("history %s: %w", room, err)
 	}
+	pageTokens.Store(room, resp.End) // where the next older page starts
 	evs := resp.Chunk
 	slices.Reverse(evs) // /messages backward is newest first
 	return c.roomEvents(WithHistory(ctx), room, nil, evs, h, true)
@@ -108,4 +113,25 @@ func (c *Client) LoadContext(ctx context.Context, room id.RoomID, ev id.EventID,
 	slices.Reverse(before) // events_before is newest first
 	evs := append(append(before, resp.Event), resp.EventsAfter...)
 	return c.roomEvents(WithHistory(ctx), room, nil, evs, h, true)
+}
+
+// LoadOlder fetches the page of history before the oldest page loaded (read only) and delivers it oldest
+// first. done is true when the server has no older events.
+func (c *Client) LoadOlder(ctx context.Context, room id.RoomID, h Handler) (done bool, err error) {
+	v, ok := pageTokens.Load(room)
+	if !ok {
+		return false, fmt.Errorf("older %s: no history loaded yet", room)
+	}
+	from := v.(string)
+	if from == "" {
+		return true, nil
+	}
+	resp, err := c.cli.Messages(ctx, room, from, "", mautrix.DirectionBackward, nil, backfillLimit)
+	if err != nil {
+		return false, fmt.Errorf("older %s: %w", room, err)
+	}
+	pageTokens.Store(room, resp.End)
+	evs := resp.Chunk
+	slices.Reverse(evs)
+	return resp.End == "" || len(evs) == 0, c.roomEvents(WithHistory(ctx), room, nil, evs, h, true)
 }

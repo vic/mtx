@@ -212,3 +212,25 @@ func (r *runner) openContext(load func(context.Context, id.RoomID, id.EventID, m
 		}()
 	}
 }
+
+// openOlder loads one older page of history for the UI, in the background; the page arrives in channel ch.
+func (r *runner) openOlder(load func(context.Context, id.RoomID, matrix.Handler) (bool, error)) func(ch string) {
+	return func(ch string) {
+		room, err := r.roomOf(ch)
+		if err != nil {
+			return
+		}
+		go func() {
+			ctx, cancel := callCtx()
+			defer cancel()
+			done, err := load(ctx, room, r.onEvent)
+			switch {
+			case err != nil:
+				r.emit(ui.ToastMsg{Text: "older: " + err.Error(), Err: true})
+			case done:
+				r.emit(ui.ToastMsg{Text: "no older messages"})
+			}
+			r.flushHistory(ch)
+		}()
+	}
+}

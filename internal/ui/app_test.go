@@ -1667,3 +1667,23 @@ func TestPinLoadsContext(t *testing.T) {
 		t.Fatalf("hit %d, the pinned line is not selected", a.hit)
 	}
 }
+
+// TestBackwardMotionLoadsOlder: a backward motion with nothing loaded asks for an older page, and tries
+// again when the page arrives.
+func TestBackwardMotionLoadsOlder(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$b1", At: time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC)}})
+	a = next.(App)
+	var asked string
+	a = a.WithOlderLoad(func(ch string) { asked = ch })
+	a, _ = press(t, a, "[", "m")
+	if asked != "#a" || a.retryMotion != "m" {
+		t.Fatalf("asked %q retry %q", asked, a.retryMotion)
+	}
+	next, _ = a.Update(HistoryLinesMsg{Ch: "#a", L: []model.Line{{Nick: "me", Text: "mine", ID: "$me0", At: time.Date(2026, 10, 22, 8, 0, 0, 0, time.UTC)}}})
+	a = next.(App)
+	if got := a.lines(a.m.Current()); a.hit < 0 || a.hit >= len(got) || got[a.hit].ID != "$me0" {
+		t.Fatalf("hit %d: the older own line is not selected", a.hit)
+	}
+}

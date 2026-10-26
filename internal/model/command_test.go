@@ -375,3 +375,10 @@ func TestDMParse(t *testing.T) {
 		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+func TestOlderParse(t *testing.T) {
+	c, err := ParseCmd("/older")
+	if err != nil || c.Name() != CmdOlder || len(c.Args()) != 0 {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/mockserver"
 )
 
@@ -73,4 +74,46 @@ func TestLoadContext(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	require.Equal(t, []string{"$b1", "$b2", "$e", "$a1"}, got)
+}
+
+// TestLoadOlderPages: the page before the first one arrives, oldest first; with no older events left, the
+// next call is done without asking the server.
+func TestLoadOlderPages(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := mockserver.Create(t)
+	addWhoami(ts)
+	var mu sync.Mutex
+	requests := 0
+	ts.Router.HandleFunc("GET /_matrix/client/v3/rooms/{roomID}/messages", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requests++
+		mu.Unlock()
+		if r.URL.Query().Get("from") == "" {
+			fmt.Fprint(w, `{"chunk":[`+msgJSON("$n1", "new")+`],"end":"t1"}`)
+			return
+		}
+		fmt.Fprint(w, `{"chunk":[`+msgJSON("$o1", "old")+`],"end":""}`)
+	})
+	tok := tokenFor(t, ctx, ts, testUser, "DEV1")
+	c, err := New(ctx, testConfig(t, ts.Server.URL, tok, "DEV1"))
+	require.NoError(t, err)
+	defer c.Close()
+	room := id.RoomID("!older:mock.test")
+	var got []string
+	h := func(_ context.Context, ev *event.Event, _ error) error {
+		got = append(got, ev.ID.String())
+		return nil
+	}
+	require.NoError(t, c.backfillRoom(ctx, room, h))
+	done, err := c.LoadOlder(ctx, room, h)
+	require.NoError(t, err)
+	require.True(t, done)
+	require.Equal(t, []string{"$n1", "$o1"}, got)
+	done, err = c.LoadOlder(ctx, room, h)
+	require.NoError(t, err)
+	require.True(t, done)
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, 2, requests, "the finished history must not ask the server again")
 }

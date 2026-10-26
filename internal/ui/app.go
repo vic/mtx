@@ -228,6 +228,8 @@ type App struct {
 	presenceVer   int                                               // bumped by PresenceMsg: the side pane cache key
 	loadContext   func(ch, id string)                               // fetches a message and its neighbours; must not block; nil = off
 	wantHit       string                                            // the event ID to select once its history arrives
+	loadOlder     func(ch string)                                   // fetches one older page of history; must not block; nil = off
+	retryMotion   string                                            // a backward motion waiting for older history: its key
 	tagsVer       int                                               // bumped by TagsMsg: the side pane cache key
 	typingFn      func(ch string)                                   // tells the room I am typing; must not block; nil = off
 	typedAt       time.Time                                         // last typing notice sent
@@ -423,6 +425,10 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a = a.applyPending(msg.Ch)
 		if msg.Ch == a.m.Current().Name {
 			a = a.selectWanted()
+		}
+		if k := a.retryMotion; k != "" && msg.Ch == a.m.Current().Name {
+			a.retryMotion = ""
+			a = a.bracket(false, k)
 		}
 	case LineMsg:
 		if msg.Old {
@@ -1115,6 +1121,12 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 	if c.Name() == model.CmdForward { // the target is the selected line
 		return a.forward(c.Args()[0])
 	}
+	if c.Name() == model.CmdOlder {
+		if a.loadOlder != nil {
+			a.loadOlder(a.m.Current().Name)
+		}
+		return a.toast("loading older messages…", false), nil
+	}
 	if c.Name() == model.CmdTheme {
 		return a.themeCmd(c.Args()), nil
 	}
@@ -1721,6 +1733,11 @@ func (a App) bracket(fwd bool, key string) App {
 		if id := a.unloadedPin(fwd); id != "" {
 			return a.loadPin(id)
 		}
+	}
+	if !fwd && a.loadOlder != nil && key != "]" && key != "[" { // nothing loaded that way: ask for an older page, then try again
+		a.retryMotion = key
+		a.loadOlder(a.m.Current().Name)
+		return a.toast("loading older messages…", false)
 	}
 	return a.toast("no more", false)
 }
@@ -2781,7 +2798,7 @@ var menus = map[string][]menuItem{
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
 		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"L", "link preview", ":preview"}, {"s", "seen by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
-	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
+	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}, {"o", "load older messages", ":older"}},
 	"emoji":   emojiMenu(),
 	"keys":    {{"m", "move…", "menu:move"}, {"v", "view…", "menu:view"}, {"g", "go/prefix g…", "menu:g"}, {"]", "next…", "menu:]"}, {"[", "prev…", "menu:["}},
 	"move": {{"j", "down line", "key:j"}, {"k", "up line", "key:k"}, {"up", "up line", "key:up"}, {"down", "down line", "key:down"},
@@ -3102,4 +3119,10 @@ func (a App) jumpToPin(idx int) App {
 		}
 	}
 	return a.loadPin(id)
+}
+
+// WithOlderLoad sets the hook that fetches one older page of history (must not block).
+func (a App) WithOlderLoad(f func(ch string)) App {
+	a.loadOlder = f
+	return a
 }

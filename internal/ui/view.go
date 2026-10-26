@@ -635,6 +635,7 @@ var helpSections = []struct {
 		{"f", "jump: a letter on each visible line; type it to select that line"},
 		{"F", "jump: a letter on each visible line; type it to open its link or media"},
 		{"gc", "jump to a channel: a letter on each channel"},
+		{"gr", "go to the message the selected reply answers"},
 		{"Y", "copy a matrix.to link to the selected message"},
 		{"# @ % ^", "open a room, user, thread or pinned message (fuzzy)"},
 		{"space o p", "pinned messages of this room"},

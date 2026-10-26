@@ -24,6 +24,7 @@ type Line struct {
 	Nick, Text string
 	Dim        bool
 	ID         string // producer's event ID (a reply target); not shown
+	ReplyTo    string // event ID this message replies to; "" none
 	Thread     string // thread root event ID of this message; "" = main chat
 	Reacts     string // reaction summary shown after the text ("👍2 ❤️1"); "" none
 }

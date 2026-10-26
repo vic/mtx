@@ -54,3 +54,13 @@ func TestMessageTextHTML(t *testing.T) {
 	text, _, _ = r.messageText(plain, nil)
 	require.Equal(t, "just <b>text</b>", text)
 }
+
+func TestReplyTo(t *testing.T) {
+	reply := &event.Event{Type: event.EventMessage, Sender: "@bob:s",
+		Content: event.Content{Parsed: &event.MessageEventContent{Body: "yes", RelatesTo: &event.RelatesTo{InReplyTo: &event.InReplyTo{EventID: "$p"}}}}}
+	require.Equal(t, "$p", replyTo(reply))
+
+	plain := &event.Event{Type: event.EventMessage, Sender: "@bob:s",
+		Content: event.Content{Parsed: &event.MessageEventContent{Body: "no"}}}
+	require.Equal(t, "", replyTo(plain))
+}

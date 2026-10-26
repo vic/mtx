@@ -745,6 +745,18 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.toast("delete my selected message? y to confirm", true), nil
 	case OpenLine:
 		return a.runCmd(":open")
+	case JumpReply:
+		ls := a.lines(a.m.Current())
+		if a.hit < 0 || a.hit >= len(ls) || ls[a.hit].ReplyTo == "" {
+			return a.toast("gr: select a reply first", true), nil
+		}
+		for i, l := range ls {
+			if l.ID == ls[a.hit].ReplyTo {
+				a.hit = i
+				return a.showHit(), nil
+			}
+		}
+		return a.toast("gr: the replied message is not loaded", true), nil
 	case MsgMenu:
 		if a.hit >= 0 {
 			a.menu = "message"
@@ -2382,7 +2394,7 @@ var menus = map[string][]menuItem{
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
 	"emoji":   emojiMenu(),

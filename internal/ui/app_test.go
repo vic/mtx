@@ -828,6 +828,21 @@ func TestJumpChan(t *testing.T) {
 	}
 }
 
+// TestJumpReply: gr on a reply selects the message it answers.
+func TestJumpReply(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "first", ID: "$1"}})
+	a = next.(App)
+	next, _ = a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "me", Text: "answer", ID: "$2", ReplyTo: "$1"}})
+	a = next.(App)
+	a.hit = 1
+	a, _ = press(t, a, "g", "r")
+	if a.hit != 0 {
+		t.Fatalf("hit %d want 0", a.hit)
+	}
+}
+
 func TestJumpLine(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)

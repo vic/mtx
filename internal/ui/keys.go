@@ -70,6 +70,7 @@ const (
 	PickUser
 	PickThread
 	PickPins
+	JumpReply
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -233,6 +234,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		return Action{Kind: PrevChan}, Normal, ""
 	case g && digits == "" && k == "c":
 		return Action{Kind: JumpChan}, Normal, ""
+	case g && digits == "" && k == "r":
+		return Action{Kind: JumpReply}, Normal, ""
 	case g && digits != "" && k == "t":
 		if n, err := strconv.Atoi(digits); err == nil {
 			return Action{GotoChan, n}, Normal, ""

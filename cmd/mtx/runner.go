@@ -451,7 +451,7 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 	if !ok {
 		return nil
 	}
-	line := model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: dim, ID: evt.ID.String(), Thread: threadOf(evt)}
+	line := model.Line{At: time.UnixMilli(evt.Timestamp), Nick: localpart(evt.Sender.String()), Text: text, Dim: dim, ID: evt.ID.String(), Thread: threadOf(evt), ReplyTo: replyTo(evt)}
 	if m := evt.Content.AsMessage(); m != nil && m.RelatesTo != nil && m.RelatesTo.Type == event.RelReplace && decErr == nil {
 		r.mu.Lock()
 		wasPlaceholder := r.placeholder[evt.ID.String()]
@@ -545,6 +545,14 @@ func (r *runner) replaceBuffered(ch string, l model.Line) bool {
 		}
 	}
 	return false
+}
+
+// replyTo is the event ID evt replies to, "" if it is not a reply.
+func replyTo(evt *event.Event) string {
+	if m := evt.Content.AsMessage(); m != nil && m.RelatesTo != nil {
+		return string(m.RelatesTo.GetReplyTo())
+	}
+	return ""
 }
 
 // messageText is the scrollback text of a message: body, an edit (new content), or the decrypt

@@ -945,3 +945,27 @@ func TestPinnedPicker(t *testing.T) {
 		t.Fatalf("hit %d", a.hit)
 	}
 }
+
+// TestOpenKeys: # opens the chat picker, @ the user picker, and % the thread picker.
+func TestOpenKeys(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	for key, want := range map[string]pickKind{"#": pickChans, "@": pickUsers, "%": pickThreads} {
+		b, _ := press(t, a, key)
+		if !b.pick || b.pickWhat != want {
+			t.Fatalf("%s: pick %v what %v", key, b.pick, b.pickWhat)
+		}
+	}
+}
+
+// TestSigilPickers: # @ % ^ open the room, user, thread and pinned pickers.
+func TestSigilPickers(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	for key, want := range map[string]pickKind{"#": pickChans, "@": pickUsers, "%": pickThreads, "^": pickPins} {
+		b, _ := press(t, a, key)
+		if !b.pick || b.pickWhat != want {
+			t.Fatalf("%s: pick %v what %v", key, b.pick, b.pickWhat)
+		}
+	}
+}

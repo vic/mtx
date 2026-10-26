@@ -730,6 +730,12 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case JumpLine:
 		a.jump = true
 		return a, nil
+	case PickUser:
+		return a.openPick(pickUsers), nil
+	case PickThread:
+		return a.openPick(pickThreads), nil
+	case PickPins:
+		return a.openPick(pickPins), nil
 	case PickRecent:
 		return a.openPick(pickRecent), nil
 	case PickSpeaker:

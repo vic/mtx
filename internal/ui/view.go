@@ -630,6 +630,7 @@ var helpSections = []struct {
 		{"m", "recent chats and threads (fuzzy): type, enter"},
 		{"f", "jump: a letter on each visible line; type it to select that line"},
 		{"Y", "copy a matrix.to link to the selected message"},
+		{"# @ % ^", "open a room, user, thread or pinned message (fuzzy)"},
 		{"space o p", "pinned messages of this room"},
 		{"enter", "on a selected line: menu of everything you can do with it"},
 		{"e", "edit my selected message"},

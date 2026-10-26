@@ -66,6 +66,9 @@ const (
 	Repeat
 	Permalink
 	MsgMenu
+	PickUser
+	PickThread
+	PickPins
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -122,6 +125,14 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: Permalink}, Normal, ""
 		case "enter":
 			return Action{Kind: MsgMenu}, Normal, ""
+		case "#":
+			return Action{Kind: PickChan}, Normal, ""
+		case "@":
+			return Action{Kind: PickUser}, Normal, ""
+		case "%":
+			return Action{Kind: PickThread}, Normal, ""
+		case "^":
+			return Action{Kind: PickPins}, Normal, ""
 		case "+":
 			return Action{Kind: ReactRow}, Normal, ""
 		case "i":

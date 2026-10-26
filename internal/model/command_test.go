@@ -330,3 +330,10 @@ func TestCreateExploreParse(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchParse(t *testing.T) {
+	c, err := ParseCmd("/search hello big world")
+	if err != nil || c.Name() != CmdSearch || !slices.Equal(c.Args(), []string{"hello big world"}) {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+}

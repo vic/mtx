@@ -1157,3 +1157,22 @@ func TestExplorePicker(t *testing.T) {
 		t.Fatalf("join: %#v", cmd())
 	}
 }
+
+// TestFoundPicker: a search result that is loaded is selected by enter.
+func TestFoundPicker(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	for _, l := range []model.Line{{Nick: "bob", Text: "zero", ID: "$0"}, {Nick: "bob", Text: "one", ID: "$1"}} {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	next, _ := a.Update(SearchMsg{Entries: []string{"<bob> one"}, IDs: []string{"$1"}})
+	a = next.(App)
+	if !a.pick || a.pickWhat != pickFound {
+		t.Fatalf("picker open %v kind %v", a.pick, a.pickWhat)
+	}
+	a, _ = press(t, a, "enter")
+	if a.hit != 1 {
+		t.Fatalf("hit %d want 1", a.hit)
+	}
+}

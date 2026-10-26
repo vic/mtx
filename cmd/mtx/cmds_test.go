@@ -557,3 +557,34 @@ func TestExploreEmits(t *testing.T) {
 	require.Equal(t, []string{"#cats:mock.test  Cats (3)", "!b:mock.test  Dogs (1)"}, em.Entries)
 	require.Equal(t, []string{"#cats:mock.test", "!b:mock.test"}, em.Targets)
 }
+
+// TestSearchEmits: /search asks the server for the room's messages and emits them as a SearchMsg.
+func TestSearchEmits(t *testing.T) {
+	ts := mockserver.Create(t)
+	ts.Router.HandleFunc("POST /_matrix/client/v3/search", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"search_categories":{"room_events":{"results":[`+
+			`{"result":{"event_id":"$1","type":"m.room.message","sender":"@bob:mock.test","origin_server_ts":1,"room_id":"`+string(testRoom)+`","content":{"msgtype":"m.text","body":"hello one"}}},`+
+			`{"result":{"event_id":"$2","type":"m.room.message","sender":"@bob:mock.test","origin_server_ts":2,"room_id":"`+string(testRoom)+`","content":{"msgtype":"m.text","body":"hello two"}}}]}}}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	var mu sync.Mutex
+	var got []tea.Msg
+	r := newRunner(cli, func(m tea.Msg) {
+		mu.Lock()
+		got = append(got, m)
+		mu.Unlock()
+	})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/search hello")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, got, 1)
+	sm, ok := got[0].(ui.SearchMsg)
+	require.True(t, ok)
+	require.Equal(t, []string{"<bob> hello one", "<bob> hello two"}, sm.Entries)
+	require.Equal(t, []string{"$1", "$2"}, sm.IDs)
+}

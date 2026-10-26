@@ -44,6 +44,9 @@ type ReplaceLineMsg struct {
 // ExploreMsg lists public rooms: Entries are the shown text, Targets what :join takes (same order).
 type ExploreMsg struct{ Entries, Targets []string }
 
+// SearchMsg is the server's search results for the room: Entries are shown, IDs are the event IDs (newest first).
+type SearchMsg struct{ Entries, IDs []string }
+
 // ReadMsg says another member read channel Ch up to the line with event ID; own lines up to it show read.
 type ReadMsg struct{ Ch, ID string }
 
@@ -217,6 +220,8 @@ type App struct {
 	reactRow    bool                                              // +: the quick reaction row is open; the next key picks
 	menu        string                                            // the open leader menu ("" none)
 	threadOpen  func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
+	found       []string                                          // :search: the matches shown in the picker
+	foundIDs    []string                                          // the event ID of each match
 	explore     []string                                          // :explore: the public rooms shown in the picker
 	exploreTo   []string                                          // the :join target of each explore row
 	edits       map[string][]string                               // per event ID: earlier texts, oldest first (EDIT history)
@@ -406,6 +411,13 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ExploreMsg:
 		a.explore, a.exploreTo = msg.Entries, msg.Targets
 		a = a.openPick(pickExplore)
+	case SearchMsg:
+		a.found, a.foundIDs = msg.Entries, msg.IDs
+		if len(msg.Entries) == 0 {
+			a = a.toast("no results", false)
+			break
+		}
+		a = a.openPick(pickFound)
 	case FullyReadMsg:
 		if a.fullyRead == nil {
 			a.fullyRead = map[string]string{}
@@ -1284,6 +1296,7 @@ const (
 	pickPins                      // space o p: the room's pinned messages
 	pickEdits                     // message menu h: the selected message's earlier versions, read only
 	pickExplore                   // :explore: the server's public rooms; enter joins the picked one
+	pickFound                     // :search: the server's matches in this room; enter selects the message if loaded
 )
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
@@ -1320,6 +1333,8 @@ func (a App) pickSource() []string {
 		out = a.chanNames()
 	case pickExplore:
 		out = a.explore
+	case pickFound:
+		out = a.found
 	case pickEdits:
 		l, _ := a.lastWithID(a.hit)
 		out = append(slices.Clone(a.edits[l.ID]), l.Text+"  (now)")
@@ -1390,6 +1405,20 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if a.pickWhat == pickEdits && (msg.String() == "enter" || msg.String() == "esc") { // read only: enter closes it too
 		a.pick = false
 		return a, nil
+	}
+	if a.pickWhat == pickFound && (msg.String() == "enter" || msg.String() == "esc") {
+		a.pick = false
+		if msg.String() == "esc" || a.psel >= len(ms) {
+			return a, nil
+		}
+		id := a.foundIDs[ms[a.psel].idx]
+		for i, l := range a.lines(a.m.Current()) {
+			if l.ID == id {
+				a.hit = i
+				return a.showHit(), nil
+			}
+		}
+		return a.toast("not loaded: scroll back to load it", true), nil
 	}
 	if a.pickWhat == pickExplore && (msg.String() == "enter" || msg.String() == "esc") {
 		a.pick = false
@@ -2544,7 +2573,7 @@ func emojiMenu() []menuItem {
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
-		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
+		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},

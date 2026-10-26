@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
@@ -74,6 +75,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.createRoom(args[0], len(args) > 1 && args[1] == "public")
 	case model.CmdExplore:
 		return c.explore(strings.Join(args, " "))
+	case model.CmdSearch:
+		return c.search(ch, args[0])
 	case model.CmdJoin:
 		return c.join(args[0])
 	case model.CmdPart:
@@ -714,5 +717,42 @@ func (c *cmds) explore(term string) error {
 		targets = append(targets, target)
 	}
 	c.r.emit(ui.ExploreMsg{Entries: entries, Targets: targets})
+	return nil
+}
+
+// search asks the server for messages of channel ch that match term and shows them in a picker.
+func (c *cmds) search(ch, term string) error {
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	req := map[string]any{"search_categories": map[string]any{"room_events": map[string]any{
+		"search_term": term, "order_by": "recent", "filter": map[string]any{"rooms": []string{room.String()}, "limit": 50}}}}
+	var resp struct {
+		SearchCategories struct {
+			RoomEvents struct {
+				Results []struct {
+					Result *event.Event `json:"result"`
+				} `json:"results"`
+			} `json:"room_events"`
+		} `json:"search_categories"`
+	}
+	if _, err := c.r.mx.MakeRequest(ctx, http.MethodPost, c.r.mx.BuildClientURL("v3", "search"), req, &resp); err != nil {
+		return err
+	}
+	var entries, ids []string
+	for _, r := range resp.SearchCategories.RoomEvents.Results {
+		e := r.Result
+		if e == nil || e.Content.ParseRaw(e.Type) != nil {
+			continue
+		}
+		if text, _, ok := c.r.messageText(e, nil); ok {
+			entries = append(entries, "<"+localpart(e.Sender.String())+"> "+strings.ReplaceAll(text, "\n", " "))
+			ids = append(ids, e.ID.String())
+		}
+	}
+	c.r.emit(ui.SearchMsg{Entries: entries, IDs: ids})
 	return nil
 }

@@ -125,13 +125,26 @@ func urlAt(row string, col int) string {
 func reactAt(row string, col int) string {
 	row = strings.TrimRight(row, " ")
 	i := strings.LastIndex(row, "  [")
-	if i < 0 || !strings.HasSuffix(row, "]") {
+	if i < 0 {
 		return ""
 	}
-	pos := i + len("  [")
-	for _, part := range strings.Fields(row[pos : len(row)-1]) {
-		at := strings.Index(row[pos:], part) + pos
-		start := lipgloss.Width(row[:at])
+	return reactIn(row, i+len("  ["), col)
+}
+
+// reactAtCont is the reaction key under column col of a row that continues a wrapped summary: the
+// tokens start after the row's indentation and the row may end with "]".
+func reactAtCont(row string, col int) string {
+	body := strings.TrimRight(row, " ")
+	return reactIn(body, len(body)-len(strings.TrimLeft(body, " ")), col)
+}
+
+// reactIn is the reaction key under column col among the tokens of text from index pos, a closing "]"
+// left out.
+func reactIn(text string, pos, col int) string {
+	text = strings.TrimSuffix(text, "]")
+	for _, part := range strings.Fields(text[pos:]) {
+		at := strings.Index(text[pos:], part) + pos
+		start := lipgloss.Width(text[:at])
 		if col >= start && col < start+lipgloss.Width(part) {
 			return strings.TrimRight(part, "0123456789")
 		}

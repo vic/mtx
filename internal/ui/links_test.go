@@ -57,3 +57,17 @@ func TestReactAt(t *testing.T) {
 		t.Fatalf("plain: %q", got)
 	}
 }
+
+// TestReactAtWrapped: a summary that wraps is clickable on every row: the first row without its closing
+// "]", the continuation rows by their own tokens.
+func TestReactAtWrapped(t *testing.T) {
+	if got := reactAt("hi  [👍2 ❤️1", 5); got != "👍" {
+		t.Fatalf("first row %q", got)
+	}
+	if got := reactAtCont("           😂3 🎉1]", 15); got != "🎉" {
+		t.Fatalf("continuation %q", got)
+	}
+	if got := reactAtCont("           😂3 🎉1]", 0); got != "" {
+		t.Fatalf("indentation %q", got)
+	}
+}

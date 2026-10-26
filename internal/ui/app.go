@@ -2202,7 +2202,7 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 		if !ok {
 			break
 		}
-		if key := reactAt(row, m.X-chanW-3); key != "" && l.ID != "" { // a reaction: toggle mine
+		if key := a.reactKeyAt(l, row, m.X-chanW-3); key != "" && l.ID != "" { // a reaction: toggle mine
 			if c, err := model.ParseCmd("/react " + key + " " + l.ID); err == nil {
 				return a, func() tea.Msg { return CmdMsg{c} }
 			}
@@ -2949,3 +2949,24 @@ func keyMsg(s string) tea.KeyPressMsg {
 
 // menuPrefixes are the prefix keys whose continuations the which-key popup lists while they wait.
 var menuPrefixes = []string{"g", "[", "]"}
+
+// reactKeyAt is the reaction key under column col of a row of line l: on the summary's first row, or on
+// a row that continues the wrapped summary below it.
+func (a App) reactKeyAt(l model.Line, row string, col int) string {
+	if key := reactAt(row, col); key != "" || l.Reacts == "" {
+		return key
+	}
+	k, s := -1, -1
+	for i, r := range a.wrap()(l, textWidth(a.w, a.h)) {
+		if k < 0 && r == row {
+			k = i
+		}
+		if s < 0 && strings.Contains(r, "  [") {
+			s = i
+		}
+	}
+	if s < 0 || k <= s {
+		return ""
+	}
+	return reactAtCont(row, col)
+}

@@ -82,9 +82,12 @@ func usePalette(p palette) {
 	nickColors = pal.nicks
 	codeSt = fg(pal.slots[0x0C])
 	hitStyle = lipgloss.NewStyle().Background(pal.slots[0x0A]).Foreground(pal.slots[0])
-	gutterBar = lipgloss.NewStyle().Foreground(pal.slots[0x0D]).Render("▌") // the cursor color
+	gutter = lipgloss.NewStyle().Background(pal.slots[0x0D]) // the current message's lead cell: the cursor color
 	readMark = dimmed.Render("✓")
 	pinMark = alert.Render("▴")
+	readMarkOn = dimmed.Background(pal.slots[0x0D]).Render("✓")
+	pinMarkOn = alert.Background(pal.slots[0x0D]).Render("▴")
+	blankOn = gutter.Render(" ")
 	unreadMark = unread
 	sponsorButton = lipgloss.NewStyle().Foreground(pal.slots[3]).Background(pal.slots[1]).Render(sponsorLabel)
 	cursorOn, cursorOff = func() (string, string) {

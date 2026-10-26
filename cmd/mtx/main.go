@@ -32,6 +32,10 @@ func run(args []string) int {
 		}
 		return 0
 	}
+	if len(args) == 1 && args[0] == "keys" { // the key tables as markdown, for the docs
+		fmt.Print(ui.KeysMarkdown())
+		return 0
+	}
 	dataHome := os.Getenv("XDG_DATA_HOME")
 	if dataHome == "" {
 		home, err := os.UserHomeDir()

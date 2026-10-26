@@ -19,9 +19,14 @@ func (a App) prepare(k ActKind) App {
 	switch k {
 	case NewLine: // i: a new message in the current view (thread or main)
 		a.quote, a.quoteBody, a.edit = nil, false, nil // i keeps the current thread target
-	case ReplyOwn, ReplyOwnQuoted: // a: reply to my message; A: the same with the quote in the body
+	case ReplyOwn, ReplyOwnQuoted: // a: reply to the selected message, else to my message; A: the same with the quote in the body
 		a.edit = nil
-		if l, ok := a.ownTarget(); ok {
+		if l, ok := a.selectedTarget(); ok {
+			if l.Nick != a.user {
+				a = a.mention(l.Nick)
+			}
+			a.quote, a.quoteBody = &l, k == ReplyOwnQuoted
+		} else if l, ok := a.ownTarget(); ok {
 			a.quote, a.quoteBody = &l, k == ReplyOwnQuoted
 		}
 	case EditOwn: // C: edit my message; the input holds its text
@@ -53,6 +58,15 @@ func (a App) prepare(k ActKind) App {
 		}
 	}
 	return a
+}
+
+// selectedTarget is the selected message when it has an ID and a nick.
+func (a App) selectedTarget() (model.Line, bool) {
+	ls := a.lines(a.m.Current())
+	if a.hit >= 0 && a.hit < len(ls) && ls[a.hit].Nick != "" && ls[a.hit].ID != "" {
+		return ls[a.hit], true
+	}
+	return model.Line{}, false
 }
 
 // ownTarget is the selected message when it is mine, else my newest message with an ID.

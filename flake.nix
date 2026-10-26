@@ -23,6 +23,7 @@
             pkgs.go
             pkgs.gcc
             pkgs.just
+            pkgs.matrix-conduit
           ];
         };
       });

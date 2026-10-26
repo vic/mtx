@@ -27,44 +27,32 @@ export default defineConfig({
 			autoTheme: true
 		}),
 		starlight({
-			title: 'nest',
+			title: '{mtx}',
 			social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/vic/nest' }
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/vic/mtx' }
       ],
 			sidebar: [
 				{
-					label: 'Nest',
-					items: [
-						{ label: 'Overview', slug: 'overview' },
-					],
+					label: 'Start',
+					items: [{ label: 'Start', slug: 'start' }],
 				},
 				{
-					label: 'Understand',
+					label: 'Use',
 					items: [
-						{ label: 'Traits as Classification', slug: 'explanation/traits' },
-						{ label: 'DOM as Infra Structure', slug: 'explanation/dom' },
-						{ label: 'CSS as Configuration', slug: 'explanation/css-for-nix' },
-						{ label: 'The Configuration Pipeline', slug: 'explanation/pipeline' },
-					],
-				},
-				{
-					label: 'Guides',
-					items: [
-						{ label: 'Getting Started', slug: 'guides/getting-started' },
-						{ label: 'Multi-Environment Fleet', slug: 'guides/fleet' },
-						{ label: 'Integrations Templates', slug: 'guides/integrations' },
-						{ label: 'Beyond NixOS Templates', slug: 'guides/beyond-nixos' },
+						{ label: 'Moving around', slug: 'moving' },
+						{ label: 'Writing', slug: 'writing' },
+						{ label: 'Rooms and people', slug: 'rooms' },
+						{ label: 'Threads and pins', slug: 'threads' },
+						{ label: 'Find things', slug: 'find' },
+						{ label: 'Media', slug: 'media' },
+						{ label: 'Looks', slug: 'looks' },
+						{ label: 'Security', slug: 'security' },
 					],
 				},
 				{
 					label: 'Reference',
 					items: [
-						{ label: 'Selectors', slug: 'reference/selectors' },
-						{ label: 'Traits', slug: 'reference/traits' },
-						{ label: 'Rules', slug: 'reference/rules' },
-						{ label: 'Select API', slug: 'reference/select' },
-						{ label: 'CSS Syntax', slug: 'reference/css-syntax' },
-						{ label: 'flakeModule', slug: 'reference/flake-module' },
+						{ label: 'Keys', slug: 'keys' },
 					],
 				},
 			],
@@ -83,7 +71,7 @@ export default defineConfig({
 				}),
 			],
 			editLink: {
-				baseUrl: 'https://github.com/vic/nest/edit/main/docs/',
+				baseUrl: 'https://github.com/vic/mtx/edit/main/docs/',
 			},
 			customCss: [
 				'./src/styles/custom.css'

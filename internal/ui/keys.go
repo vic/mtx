@@ -172,6 +172,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: Bottom}, Normal, ""
 		case "ctrl+o":
 			return Action{Kind: PickChan}, Normal, ""
+		case "l":
+			return Action{Kind: OpenLine}, Normal, ""
 		case "ctrl+f":
 			return Action{Kind: FileBlock}, Normal, ""
 		case "ctrl+t":

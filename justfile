@@ -1,3 +1,6 @@
+help:
+    just --list
+
 build:
     nix-shell -p go --run 'go build -tags goolm -o mtx ./cmd/mtx'
 
@@ -41,3 +44,11 @@ conduit:
     export MTX_CONDUIT_B_USER=$(field "$b" user_id) MTX_CONDUIT_B_PASSWORD=$pb
     timeout 300 nix-shell -p go --run 'go test -tags "goolm conduit" -count=1 -timeout 180s -run TestConduit ./internal/matrix/'
 
+
+# Regenerate the keys page and every demo gif. Needs conduit running and MTX_SEED_REG_TOKEN set.
+gifs:
+    docs/tapes/make.sh
+
+# Regenerate only the keys page.
+keys: build
+    docs/tapes/keys.sh

@@ -214,18 +214,13 @@ func lineRowUncached(rows []string, of []int, shown []model.Line, hit, i, n int,
 		pad := len(s) - len(strings.TrimLeft(s, " ")) // indentation stays unstyled
 		return s[:pad] + markHits(s[pad:], st, code[i], q)
 	}
+	if of[i] == hit {
+		lead = gutterOn(lead)
+	}
 	if s := stampRE.FindString(r); s != "" {
 		lead, r = lead+dimmed.Render(s), r[len(s):]
 	}
-	// body: the text right of the nick column. The current message's bar takes the
-	// last leading space, the column just left of the text.
-	body := func(s string) string {
-		pad := len(s) - len(strings.TrimLeft(s, " "))
-		if of[i] != hit || pad == 0 {
-			return text(s)
-		}
-		return text(s[:pad-1]) + gutterBar + text(s[pad:])
-	}
+	body := text
 	nk := "<" + l.Nick + ">"
 	if after, ok := strings.CutPrefix(r, nk); ok {
 
@@ -682,7 +677,7 @@ var helpSections = []struct {
 		{"enter", "on a selected line: menu of everything you can do with it"},
 		{"e", "edit my selected message"},
 		{"d y", "delete my selected message"},
-		{"gx", "open the selected line's media or link"},
+		{"l", "open the selected line's media or link"},
 		{".", "repeat the last line action (e.g. the same reaction) on the selected line"},
 		{"s", "show / hide times (15:04)"},
 	}},
@@ -759,6 +754,19 @@ var helpSections = []struct {
 		{":read [room]", "mark the room read"},
 		{":unread [room]", "mark the room unread (it stays unread until you read it)"},
 	}},
+}
+
+// KeysMarkdown is helpSections as markdown tables: the docs keys page is generated from it.
+func KeysMarkdown() string {
+	cell := strings.NewReplacer("|", `\|`)
+	var b strings.Builder
+	for _, s := range helpSections {
+		b.WriteString("\n## " + s.head + "\n\n| Key | Does |\n|---|---|\n")
+		for _, k := range s.keys {
+			b.WriteString("| `" + cell.Replace(k[0]) + "` | " + cell.Replace(k[1]) + " |\n")
+		}
+	}
+	return b.String()
 }
 
 // helpText renders helpSections with the key column aligned.
@@ -934,8 +942,24 @@ func markHits(s string, st lipgloss.Style, code bool, q string) string {
 	return b.String()
 }
 
-// gutterBar marks the current message in the lines pane's lead column.
-var gutterBar string // the current message's lead bar: set by usePalette
+// gutter is the lead cell background of the current message: set by usePalette.
+var gutter lipgloss.Style
+
+// gutterOn is lead cell lead on the current message's background; its mark keeps its color.
+func gutterOn(lead string) string {
+	switch lead {
+	case pinMark:
+		return pinMarkOn
+	case readMark:
+		return readMarkOn
+	case " ":
+		return blankOn
+	}
+	return gutter.Render(ansi.Strip(lead)) // a jump label
+}
+
+// readMarkOn and pinMarkOn are readMark and pinMark on the gutter background: set by usePalette.
+var readMarkOn, pinMarkOn, blankOn string
 
 // frameRule is a horizontal frame line of width w with text in it: "─ text ───".
 func frameRule(text string, w int) string {

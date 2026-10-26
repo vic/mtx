@@ -1249,7 +1249,7 @@ func (a App) inputLine() (label, input, hint string) {
 		return "NICKS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "mention", "tab", "chat", "esc", "chat")
 	}
 	if a.hit >= 0 {
-		return "NORMAL", a.footer(), keyHint("a", "reply", "A", "quote", "e", "edit", "d", "delete", "+", "react", "T", "thread", "y", "yank", "gx", "open", ".", "repeat", "esc", "unselect")
+		return "NORMAL", a.footer(), keyHint("a", "reply", "A", "quote", "e", "edit", "d", "delete", "+", "react", "T", "thread", "y", "yank", "l", "open", ".", "repeat", "esc", "unselect")
 	}
 	return "NORMAL", a.footer(), keyHint("SPC", "menu", "?", "help", ":", "command", "#", "rooms", "@", "users", "%", "threads", "^", "pins", "m", "recent", "i", "write", "a", "reply", "f", "jump", "+", "react", "enter", "message", "↑↓", "line")
 }
@@ -1343,6 +1343,9 @@ func (a App) scroll(act Action) App {
 	ch := a.m.Current().Name
 	switch act.Kind {
 	case Scroll:
+		if a.hit >= 0 { // a marked line: j and k move it
+			return a.lineStep(act.N > 0)
+		}
 		b := a.setOff(ch, a.off()-act.N)
 		if act.N < 0 && b.off() == a.off() { // at the top of the loaded lines
 			return a.older("scroll")
@@ -1351,8 +1354,17 @@ func (a App) scroll(act Action) App {
 	case HalfPage:
 		return a.setOff(ch, a.off()-act.N*max(a.page()/2, 1))
 	case Top:
+		if ls := a.lines(a.m.Current()); a.hit >= 0 && len(ls) > 0 { // a marked line: gg marks the first
+			a.hit = 0
+			return a.showHit()
+		}
 		cur := a.m.Current()
 		return a.setOff(ch, rowCount(a.lines(cur), textWidth(a.w, a.h), a.wrap()))
+	case Bottom:
+		if ls := a.lines(a.m.Current()); a.hit >= 0 && len(ls) > 0 { // a marked line: G marks the last
+			a.hit = len(ls) - 1
+			return a.showHit()
+		}
 	}
 	return a.setOff(ch, 0)
 }
@@ -2353,11 +2365,13 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 		}
 		if a.hit != idx { // first click: the line becomes current, as if moved there with up/down
 			a.hit = idx
+			a.menu = "message"
 			return a, nil
 		}
 		if l.Nick != "" && l.Nick != a.user { // a click on the current line: reply to it
 			a = a.mention(l.Nick)
 			a.quote = &l
+			a.menu = ""
 		}
 	}
 	return a, nil
@@ -2890,7 +2904,7 @@ var menus = map[string][]menuItem{
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"v", "verify this device", ":verify"}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}, {"d", "devices", ":devices"}},
 	"message": {{"v", "view image", ":view"}, {"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"L", "link preview", ":preview"}, {"R", "read by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"l", "open media/link", "key:l"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"L", "link preview", ":preview"}, {"R", "read by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}, {"o", "load older messages", ":older"}},
 	"emoji":   emojiMenu(),

@@ -1,0 +1,42 @@
+---
+title: Start
+description: Install mtx, log in, verify this device.
+---
+
+![mtx tour](/demo/tour.gif)
+
+## Install
+
+```
+nix run github:vic/mtx
+```
+
+## First login
+
+The first run asks for your homeserver, user and password, then opens your rooms.
+
+## Save the pickle key
+
+At the end of the first login mtx shows `MTX_PICKLE_KEY` and the other `MTX_*` lines, with a Copy button.
+Save them now, for example in your shell profile or a secrets manager. Keep them out of git.
+
+mtx never stores the pickle key. Lose it and your saved session and keys are unreadable: you log in again and verify the device again.
+
+## Verify this device
+
+Run `:verify` and confirm the emojis on your other device. This lets you read encrypted history.
+No other device? Use `:recover <recovery key>`.
+
+![verify](/demo/verify.gif)
+
+## The keys you use most
+
+| Key | Does |
+|---|---|
+| `?` | help, every key |
+| `space` | menu of what you can do |
+| `ctrl+o` | open a chat |
+| `i` | write a message |
+| `:` | run a command |
+
+Everything else is in [Keys](/keys/).

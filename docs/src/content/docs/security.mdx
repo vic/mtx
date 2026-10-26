@@ -1,0 +1,26 @@
+---
+title: Security
+description: Verify, recover, devices.
+---
+
+| Command | Does |
+|---|---|
+| `:verify` | verify this device with your other devices (emoji check) |
+| `:verify accept` | accept a request from another device |
+| `:verify cancel` | cancel the one in progress |
+| `:recover <recovery key>` | verify this device and load old room keys from backup |
+| `:devices` | list your devices |
+
+## The pickle key and the database
+
+mtx keeps your session and end-to-end keys in a local database. `MTX_PICKLE_KEY` is the secret that guards it.
+
+| | Where |
+|---|---|
+| Database | `$XDG_DATA_HOME/mtx/mtx.db`, usually `~/.local/share/mtx/mtx.db` |
+| Other path | set `MTX_DB` |
+| Pickle key | only where you saved it: mtx never stores it |
+
+Keep the key out of git. Lose it and the database is unreadable: log in again and verify the device again.
+
+![verify](/demo/verify.gif)

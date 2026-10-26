@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	tea "charm.land/bubbletea/v2"
 
 	"mtx/internal/model"
@@ -8,6 +10,7 @@ import (
 )
 
 // runDemo is the UI with made-up rooms and people, for docs and recordings: it sends nothing anywhere.
+// MTX_DEMO_VERIFY=1 also opens the verify box with fixed emojis (the docs gif; no real check runs).
 func runDemo() error {
 	m, err := model.New(ringCap)
 	if err != nil {
@@ -16,8 +19,12 @@ func runDemo() error {
 	app := ui.New(m, func(ch, text string) error { return nil }).WithUser("vic")
 	p := tea.NewProgram(app)
 	go func() {
+		p.Send(ui.ThemeMsg("base24/dracula")) // the docs gifs use mtx's own Dracula, not the terminal's
 		for _, msg := range demoMsgs() {
 			p.Send(msg)
+		}
+		if os.Getenv("MTX_DEMO_VERIFY") == "1" {
+			p.Send(ui.VerifyMsg{Kind: "sas", Txn: "demo", Emojis: "🐶 🍕 🚀 🎲 🌵 ⭐ 🔑"})
 		}
 	}()
 	_, err = p.Run()

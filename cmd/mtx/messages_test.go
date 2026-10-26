@@ -35,3 +35,22 @@ func TestMessageTextEditMentionAndUndecryptable(t *testing.T) {
 	require.True(t, dim)
 	require.Equal(t, "[undecryptable: no key]", und)
 }
+
+func TestMessageTextHTML(t *testing.T) {
+	cli, err := mautrix.NewClient("https://mock.test", "@alice:s", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+
+	html := &event.Event{Type: event.EventMessage, Sender: "@bob:s",
+		Content: event.Content{Parsed: &event.MessageEventContent{Body: "plain bold", MsgType: event.MsgText,
+			Format: event.FormatHTML, FormattedBody: `plain <strong>bold</strong> and <a href="https://x.org">link</a>`}}}
+	text, dim, ok := r.messageText(html, nil)
+	require.True(t, ok)
+	require.False(t, dim)
+	require.Equal(t, "plain **bold** and [link](https://x.org)", text)
+
+	plain := &event.Event{Type: event.EventMessage, Sender: "@bob:s",
+		Content: event.Content{Parsed: &event.MessageEventContent{Body: "just <b>text</b>", MsgType: event.MsgText}}}
+	text, _, _ = r.messageText(plain, nil)
+	require.Equal(t, "just <b>text</b>", text)
+}

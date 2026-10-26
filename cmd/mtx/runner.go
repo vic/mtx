@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 
 	"mtx/internal/matrix"
@@ -559,6 +560,9 @@ func (r *runner) messageText(evt *event.Event, decErr error) (text string, dim, 
 		return "", false, false
 	}
 	body := m.Body
+	if m.Format == event.FormatHTML && m.FormattedBody != "" {
+		body = format.HTMLToMarkdown(m.FormattedBody) // our view colors markdown; HTML would show as tags
+	}
 	if m.MsgType == event.MsgEmote {
 		body = "* " + localpart(evt.Sender.String()) + " " + body
 	}
@@ -566,8 +570,12 @@ func (r *runner) messageText(evt *event.Event, decErr error) (text string, dim, 
 	case event.MsgImage, event.MsgVideo, event.MsgAudio, event.MsgFile:
 		body = r.mediaText(m)
 	}
-	if m.NewContent != nil {
-		body = m.NewContent.Body + " (edited)"
+	if nc := m.NewContent; nc != nil {
+		body = nc.Body
+		if nc.Format == event.FormatHTML && nc.FormattedBody != "" {
+			body = format.HTMLToMarkdown(nc.FormattedBody)
+		}
+		body += " (edited)"
 	}
 	me := r.mx.UserID
 	if m.Mentions != nil && slices.Contains(m.Mentions.UserIDs, me) && !strings.Contains(body, "@"+localpart(me.String())) {

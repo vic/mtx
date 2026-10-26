@@ -1921,3 +1921,30 @@ func TestClickPlainMentions(t *testing.T) {
 		t.Fatalf("mode %v input %q", a.mode, a.in.Value())
 	}
 }
+
+// TestHelpExact: help matches the query as a substring; "sen" is not in "seen", "seen" is.
+func TestHelpExact(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 40
+	a, _ = press(t, a, "?", "s")
+	if len(a.matches()) == 0 {
+		t.Fatal("setup: no rows for s")
+	}
+	a.pq.SetValue("eens") // "seen" has "een" but not "eens"
+	for _, m := range a.matches() {
+		if strings.Contains(strings.ToLower(m.name), "eens") {
+			t.Fatalf("eens matched %q", m.name)
+		}
+	}
+	a.pq.SetValue("seen")
+	found := false
+	for _, m := range a.matches() {
+		if strings.Contains(m.name, "seen") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("seen matched no help row")
+	}
+}

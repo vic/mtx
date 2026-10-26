@@ -1288,7 +1288,7 @@ func (a App) screen() string {
 		if !ok {
 			what = "pick"
 		}
-		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), pickList(a.pickSource(), a.pq.Value()), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
+		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), a.matches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
 	}
 	return screen
 }
@@ -1587,7 +1587,7 @@ func (a App) pickSource() []string {
 
 // pickKey runs one key in the open picker: enter goes to the selected channel or line.
 func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	ms := pickList(a.pickSource(), a.pq.Value())
+	ms := a.matches()
 	if a.pickWhat == pickUsers && msg.String() == "enter" && a.psel < len(ms) { // a user: enter opens the DM
 		a.pick = false
 		return a.runCmd(":dm " + ms[a.psel].name)
@@ -1726,7 +1726,7 @@ func (a App) pickHit() App {
 	if a.pickWhat != pickLines {
 		return a
 	}
-	if ms := pickList(a.pickSource(), a.pq.Value()); a.psel < len(ms) {
+	if ms := a.matches(); a.psel < len(ms) {
 		a.hit = ms[a.psel].idx
 		return a.showHit()
 	}
@@ -2741,7 +2741,7 @@ func (a App) paneWheel(p paneFocus, delta int) App {
 // wheel scrolls what is under the wheel by n notches: help box, side pane, or chat.
 func (a App) wheel(m tea.MouseWheelMsg, n int) App {
 	if a.pick { // a picker moves its selection, one row a notch; the theme picker previews as keys do
-		ms := pickList(a.pickSource(), a.pq.Value())
+		ms := a.matches()
 		a.psel = max(min(a.psel+n, len(ms)-1), 0)
 		if a.pickWhat == pickThemes {
 			return a.previewTheme()
@@ -3036,7 +3036,7 @@ func (a App) themeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // previewTheme applies the theme of the picker's selected row, the live preview of the theme picker.
 func (a App) previewTheme() App {
-	ms := pickList(a.pickSource(), a.pq.Value())
+	ms := a.matches()
 	if a.psel < len(ms) {
 		a = a.applyTheme(a.themeIDs[ms[a.psel].idx])
 	}
@@ -3254,4 +3254,12 @@ func (a App) older(key string) App {
 	}
 	a.retryMotion = key
 	return a.toast("loading older messages…", false)
+}
+
+// matches are the picker's rows for its query: help matches exactly, everything else fuzzily.
+func (a App) matches() []pickMatch {
+	if a.pickWhat == pickHelp {
+		return exactList(a.pickSource(), a.pq.Value())
+	}
+	return pickList(a.pickSource(), a.pq.Value())
 }

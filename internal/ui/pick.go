@@ -128,3 +128,21 @@ func pickWindow(n, sel, rowsMax int) (start, end int) {
 	}
 	return start, min(start+rowsMax, n)
 }
+
+// exactList keeps the names that contain q (case-insensitive), in their order; at marks the match.
+func exactList(names []string, q string) []pickMatch {
+	q = strings.ToLower(strings.TrimSpace(q))
+	var out []pickMatch
+	for i, n := range names {
+		j := strings.Index(strings.ToLower(n), q)
+		if j < 0 {
+			continue
+		}
+		m := pickMatch{name: n, idx: i}
+		for k := range len([]rune(q)) {
+			m.at = append(m.at, len([]rune(n[:j]))+k)
+		}
+		out = append(out, m)
+	}
+	return out
+}

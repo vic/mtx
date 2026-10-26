@@ -215,6 +215,7 @@ type App struct {
 	threadOpen  func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
 	pins        map[string][]string                               // per channel: pinned event IDs (PinsMsg)
 	pinsVer     int
+	forwarding  bool                                                  // w in the message menu: the chat picker forwards the selected line
 	jumpOpen    bool                                                  // F: the picked label opens its line's link or media
 	jumpChan    bool                                                  // gc: the labels pick a channel of the channel pane
 	jump        bool                                                  // f: line labels are shown; the next key picks a line
@@ -588,6 +589,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return a.openPick(pickUsers), nil
 			case it.do == "thread":
 				a = a.nextThread()
+			case it.do == "forward":
+				a = a.openPick(pickChans)
+				a.forwarding = true
 			case it.do == "jumpunread":
 				a = a.jumpUnread()
 			case strings.HasPrefix(it.do, "emoji:"):
@@ -996,6 +1000,9 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 	case model.CmdDocs:
 		return a, openURL(docsURL)
 	}
+	if c.Name() == model.CmdForward { // the target is the selected line
+		return a.forward(c.Args()[0])
+	}
 	if c.Name() == model.CmdHelp { // the same screen as ? (vic 2026-10-23)
 		a.help = true
 		return a, nil
@@ -1345,6 +1352,13 @@ func (a App) pickSource() []string {
 // pickKey runs one key in the open picker: enter goes to the selected channel or line.
 func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	ms := pickList(a.pickSource(), a.pq.Value())
+	if a.forwarding && a.pickWhat == pickChans && (msg.String() == "enter" || msg.String() == "esc") {
+		a.forwarding, a.pick = false, false
+		if msg.String() == "esc" || a.psel >= len(ms) {
+			return a, nil
+		}
+		return a.forward(ms[a.psel].name)
+	}
 	switch msg.String() {
 	case "esc":
 		if a.pickWhat == pickGrep { // esc clears the grep filter
@@ -1455,6 +1469,24 @@ func firstURL(s string) string {
 		}
 	}
 	return ""
+}
+
+// forward sends the selected line (else the newest) to channel to, quoted with its sender.
+func (a App) forward(to string) (App, tea.Cmd) {
+	ls := a.lines(a.m.Current())
+	i := a.hit
+	if i < 0 || i >= len(ls) {
+		i = len(ls) - 1
+	}
+	if i < 0 {
+		return a.toast("forward: nothing to forward", true), nil
+	}
+	if _, ok := a.chanByName(to); !ok {
+		return a.toast("forward: no chat "+to, true), nil
+	}
+	text := "↪ " + ls[i].Nick + ": " + ls[i].Text
+	send := a.send
+	return a.toast("forwarded to "+to, false), func() tea.Msg { return SendResultMsg{Ch: to, Text: text, Err: send(to, text)} }
 }
 
 // jumpUnread selects the first shown line after my read marker and scrolls to it.
@@ -2394,7 +2426,7 @@ var menus = map[string][]menuItem{
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
 	"emoji":   emojiMenu(),

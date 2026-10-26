@@ -972,6 +972,9 @@ func TestEveryCommandInMenus(t *testing.T) {
 			if it.do == "react" {
 				have["react"] = true
 			}
+			if it.do == "forward" {
+				have["forward"] = true
+			}
 			if m, ok := strings.CutPrefix(it.do, "menu:"); ok {
 				if _, ok := menus[m]; !ok {
 					t.Errorf("menu %q is not defined", m)
@@ -1057,5 +1060,29 @@ func TestSigilPickers(t *testing.T) {
 		if !b.pick || b.pickWhat != want {
 			t.Fatalf("%s: pick %v what %v", key, b.pick, b.pickWhat)
 		}
+	}
+}
+
+// TestForward: :forward sends the selected line quoted with its sender; an unknown chat sends nothing.
+func TestForward(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$1"}})
+	a = next.(App)
+	a.hit = 0
+	next, cmd := a.runCmd(":forward #b")
+	a = next.(App)
+	if cmd == nil {
+		t.Fatal("forward returned no command")
+	}
+	cmd()
+	if len(log) != 1 || log[0] != (sent{"#b", "↪ bob: hi"}) {
+		t.Fatalf("sent %+v", log)
+	}
+
+	next, _ = a.runCmd(":forward #zz")
+	a = next.(App)
+	if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "forward: no chat #zz" || len(log) != 1 {
+		t.Fatalf("toasts %+v sent %+v", a.toasts, log)
 	}
 }

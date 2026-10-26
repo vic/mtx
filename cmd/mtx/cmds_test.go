@@ -407,3 +407,99 @@ func TestOpSends(t *testing.T) {
 	defer mu.Unlock()
 	require.Contains(t, put, `"@bob:mock.test":50`)
 }
+
+// TestJoinRuleSends: /joinrule sets m.room.join_rules; a bad rule is a usage error and sends nothing.
+func TestJoinRuleSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var path, body string
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{room}/state/m.room.join_rules/{key...}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		path, body = r.URL.Path, string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{"event_id":"$jr"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/joinrule public")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	require.Contains(t, path, "/m.room.join_rules/")
+	require.JSONEq(t, `{"join_rule":"public"}`, body)
+	mu.Unlock()
+
+	bad, err := model.ParseCmd("/joinrule everyone")
+	require.NoError(t, err)
+	require.ErrorContains(t, cs.do("#r", bad), "usage: :joinrule")
+}
+
+// TestHistorySends: /history world sets m.room.history_visibility to world_readable; a bad value is a usage error.
+func TestHistorySends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var path, body string
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{room}/state/m.room.history_visibility/{key...}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		path, body = r.URL.Path, string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{"event_id":"$hv"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/history world")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	require.Contains(t, path, "/m.room.history_visibility/")
+	require.JSONEq(t, `{"history_visibility":"world_readable"}`, body)
+	mu.Unlock()
+
+	bad, err := model.ParseCmd("/history everyone")
+	require.NoError(t, err)
+	require.ErrorContains(t, cs.do("#r", bad), "usage: :history")
+}
+
+// TestAliasSends: /alias publishes the alias in the directory, then sets m.room.canonical_alias; a bad alias is a usage error.
+func TestAliasSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var dir, canon string
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/directory/room/{alias}", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		dir = r.URL.Path
+		mu.Unlock()
+		fmt.Fprint(w, `{}`)
+	})
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{room}/state/m.room.canonical_alias/{key...}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		canon = string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{"event_id":"$ca"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/alias #den:mock.test")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	require.NotEmpty(t, dir)
+	require.JSONEq(t, `{"alias":"#den:mock.test"}`, canon)
+	mu.Unlock()
+
+	bad, err := model.ParseCmd("/alias den")
+	require.NoError(t, err)
+	require.ErrorContains(t, cs.do("#r", bad), "usage: :alias")
+}

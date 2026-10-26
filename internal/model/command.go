@@ -10,50 +10,54 @@ import (
 type CmdName string
 
 const (
-	CmdJoin     CmdName = "join"
-	CmdCreate   CmdName = "create"
-	CmdPart     CmdName = "part"
-	CmdClose    CmdName = "close"
-	CmdInvite   CmdName = "invite"
-	CmdKick     CmdName = "kick"
-	CmdBan      CmdName = "ban"
-	CmdUnban    CmdName = "unban"
-	CmdOp       CmdName = "op"
-	CmdTopic    CmdName = "topic"
-	CmdRename   CmdName = "name"
-	CmdTag      CmdName = "tag"
-	CmdWhois    CmdName = "whois"
-	CmdNick     CmdName = "nick"
-	CmdIgnore   CmdName = "ignore"
-	CmdUnignore CmdName = "unignore"
-	CmdNames    CmdName = "names"
-	CmdMsg      CmdName = "msg"
-	CmdMe       CmdName = "me"
-	CmdOpen     CmdName = "open"
-	CmdUpload   CmdName = "upload"
-	CmdAvatar   CmdName = "avatar"
-	CmdMute     CmdName = "mute"
-	CmdSponsor  CmdName = "sponsor"
-	CmdDocs     CmdName = "docs"
-	CmdUnmute   CmdName = "unmute"
-	CmdRecover  CmdName = "recover"
-	CmdAccept   CmdName = "accept"
-	CmdReject   CmdName = "reject"
-	CmdInvites  CmdName = "invites"
-	CmdReact    CmdName = "react"
-	CmdPin      CmdName = "pin"
-	CmdUnpin    CmdName = "unpin"
-	CmdRead     CmdName = "read"
-	CmdUnread   CmdName = "unread"
-	CmdForward  CmdName = "forward"
-	CmdRedact   CmdName = "redact"
-	CmdQuit     CmdName = "quit"
-	CmdHelp     CmdName = "help"
+	CmdJoin       CmdName = "join"
+	CmdCreate     CmdName = "create"
+	CmdPart       CmdName = "part"
+	CmdClose      CmdName = "close"
+	CmdInvite     CmdName = "invite"
+	CmdKick       CmdName = "kick"
+	CmdBan        CmdName = "ban"
+	CmdUnban      CmdName = "unban"
+	CmdOp         CmdName = "op"
+	CmdTopic      CmdName = "topic"
+	CmdRename     CmdName = "name"
+	CmdTag        CmdName = "tag"
+	CmdWhois      CmdName = "whois"
+	CmdNick       CmdName = "nick"
+	CmdIgnore     CmdName = "ignore"
+	CmdUnignore   CmdName = "unignore"
+	CmdNames      CmdName = "names"
+	CmdMsg        CmdName = "msg"
+	CmdMe         CmdName = "me"
+	CmdOpen       CmdName = "open"
+	CmdUpload     CmdName = "upload"
+	CmdAvatar     CmdName = "avatar"
+	CmdJoinRule   CmdName = "joinrule"
+	CmdHistory    CmdName = "history"
+	CmdAlias      CmdName = "alias"
+	CmdRoomAvatar CmdName = "roomavatar"
+	CmdMute       CmdName = "mute"
+	CmdSponsor    CmdName = "sponsor"
+	CmdDocs       CmdName = "docs"
+	CmdUnmute     CmdName = "unmute"
+	CmdRecover    CmdName = "recover"
+	CmdAccept     CmdName = "accept"
+	CmdReject     CmdName = "reject"
+	CmdInvites    CmdName = "invites"
+	CmdReact      CmdName = "react"
+	CmdPin        CmdName = "pin"
+	CmdUnpin      CmdName = "unpin"
+	CmdRead       CmdName = "read"
+	CmdUnread     CmdName = "unread"
+	CmdForward    CmdName = "forward"
+	CmdRedact     CmdName = "redact"
+	CmdQuit       CmdName = "quit"
+	CmdHelp       CmdName = "help"
 )
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "joinrule", "history", "alias", "roomavatar", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -95,6 +99,10 @@ func arity(n CmdName) (count int, raw, ok bool) {
 	case CmdRecover:
 		return 1, true, true
 	case CmdAvatar:
+		return 1, true, true
+	case CmdJoinRule, CmdHistory, CmdAlias:
+		return 1, false, true
+	case CmdRoomAvatar:
 		return 1, true, true
 	case CmdUpload:
 		return 1, true, true
@@ -169,45 +177,49 @@ func ParseCmd(line string) (Cmd, error) {
 
 // usage is shown when a command gets the wrong arguments (vic 2026-10-23).
 var usage = map[CmdName]string{
-	CmdJoin:     ":join &room",
-	CmdCreate:   ":create &room",
-	CmdPart:     ":part [&room]",
-	CmdClose:    ":close [&room] (or /rm)",
-	CmdInvite:   ":invite <nick> &room",
-	CmdKick:     ":kick <nick>",
-	CmdBan:      ":ban <user> [reason]",
-	CmdUnban:    ":unban <user>",
-	CmdOp:       ":op <user> <level>",
-	CmdTopic:    ":topic <text>",
-	CmdRename:   ":name <text>",
-	CmdTag:      ":tag fav|low|none",
-	CmdWhois:    ":whois <nick>",
-	CmdNick:     ":nick <display name>",
-	CmdIgnore:   ":ignore <user>",
-	CmdUnignore: ":unignore <user>",
-	CmdNames:    ":names [&room]",
-	CmdMsg:      ":msg <nick> <text>",
-	CmdMe:       ":me <action>",
-	CmdOpen:     ":open (the selected line's media)",
-	CmdUpload:   ":upload <path>",
-	CmdAvatar:   ":avatar <image path>",
-	CmdMute:     ":mute [room]",
-	CmdSponsor:  ":sponsor",
-	CmdDocs:     ":docs",
-	CmdUnmute:   ":unmute [room]",
-	CmdRead:     ":read [room]",
-	CmdUnread:   ":unread [room]",
-	CmdForward:  ":forward <chat> (the selected line)",
-	CmdRecover:  ":recover <recovery key>",
-	CmdAccept:   ":accept [room]",
-	CmdReject:   ":reject [room]",
-	CmdInvites:  ":invites",
-	CmdReact:    ":react <emoji> (on the selected line)",
-	CmdPin:      ":pin (the selected line)",
-	CmdUnpin:    ":unpin (the selected line)",
-	CmdRedact:   ":redact [reason] (on my selected line)",
-	CmdQuit:     ":quit",
-	CmdHelp:     ":help",
+	CmdJoin:       ":join &room",
+	CmdCreate:     ":create &room",
+	CmdPart:       ":part [&room]",
+	CmdClose:      ":close [&room] (or /rm)",
+	CmdInvite:     ":invite <nick> &room",
+	CmdKick:       ":kick <nick>",
+	CmdBan:        ":ban <user> [reason]",
+	CmdUnban:      ":unban <user>",
+	CmdOp:         ":op <user> <level>",
+	CmdTopic:      ":topic <text>",
+	CmdRename:     ":name <text>",
+	CmdTag:        ":tag fav|low|none",
+	CmdWhois:      ":whois <nick>",
+	CmdNick:       ":nick <display name>",
+	CmdIgnore:     ":ignore <user>",
+	CmdUnignore:   ":unignore <user>",
+	CmdNames:      ":names [&room]",
+	CmdMsg:        ":msg <nick> <text>",
+	CmdMe:         ":me <action>",
+	CmdOpen:       ":open (the selected line's media)",
+	CmdUpload:     ":upload <path>",
+	CmdAvatar:     ":avatar <image path>",
+	CmdJoinRule:   ":joinrule public|invite|knock",
+	CmdHistory:    ":history shared|invited|joined|world",
+	CmdAlias:      ":alias <#alias:server>",
+	CmdRoomAvatar: ":roomavatar <image path>",
+	CmdMute:       ":mute [room]",
+	CmdSponsor:    ":sponsor",
+	CmdDocs:       ":docs",
+	CmdUnmute:     ":unmute [room]",
+	CmdRead:       ":read [room]",
+	CmdUnread:     ":unread [room]",
+	CmdForward:    ":forward <chat> (the selected line)",
+	CmdRecover:    ":recover <recovery key>",
+	CmdAccept:     ":accept [room]",
+	CmdReject:     ":reject [room]",
+	CmdInvites:    ":invites",
+	CmdReact:      ":react <emoji> (on the selected line)",
+	CmdPin:        ":pin (the selected line)",
+	CmdUnpin:      ":unpin (the selected line)",
+	CmdRedact:     ":redact [reason] (on my selected line)",
+	CmdQuit:       ":quit",
+	CmdHelp:       ":help",
 }
 
 // Usages lists the usage of every command whose word starts with prefix (no "/"),

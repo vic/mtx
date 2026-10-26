@@ -164,3 +164,31 @@ func (r *runner) setAvatar(path string) error {
 	}
 	return r.mx.SetAvatarURL(ctx, resp.ContentURI)
 }
+
+// setRoomAvatar uploads the image at path and makes it the avatar of room ch.
+func (r *runner) setRoomAvatar(ch, path string) error {
+	room, err := r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	if rest, ok := strings.CutPrefix(path, "~/"); ok {
+		home, _ := os.UserHomeDir()
+		path = filepath.Join(home, rest)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	mt := http.DetectContentType(data)
+	if !strings.HasPrefix(mt, "image/") {
+		return fmt.Errorf("room avatar: %s is not an image (%s)", filepath.Base(path), mt)
+	}
+	ctx, cancel := callCtx()
+	defer cancel()
+	resp, err := r.mx.UploadBytesWithName(ctx, data, mt, filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	_, err = r.mx.SendStateEvent(ctx, room, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: resp.ContentURI.CUString()})
+	return err
+}

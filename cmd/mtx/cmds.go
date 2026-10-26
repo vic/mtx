@@ -157,6 +157,14 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		ctx, cancel := c.ctx()
 		defer cancel()
 		return c.r.mx.SetRoomAccountData(ctx, room, "m.marked_unread", map[string]bool{"unread": true})
+	case model.CmdJoinRule:
+		return c.joinRule(ch, args[0])
+	case model.CmdHistory:
+		return c.history(ch, args[0])
+	case model.CmdAlias:
+		return c.alias(ch, args[0])
+	case model.CmdRoomAvatar:
+		return c.r.setRoomAvatar(ch, args[0])
 	case model.CmdAvatar:
 		return c.r.setAvatar(args[0])
 	case model.CmdUpload:
@@ -615,5 +623,60 @@ func (c *cmds) pin(ch, ev string, on bool) error {
 		pe.Pinned = append(pe.Pinned, id.EventID(ev))
 	}
 	_, err = c.r.mx.SendStateEvent(ctx, room, event.StatePinnedEvents, "", &pe)
+	return err
+}
+
+// joinRule sets who may join the room: public, invite or knock.
+func (c *cmds) joinRule(ch, rule string) error {
+	jr := event.JoinRule(rule)
+	switch jr {
+	case event.JoinRulePublic, event.JoinRuleInvite, event.JoinRuleKnock:
+	default:
+		return errors.New("usage: :joinrule public|invite|knock")
+	}
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	_, err = c.r.mx.SendStateEvent(ctx, room, event.StateJoinRules, "", &event.JoinRulesEventContent{JoinRule: jr})
+	return err
+}
+
+// history sets the history visibility: shared, invited, joined or world (world_readable).
+func (c *cmds) history(ch, vis string) error {
+	hv := map[string]event.HistoryVisibility{
+		"shared": event.HistoryVisibilityShared, "invited": event.HistoryVisibilityInvited,
+		"joined": event.HistoryVisibilityJoined, "world": event.HistoryVisibilityWorldReadable,
+	}[vis]
+	if hv == "" {
+		return errors.New("usage: :history shared|invited|joined|world")
+	}
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	_, err = c.r.mx.SendStateEvent(ctx, room, event.StateHistoryVisibility, "", &event.HistoryVisibilityEventContent{HistoryVisibility: hv})
+	return err
+}
+
+// alias publishes #alias:server for the room in the directory, then makes it the canonical alias.
+func (c *cmds) alias(ch, alias string) error {
+	if !strings.HasPrefix(alias, "#") || !strings.Contains(alias, ":") {
+		return errors.New("usage: :alias #alias:server")
+	}
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	if _, err := c.r.mx.CreateAlias(ctx, id.RoomAlias(alias), room); err != nil {
+		return err
+	}
+	_, err = c.r.mx.SendStateEvent(ctx, room, event.StateCanonicalAlias, "", &event.CanonicalAliasEventContent{Alias: id.RoomAlias(alias)})
 	return err
 }

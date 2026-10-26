@@ -291,3 +291,24 @@ func TestParsePin(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRoomSettingsParse(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		name CmdName
+		args []string
+	}{
+		{"/joinrule invite", CmdJoinRule, []string{"invite"}},
+		{"/history world", CmdHistory, []string{"world"}},
+		{"/alias #den:mock.test", CmdAlias, []string{"#den:mock.test"}},
+		{"/roomavatar ~/pic one.png", CmdRoomAvatar, []string{"~/pic one.png"}},
+	} {
+		c, err := ParseCmd(tc.line)
+		if err != nil || c.Name() != tc.name || !slices.Equal(c.Args(), tc.args) {
+			t.Errorf("%s: got %q %q %v", tc.line, c.Name(), c.Args(), err)
+		}
+	}
+	if _, err := ParseCmd("/alias"); err == nil {
+		t.Error("/alias without an alias parsed")
+	}
+}

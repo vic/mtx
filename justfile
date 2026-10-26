@@ -7,11 +7,8 @@ test:
 fmt:
     nix-shell -p go --run 'go fmt ./...'
 
-login:
-    nix-shell -p go --run 'go run -tags goolm ./cmd/mtx login'
-
-run:
-    nix-shell -p go --run 'go run -tags goolm ./cmd/mtx'
+run *args:
+    nix-shell -p go --run 'go run -tags goolm ./cmd/mtx {{args}}'
 
 vet:
     nix-shell -p go --run 'go vet -tags goolm ./...'

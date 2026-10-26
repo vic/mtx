@@ -638,6 +638,14 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.toast("delete cancelled", false), nil
 	}
 	if a.menu != "" {
+		if k == "backspace" { // back to the parent menu; from space, the normal menu with every key
+			if a.menu == "space" {
+				a.menu = "normal"
+			} else {
+				a.menu = menuParent(a.menu)
+			}
+			return a, nil
+		}
 		items := menus[a.menu]
 		a.menu = ""
 		for _, it := range items {
@@ -2970,3 +2978,29 @@ func (a App) reactKeyAt(l model.Line, row string, col int) string {
 	}
 	return reactAtCont(row, col)
 }
+
+// menuParent is the menu that opens the menu name: the one with a "menu:<name>" item, else space. The
+// top menus have none ("space" and "normal").
+func menuParent(name string) string {
+	if name == "space" || name == "normal" || name == "" {
+		return ""
+	}
+	for parent, items := range menus {
+		for _, it := range items {
+			if it.do == "menu:"+name {
+				return parent
+			}
+		}
+	}
+	return "space"
+}
+
+// normalMenu lists every NORMAL key in one menu: the motions, the views and the prefix keys.
+func normalMenu() []menuItem {
+	out := append(slices.Clone(menus["move"]), menus["view"]...)
+	return append(out,
+		menuItem{"g", "g…", "menu:g"}, menuItem{"]", "next…", "menu:]"}, menuItem{"[", "prev…", "menu:["},
+		menuItem{":", "command", "key::"}, menuItem{"space", "menus", "menu:space"})
+}
+
+func init() { menus["normal"] = normalMenu() }

@@ -712,6 +712,7 @@ var helpSections = []struct {
 		{":explore [term]", "list the public rooms on this server; enter joins the picked one"},
 		{":devices", "list my devices: id, name, last seen (read only)"},
 		{"nick pane ● ◐ ○", "presence: online, away, offline"},
+		{"space ⌫", "all NORMAL keys in one menu; ⌫ in a submenu goes back"},
 		{":preview", "preview the selected line's link (title, site, description)"},
 		{"space T", "theme: browse every base16/base24 scheme with live preview; enter keeps it"},
 		{":goto <date | date time | HH:MM | yesterday>", "select the first loaded message at or after that time"},

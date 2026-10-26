@@ -1475,3 +1475,37 @@ func TestPresenceMark(t *testing.T) {
 		t.Fatalf("no dot on ana: %q", rows)
 	}
 }
+
+// TestMenuBackspace: backspace in a submenu goes back to its parent; in the space menu it opens the normal
+// menu, where a key runs as it does in NORMAL.
+func TestMenuBackspace(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, "space", "m")
+	if a.menu != "room" {
+		t.Fatalf("menu %q", a.menu)
+	}
+	a, _ = press(t, a, "backspace")
+	if a.menu != "space" {
+		t.Fatalf("after one backspace %q", a.menu)
+	}
+	a, _ = press(t, a, "backspace")
+	if a.menu != "normal" {
+		t.Fatalf("after two backspaces %q", a.menu)
+	}
+	has := func(do string) bool {
+		for _, it := range menus["normal"] {
+			if it.do == do {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("key:f") || !has("menu:g") {
+		t.Fatal("normal menu misses f or g")
+	}
+	a, _ = press(t, a, "f")
+	if !a.jump {
+		t.Fatal("f in the normal menu did not run as NORMAL f")
+	}
+}

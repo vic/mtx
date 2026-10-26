@@ -180,3 +180,9 @@ func TestSpaceEventsSkipRefresh(t *testing.T) {
 	require.False(t, ok)
 	require.Equal(t, "", name)
 }
+
+func TestRoomTag(t *testing.T) {
+	require.Equal(t, "dm", roomTag("", true))
+	require.Equal(t, "favourite", roomTag("favourite", true))
+	require.Equal(t, "", roomTag("", false))
+}

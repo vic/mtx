@@ -195,6 +195,14 @@ func (r *runner) emitMembers(room id.RoomID) error {
 }
 
 // refresh loads the joined rooms at start and after a join.
+// roomTag is the tag group of a room: its own tag, else "dm" when it is a direct chat (m.direct).
+func roomTag(tag string, isDM bool) string {
+	if tag == "" && isDM {
+		return "dm"
+	}
+	return tag
+}
+
 func (r *runner) refresh() error {
 	ctx, cancel := callCtx()
 	defer cancel()
@@ -225,6 +233,19 @@ func (r *runner) refresh() error {
 	var firstErr error
 	tags := ui.TagsMsg{}
 	spaces := map[id.RoomID]roomMeta{}
+	direct := map[id.RoomID]bool{} // rooms of m.direct: people, even with a room name
+	{
+		ctx, cancel := callCtx()
+		var dm map[id.UserID][]id.RoomID
+		if err := r.mx.GetAccountData(ctx, "m.direct", &dm); err == nil {
+			for _, rooms := range dm {
+				for _, room := range rooms {
+					direct[room] = true
+				}
+			}
+		}
+		cancel()
+	}
 	for m := range metas {
 		done++
 		r.emit(ui.ProgressMsg{ID: "rooms", Text: "loading rooms", Done: done, Total: total, Finished: done == total})
@@ -245,7 +266,7 @@ func (r *runner) refresh() error {
 		r.register(m.room, roomLabel(m, localpart(r.mx.UserID.String())))
 		r.emitRooms()
 		name, _ := r.nameOf(m.room)
-		tags[name] = m.tag
+		tags[name] = roomTag(m.tag, direct[m.room])
 		r.emit(ui.MembersMsg{Ch: name, Nicks: m.nicks, Levels: m.levels})
 		r.emit(ui.PinsMsg{Ch: name, IDs: m.pins})
 	}

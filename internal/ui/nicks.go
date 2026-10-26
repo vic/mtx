@@ -70,6 +70,8 @@ func chanGroup(c model.Channel, tag string) int {
 		return 0
 	case tag == "lowpriority":
 		return 3
+	case tag == "dm":
+		return 2
 	case strings.HasPrefix(c.Name, "@"):
 		return 2
 	}

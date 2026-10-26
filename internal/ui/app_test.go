@@ -1222,3 +1222,26 @@ func TestEveryPickerRenders(t *testing.T) {
 		render("menu "+name, func() { _ = b.View() })
 	}
 }
+
+// TestDMGroup: a direct chat with a room name lists under people, after the people label.
+func TestDMGroup(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(RoomsMsg{"#a", "#chat-with-ana"})
+	a = next.(App)
+	next, _ = a.Update(TagsMsg{"#chat-with-ana": "dm"})
+	a = next.(App)
+	rows := a.chanRows()
+	people, dm := -1, -1
+	for i, r := range rows {
+		if r == nickLabel+"people" {
+			people = i
+		}
+		if r == "#chat-with-ana" {
+			dm = i
+		}
+	}
+	if people < 0 || dm < 0 || dm < people {
+		t.Fatalf("rows %q", rows)
+	}
+}

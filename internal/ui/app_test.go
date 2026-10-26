@@ -2,6 +2,8 @@ package ui
 
 import (
 	"errors"
+	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -838,5 +840,23 @@ func TestOpenPickers(t *testing.T) {
 		if !strings.HasPrefix(n, "@") {
 			t.Fatalf("user picker lists %q", n)
 		}
+	}
+}
+
+// TestPermalink: Y copies a matrix.to link to the selected line and toasts it.
+func TestPermalink(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(IDsMsg{"#a": "!r:s"})
+	a = next.(App)
+	next, _ = a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$e"}})
+	a = next.(App)
+	a, cmd := press(t, a, "Y")
+	want := "https://matrix.to/#/" + url.PathEscape("!r:s") + "/" + url.PathEscape("$e")
+	if cmd == nil || fmt.Sprint(cmd()) != fmt.Sprint(tea.SetClipboard(want)()) {
+		t.Fatalf("clipboard: %v", cmd)
+	}
+	if !strings.Contains(fmt.Sprint(a.toasts), want) {
+		t.Fatalf("toast %v", a.toasts)
 	}
 }

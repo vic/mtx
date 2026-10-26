@@ -3,6 +3,7 @@ package ui
 import (
 	"cmp"
 	"maps"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -529,6 +530,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.menu = strings.TrimPrefix(it.do, "menu:")
 			case it.do == "react":
 				a.reactRow = true
+			case it.do == "permalink":
+				return a.permalink()
 			case strings.HasPrefix(it.do, "pick:"):
 				switch strings.TrimPrefix(it.do, "pick:") {
 				case "chat":
@@ -690,6 +693,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.toast("delete my selected message? y to confirm", true), nil
 	case OpenLine:
 		return a.runCmd(":open")
+	case Permalink:
+		return a.permalink()
 	case Repeat:
 		if a.lastLineCmd == "" {
 			return a, nil
@@ -2265,7 +2270,7 @@ type menuItem struct{ key, label, do string }
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"r", "react", "react"}, {"t", "thread", "thread"}, {"m", "room…", "menu:room"}, {"j", "join", ":join "},
-		{"u", "upload", ":upload "}, {"o", "open…", "menu:open"}, {"g", "open media", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"},
+		{"u", "upload", ":upload "}, {"o", "open…", "menu:open"}, {"y", "copy link", "permalink"}, {"g", "open media", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"},
 		{"s", "sponsor", ":sponsor"}, {"d", "docs", ":docs"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
@@ -2291,4 +2296,15 @@ func (a App) jumpTargets() []int {
 func (a App) WithThreadOpen(f func(ch, root string)) App {
 	a.threadOpen = f
 	return a
+}
+
+// permalink copies a matrix.to link to the selected line (else the newest line with an ID) and toasts it.
+func (a App) permalink() (tea.Model, tea.Cmd) {
+	l, ok := a.lastWithID(a.hit)
+	c := a.m.Current()
+	if !ok || c.ID == "" {
+		return a.toast("permalink: no message with an ID here", true), nil
+	}
+	link := "https://matrix.to/#/" + url.PathEscape(c.ID) + "/" + url.PathEscape(l.ID)
+	return a.toast("copied "+link, false), tea.SetClipboard(link)
 }

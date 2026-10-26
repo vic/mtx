@@ -64,6 +64,7 @@ const (
 	Delete
 	OpenLine
 	Repeat
+	Permalink
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -116,6 +117,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: Delete}, Normal, ""
 		case ".":
 			return Action{Kind: Repeat}, Normal, ""
+		case "Y":
+			return Action{Kind: Permalink}, Normal, ""
 		case "+":
 			return Action{Kind: ReactRow}, Normal, ""
 		case "i":

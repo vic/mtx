@@ -34,6 +34,7 @@ func TestKey(t *testing.T) {
 		{"insert j is text", Insert, "", "j", Action{}, Insert, ""},
 		// NEG
 		{"g then x opens the line", Normal, "g", "x", Action{Kind: OpenLine}, Normal, ""},
+		{"g then c jumps to a channel", Normal, "g", "c", Action{Kind: JumpChan}, Normal, ""},
 		{"x none", Normal, "", "x", Action{}, Normal, ""},
 		{"0 not a count", Normal, "", "0", Action{}, Normal, ""},
 		{"3g then x aborts", Normal, "3g", "x", Action{}, Normal, ""},

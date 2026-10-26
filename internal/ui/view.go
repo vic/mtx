@@ -354,6 +354,11 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			if p.focus == focusChans && i == p.sel && i < len(chans) {
 				cc = fit(current, " "+chans[i].Name, chanW)
 			}
+			if p.chanJump && i < len(chans) && !strings.HasPrefix(chans[i].Name, nickLabel) {
+				if k := chanRowIndex(chans, i); k < len(jumpKeys) {
+					cc = fit(cell, alert.Render(string(jumpKeys[k]))+" "+chans[i].Name, chanW)
+				}
+			}
 			if p.focus == focusNicks && i == p.nickSel {
 				nc = fit(current, " "+p.nicks[min(i+p.nickTop, len(p.nicks)-1)], nickW)
 			}
@@ -628,6 +633,8 @@ var helpSections = []struct {
 		{"M", "mentions only (direct lines) / all lines"},
 		{"m", "recent chats and threads (fuzzy): type, enter"},
 		{"f", "jump: a letter on each visible line; type it to select that line"},
+		{"F", "jump: a letter on each visible line; type it to open its link or media"},
+		{"gc", "jump to a channel: a letter on each channel"},
 		{"Y", "copy a matrix.to link to the selected message"},
 		{"# @ % ^", "open a room, user, thread or pinned message (fuzzy)"},
 		{"space o p", "pinned messages of this room"},
@@ -747,6 +754,7 @@ func wrapStamped(l model.Line, width int) []string {
 // focused), which pane has focus, its selected row and the query typed in it.
 type sidePanes struct {
 	chans, nicks     []string
+	chanJump         bool // gc: channel rows show their jump labels
 	focus            paneFocus
 	sel              int
 	nickSel          int // row of the selected nick (-1 none), labels are not selectable
@@ -936,6 +944,17 @@ func jumpLabel(of []int, k int) string {
 		return " "
 	}
 	return alert.Render(string(jumpKeys[n]))
+}
+
+// chanRowIndex is the position of channel row i among the channel rows above and at it: group labels do not count.
+func chanRowIndex(chans []model.Channel, i int) int {
+	n := 0
+	for _, c := range chans[:i] {
+		if !strings.HasPrefix(c.Name, nickLabel) {
+			n++
+		}
+	}
+	return n
 }
 
 // menuBox is an open which-key menu as a bordered box: the menu name, then one "key  label" row per item.

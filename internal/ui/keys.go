@@ -60,6 +60,8 @@ const (
 	Leader
 	PickRecent
 	JumpLine
+	JumpOpen
+	JumpChan
 	Delete
 	OpenLine
 	Repeat
@@ -190,6 +192,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: ThreadNext}, Normal, ""
 		case "f":
 			return Action{Kind: JumpLine}, Normal, ""
+		case "F":
+			return Action{Kind: JumpOpen}, Normal, ""
 		case "m":
 			return Action{Kind: PickRecent}, Normal, ""
 		case "M":
@@ -227,6 +231,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		return Action{Kind: NextChan}, Normal, ""
 	case g && digits == "" && k == "T":
 		return Action{Kind: PrevChan}, Normal, ""
+	case g && digits == "" && k == "c":
+		return Action{Kind: JumpChan}, Normal, ""
 	case g && digits != "" && k == "t":
 		if n, err := strconv.Atoi(digits); err == nil {
 			return Action{GotoChan, n}, Normal, ""

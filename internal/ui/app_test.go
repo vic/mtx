@@ -779,6 +779,55 @@ func TestJumpUnread(t *testing.T) {
 	}
 }
 
+// TestJumpOpen: F then a label opens that line's link (the command is returned, not run here).
+func TestJumpOpen(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "see https://x.org/a", ID: "$1"}})
+	a = next.(App)
+	a, _ = press(t, a, "F")
+	if !a.jump || !a.jumpOpen {
+		t.Fatal("F did not open the labels")
+	}
+	if _, cmd := press(t, a, string(jumpKeys[0])); cmd == nil {
+		t.Fatal("F and a label returned no command")
+	}
+}
+
+// TestFirstURL: a markdown link gives its URL, a bare URL is trimmed of punctuation, no URL gives "".
+func TestFirstURL(t *testing.T) {
+	for in, want := range map[string]string{"a https://x.org b": "https://x.org", "[d](https://y.org)": "https://y.org", "(http://z.org/q),": "http://z.org/q", "none": ""} {
+		if got := firstURL(in); got != want {
+			t.Errorf("firstURL(%q) = %q want %q", in, got, want)
+		}
+	}
+}
+
+// TestJumpChan: gc then a label selects that channel of the pane (group labels do not take a label).
+func TestJumpChan(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	next, _ := a.Update(RoomsMsg{"#a", "#b", "#c"})
+	a = next.(App)
+	a, _ = press(t, a, "g", "c")
+	if !a.jumpChan {
+		t.Fatal("gc did not open the channel labels")
+	}
+	_, names := a.paneItems(focusChans)
+	var rows []string
+	for _, n := range names {
+		if !strings.HasPrefix(n, nickLabel) {
+			rows = append(rows, n)
+		}
+	}
+	a, _ = press(t, a, string(jumpKeys[1]))
+	if got := a.m.Current().Name; got != rows[1] {
+		t.Fatalf("current %q want %q", got, rows[1])
+	}
+}
+
 func TestJumpLine(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)

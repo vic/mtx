@@ -215,6 +215,8 @@ type App struct {
 	threadOpen  func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
 	pins        map[string][]string                               // per channel: pinned event IDs (PinsMsg)
 	pinsVer     int
+	jumpOpen    bool                                                  // F: the picked label opens its line's link or media
+	jumpChan    bool                                                  // gc: the labels pick a channel of the channel pane
 	jump        bool                                                  // f: line labels are shown; the next key picks a line
 	confirmDel  bool                                                  // d: waiting for y to delete the selected message
 	lastLineCmd string                                                // the last :react command run on a line, for .
@@ -517,9 +519,31 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if a.jump {
 		a.jump = false
+		open, chanJump := a.jumpOpen, a.jumpChan
+		a.jumpOpen, a.jumpChan = false, false
+		if chanJump {
+			_, names := a.paneItems(focusChans)
+			var rows []string // the channel rows from the top of the pane: group labels skipped
+			for _, n := range names[min(a.ptop[focusChans], len(names)):] {
+				if !strings.HasPrefix(n, nickLabel) {
+					rows = append(rows, n)
+				}
+			}
+			if i := strings.Index(jumpKeys, k); len(k) == 1 && i >= 0 && i < len(rows) {
+				return a.focusName(rows[i]), nil
+			}
+			return a, nil
+		}
 		ts := a.jumpTargets()
 		if i := strings.Index(jumpKeys, k); len(k) == 1 && i >= 0 && i < len(ts) {
 			a.hit = ts[i]
+			if open {
+				l := a.lines(a.m.Current())[a.hit]
+				if u := firstURL(l.Text); u != "" {
+					return a, openURL(u)
+				}
+				return a.runCmd(":open")
+			}
 		}
 		return a, nil
 	}
@@ -735,6 +759,15 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.runCmd(a.lastLineCmd)
 	case JumpLine:
 		a.jump = true
+		return a, nil
+	case JumpOpen:
+		a.jump, a.jumpOpen = true, true
+		return a, nil
+	case JumpChan:
+		if !wide(a.w, a.h) {
+			return a.toast("gc needs the side panes", true), nil
+		}
+		a.jump, a.jumpChan = true, true
 		return a, nil
 	case PickUser:
 		return a.openPick(pickUsers), nil
@@ -1396,6 +1429,20 @@ func (a App) pickHit() App {
 		return a.showHit()
 	}
 	return a
+}
+
+// firstURL is the first link in s: a markdown link's URL, else the first word that starts with http.
+func firstURL(s string) string {
+	if m := mdLinkRE.FindStringSubmatch(s); m != nil {
+		return m[1]
+	}
+	for _, w := range strings.Fields(s) {
+		w = strings.Trim(w, "\"'()[]<>,;")
+		if strings.HasPrefix(w, "https://") || strings.HasPrefix(w, "http://") {
+			return w
+		}
+	}
+	return ""
 }
 
 // jumpUnread selects the first shown line after my read marker and scrolls to it.
@@ -2300,7 +2347,8 @@ func (a App) sides() sidePanes {
 	p.mainLast, p.mainLastAt = a.mainLast()
 	p.readAt, p.user = a.readAt[cur], a.user
 	p.pinned = pinSet(a.pins[cur])
-	p.jump = a.jump
+	p.jump = a.jump && !a.jumpChan
+	p.chanJump = a.jumpChan
 	p.unread = a.unreadAll()
 	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)
 	return p

@@ -711,6 +711,7 @@ var helpSections = []struct {
 		{":react <emoji>", "react to the selected line (again removes it)"},
 		{":redact [reason]", "delete my selected message"},
 		{":open", "download and open the selected line's media"},
+		{":view", "show the selected line's image in a popup"},
 		{":upload <path>", "send a local file to this room (encrypted in encrypted rooms)"},
 		{":avatar <image path>", "set my avatar"},
 		{":accept [room]", "join a pending invite"},
@@ -1093,5 +1094,11 @@ func menuBox(name string, items []menuItem, maxRows int) string {
 // verifyBox is the emoji box of a device verification: the emojis to compare, and the answer keys.
 func verifyBox(emojis string) string {
 	rows := []string{title.Render("verify this device"), "", emojis, "", keyHint("y", "they match", "n", "they differ")}
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
+}
+
+// imgBox is the image popup: the rendered image s in a rounded box, with how to close it.
+func imgBox(s string) string {
+	rows := []string{title.Render("image  (any key closes)"), "", s}
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
 }

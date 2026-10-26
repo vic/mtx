@@ -2,6 +2,7 @@ package ui
 
 import (
 	"cmp"
+	"image"
 	"maps"
 	"net/url"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/mosaic"
 
 	"mtx/internal/model"
 	"mtx/internal/theme"
@@ -226,6 +228,7 @@ type App struct {
 	tags          map[string]string                                 // channel -> tag group (TagsMsg)
 	presence      map[string]string                                 // nick -> online, unavailable or offline (PresenceMsg)
 	presenceVer   int                                               // bumped by PresenceMsg: the side pane cache key
+	img           string                                            // the image popup, rendered; "" = closed
 	verifyTxn     string                                            // the device verification in progress (VerifyMsg)
 	verifySAS     string                                            // the emojis to compare, while the verification box is open; "" none
 	loadContext   func(ch, id string)                               // fetches a message and its neighbours; must not block; nil = off
@@ -463,6 +466,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a = a.note("line for unknown channel " + msg.Ch)
 		}
 		a = a.applyPending(msg.Ch)
+	case ImageMsg:
+		m := mosaic.New().Width(max(a.w*2/3, 1)).Height(max(a.h*2/3, 1))
+		a.img = m.Render(msg.Img)
 	case VerifyMsg:
 		a = a.verifyStep(msg)
 	case ThemeMsg:
@@ -631,6 +637,10 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
 	if k == "ctrl+c" {
 		return a, tea.Quit
+	}
+	if a.img != "" { // the image popup: any key closes it
+		a.img = ""
+		return a, nil
 	}
 	if a.verifySAS != "" { // the emoji box: y they match, n they differ
 		switch k {
@@ -1146,6 +1156,13 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 		}
 		line += " " + l.ID
 	}
+	if line == "/view" { // the target is the selected line
+		l, ok := a.lastWithID(a.hit)
+		if !ok {
+			return a.note("view: no message with an ID here"), nil
+		}
+		line = "/view " + l.ID
+	}
 	if line == "/open" {
 		l, ok := a.lastWithID(a.hit)
 		if !ok {
@@ -1257,6 +1274,8 @@ func (a App) View() tea.View {
 func (a App) screen() string {
 	screen := a.chatScreen()
 	switch {
+	case a.img != "":
+		return overlayCentered(screen, a.w, a.h, imgBox(a.img))
 	case a.verifySAS != "":
 		return overlayCentered(screen, a.w, a.h, verifyBox(a.verifySAS))
 	case a.help:
@@ -2846,7 +2865,7 @@ func emojiMenu() []menuItem {
 
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
-	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
+	"space": {{"v", "view image", ":view"}, {"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
 		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"T", "theme", ":theme"}, {"k", "keys…", "menu:keys"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "seen by", "seenby"}, {"S", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}, {"⌫", "all NORMAL keys", "menu:normal"}},
@@ -2857,7 +2876,7 @@ var menus = map[string][]menuItem{
 		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"v", "verify this device", ":verify"}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}, {"d", "devices", ":devices"}},
-	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
+	"message": {{"v", "view image", ":view"}, {"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
 		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"L", "link preview", ":preview"}, {"R", "read by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}, {"o", "load older messages", ":older"}},
@@ -2941,6 +2960,9 @@ func (a App) WithThemeSave(f func(id string)) App {
 	a.themeSave = f
 	return a
 }
+
+// ImageMsg is a decoded image to show in a popup; esc closes it.
+type ImageMsg struct{ Img image.Image }
 
 // VerifyMsg is one step of a device verification (verify.go): Kind is request, ready, sas, done or cancel.
 type VerifyMsg struct{ Kind, Txn, From, Emojis, Reason string }

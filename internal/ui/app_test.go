@@ -3,6 +3,8 @@ package ui
 import (
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
 	"net/url"
 	"slices"
 	"strconv"
@@ -1847,5 +1849,32 @@ func TestHelpFuzzy(t *testing.T) {
 	a, _ = press(t, a, "down")
 	if !a.help {
 		t.Fatal("down closed the help box")
+	}
+}
+
+// TestImagePopup: an image shows in the popup; any key closes it. :view with no line says so.
+func TestImagePopup(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 80, 24
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for x := range 4 {
+		for y := range 4 {
+			img.Set(x, y, color.RGBA{R: 255, A: 255})
+		}
+	}
+	next, _ := a.Update(ImageMsg{Img: img})
+	a = next.(App)
+	if a.img == "" || !strings.Contains(ansi.Strip(a.View().Content), "image") {
+		t.Fatal("image popup not shown")
+	}
+	a, _ = press(t, a, "x")
+	if a.img != "" {
+		t.Fatal("a key did not close the image popup")
+	}
+	next, _ = a.runCmd(":view")
+	a = next.(App)
+	if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "view: no message with an ID here" {
+		t.Fatalf("no view note: %+v", a.toasts)
 	}
 }

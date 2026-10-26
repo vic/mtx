@@ -389,3 +389,14 @@ func TestVerifyParse(t *testing.T) {
 		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+// TestParseView: /view takes the event ID the UI adds, like /open.
+func TestParseView(t *testing.T) {
+	c, err := ParseCmd("/view $ev")
+	if err != nil || c.Name() != CmdView {
+		t.Fatalf("name %q err %v", c.Name(), err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "$ev" {
+		t.Fatalf("args %q", got)
+	}
+}

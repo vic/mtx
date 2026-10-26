@@ -39,6 +39,7 @@ const (
 	CmdMsg        CmdName = "msg"
 	CmdMe         CmdName = "me"
 	CmdOpen       CmdName = "open"
+	CmdView       CmdName = "view"
 	CmdUpload     CmdName = "upload"
 	CmdAvatar     CmdName = "avatar"
 	CmdJoinRule   CmdName = "joinrule"
@@ -66,7 +67,7 @@ const (
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "joinrule", "history", "alias", "roomavatar", "explore", "search", "devices", "goto", "theme", "preview", "dm", "older", "verify", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "view", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "joinrule", "history", "alias", "roomavatar", "explore", "search", "devices", "goto", "theme", "preview", "dm", "older", "verify", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -133,7 +134,7 @@ func arity(n CmdName) (count int, raw, ok bool) {
 		return 1, true, true
 	case CmdUpload:
 		return 1, true, true
-	case CmdOpen:
+	case CmdOpen, CmdView:
 		return 1, false, true
 	case CmdMe:
 		return 1, true, true
@@ -233,6 +234,7 @@ var usage = map[CmdName]string{
 	CmdMsg:        ":msg <nick> <text>",
 	CmdMe:         ":me <action>",
 	CmdOpen:       ":open (the selected line's media)",
+	CmdView:       ":view (the selected line's image, in a popup)",
 	CmdUpload:     ":upload <path>",
 	CmdAvatar:     ":avatar <image path>",
 	CmdJoinRule:   ":joinrule public|invite|knock",

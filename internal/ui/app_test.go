@@ -703,7 +703,7 @@ func TestLeaderMenu(t *testing.T) {
 		t.Fatalf("argument prompt %q %q", string(a.prompt), a.in.Value())
 	}
 	a, _ = press(t, a, "esc")
-	a, _ = press(t, a, "space", "x")
+	a, _ = press(t, a, "space", "z")
 	if a.menu != "" || a.prompt != 0 {
 		t.Fatalf("other key should close: menu %q prompt %q", a.menu, string(a.prompt))
 	}
@@ -868,5 +868,33 @@ func TestPermalink(t *testing.T) {
 	}
 	if !strings.Contains(fmt.Sprint(a.toasts), want) {
 		t.Fatalf("toast %v", a.toasts)
+	}
+}
+
+// TestEveryCommandInMenus: every command word has a which-key path, and every submenu a menu item opens exists.
+func TestEveryCommandInMenus(t *testing.T) {
+	have := map[string]bool{}
+	for _, items := range menus {
+		for _, it := range items {
+			if w, ok := strings.CutPrefix(it.do, ":"); ok {
+				have[strings.Fields(w)[0]] = true
+			}
+			if it.do == "react" {
+				have["react"] = true
+			}
+			if m, ok := strings.CutPrefix(it.do, "menu:"); ok {
+				if _, ok := menus[m]; !ok {
+					t.Errorf("menu %q is not defined", m)
+				}
+			}
+		}
+	}
+	for _, w := range model.CmdWords {
+		if w == "rm" || w == "q" {
+			continue
+		}
+		if !have[w] {
+			t.Errorf("command %q has no which-key path", w)
+		}
 	}
 }

@@ -2266,12 +2266,18 @@ type menuItem struct{ key, label, do string }
 
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
-	"space": {{"r", "react", "react"}, {"t", "thread", "thread"}, {"m", "room…", "menu:room"}, {"j", "join", ":join "},
-		{"u", "upload", ":upload "}, {"o", "open…", "menu:open"}, {"y", "copy link", "permalink"}, {"g", "open media", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"},
-		{"s", "sponsor", ":sponsor"}, {"d", "docs", ":docs"}},
+	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
+		{"i", "invites…", "menu:invites"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
+		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
+		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}},
+	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"e", "emote (/me)", ":me "}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
-		{"i", "invite", ":invite "}, {"f", "favourite", ":tag fav"}, {"d", "low priority", ":tag low"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
+		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},
+		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
+	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
+		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}},
+	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 }
 
 // jumpKeys are the f labels, home row first; jumpTargets are the shown lines they name, top to bottom.

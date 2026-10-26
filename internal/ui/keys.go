@@ -61,6 +61,9 @@ const (
 	Leader
 	PickRecent
 	JumpLine
+	Delete
+	OpenLine
+	Repeat
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -107,6 +110,12 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		switch k {
 		case "space":
 			return Action{Kind: Leader}, Normal, ""
+		case "e":
+			return Action{Kind: EditOwn}, Insert, ""
+		case "d":
+			return Action{Kind: Delete}, Normal, ""
+		case ".":
+			return Action{Kind: Repeat}, Normal, ""
 		case "+":
 			return Action{Kind: ReactRow}, Normal, ""
 		case "i":
@@ -196,6 +205,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		return Action{}, Normal, digits + "g"
 	case g && digits == "" && k == "g":
 		return Action{Kind: Top}, Normal, ""
+	case g && digits == "" && k == "x":
+		return Action{Kind: OpenLine}, Normal, ""
 	case g && digits == "" && k == "t":
 		return Action{Kind: NextChan}, Normal, ""
 	case g && digits == "" && k == "T":

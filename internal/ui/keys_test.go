@@ -33,7 +33,7 @@ func TestKey(t *testing.T) {
 		{"insert tab", Insert, "", "tab", Action{Complete, 0}, Insert, ""},
 		{"insert j is text", Insert, "", "j", Action{}, Insert, ""},
 		// NEG
-		{"g then x aborts", Normal, "g", "x", Action{}, Normal, ""},
+		{"g then x opens the line", Normal, "g", "x", Action{Kind: OpenLine}, Normal, ""},
 		{"x none", Normal, "", "x", Action{}, Normal, ""},
 		{"0 not a count", Normal, "", "0", Action{}, Normal, ""},
 		{"3g then x aborts", Normal, "3g", "x", Action{}, Normal, ""},

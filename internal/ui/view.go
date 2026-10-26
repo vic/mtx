@@ -628,6 +628,10 @@ var helpSections = []struct {
 		{"M", "mentions only (direct lines) / all lines"},
 		{"m", "recent chats and threads (fuzzy): type, enter"},
 		{"f", "jump: a letter on each visible line; type it to select that line"},
+		{"e", "edit my selected message"},
+		{"d y", "delete my selected message"},
+		{"gx", "open the selected line's media or link"},
+		{".", "repeat the last line action (e.g. the same reaction) on the selected line"},
 		{"s", "show / hide times (15:04)"},
 	}},
 	{"INSERT", [][2]string{

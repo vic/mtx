@@ -787,3 +787,38 @@ func TestJumpLine(t *testing.T) {
 		t.Fatalf("esc did not cancel: jump %v hit %d", a.jump, a.hit)
 	}
 }
+
+// TestLineVerbs: d asks, then y deletes my selected message; . repeats the last line command on the selected line.
+func TestLineVerbs(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "me", Text: "mine", ID: "$m"}})
+	a = next.(App)
+	next, _ = a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "theirs", ID: "$o"}})
+	a = next.(App)
+	a.hit = 0
+	a, _ = press(t, a, "d")
+	if !a.confirmDel {
+		t.Fatal("d did not ask")
+	}
+	a, cmd := press(t, a, "y")
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdRedact || cm.Cmd.Args()[0] != "$m" {
+		t.Fatalf("redact: %#v", cmd())
+	}
+	a.hit = 0
+	a, _ = press(t, a, "+")
+	a, _ = press(t, a, "1")
+	a.hit = 1
+	a, cmd = press(t, a, ".")
+	cm, ok = cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdReact || cm.Cmd.Args()[0] != "👍" || cm.Cmd.Args()[1] != "$o" {
+		t.Fatalf("repeat: %#v", cmd())
+	}
+	a.hit = 0
+	a, _ = press(t, a, "d")
+	a, cmd = press(t, a, "n")
+	if cmd != nil || a.confirmDel {
+		t.Fatalf("n should cancel: cmd %v confirm %v", cmd, a.confirmDel)
+	}
+}

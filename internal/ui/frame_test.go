@@ -801,7 +801,8 @@ func TestClickChannelAndNick(t *testing.T) {
 	}
 	click(2, 1) // back to #a, which has the lines
 	a.in.SetValue("")
-	click(40, 2) // a line of the lines pane: replies to its nick "n"
+	click(40, 2) // a line of the lines pane: the first click selects it
+	click(40, 2) // the second click on it replies to its nick "n"
 	if a.in.Value() != "@n " {
 		t.Fatalf("click line: input %q", a.in.Value())
 	}
@@ -824,7 +825,9 @@ func TestClickChannelAndNick(t *testing.T) {
 
 func TestReplyPromptUntilInputEmpty(t *testing.T) {
 	a := scrollApp(t)
-	next, _ := a.Update(tea.MouseClickMsg{X: 40, Y: 2, Button: tea.MouseLeft})
+	next, _ := a.Update(tea.MouseClickMsg{X: 40, Y: 2, Button: tea.MouseLeft}) // the first click selects it
+	a = next.(App)
+	next, _ = a.Update(tea.MouseClickMsg{X: 40, Y: 2, Button: tea.MouseLeft}) // the second click replies
 	a = next.(App)
 	if _, in, _ := a.inputLine(); !strings.HasPrefix(in, "RE: ") {
 		t.Fatalf("reply prompt: %q", in)

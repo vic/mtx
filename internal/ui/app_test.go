@@ -1915,7 +1915,9 @@ func TestClickPlainMentions(t *testing.T) {
 	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "just words", ID: "$p"}})
 	a = next.(App)
 	y, x := clickRow(t, a, "just words")
-	next, _ = a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	next, _ = a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}) // first click selects
+	a = next.(App)
+	next, _ = a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}) // second click replies
 	a = next.(App)
 	if a.mode != Insert || !strings.Contains(a.in.Value(), "@bob") {
 		t.Fatalf("mode %v input %q", a.mode, a.in.Value())
@@ -1944,5 +1946,45 @@ func TestHelpExact(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("seen matched no help row")
+	}
+}
+
+// TestClickSelectsThenReplies: the first click makes the line current; a second click on it replies.
+func TestClickSelectsThenReplies(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	for _, l := range []model.Line{{Nick: "bob", Text: "first words", ID: "$1"}, {Nick: "ana", Text: "second words", ID: "$2"}} {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	y, x := clickRow(t, a, "first words")
+	next, _ := a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	a = next.(App)
+	if a.mode != Normal || a.quote != nil || a.hit < 0 || a.lines(a.m.Current())[a.hit].ID != "$1" {
+		t.Fatalf("first click: mode %v quote %v hit %d", a.mode, a.quote, a.hit)
+	}
+	next, _ = a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	a = next.(App)
+	if a.mode != Insert || a.quote == nil || !strings.Contains(a.in.Value(), "@bob") {
+		t.Fatalf("second click: mode %v quote %v input %q", a.mode, a.quote, a.in.Value())
+	}
+}
+
+// TestClickOtherLineMoves: a click on another line moves the selection and does not reply.
+func TestClickOtherLineMoves(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	for _, l := range []model.Line{{Nick: "bob", Text: "first words", ID: "$1"}, {Nick: "ana", Text: "second words", ID: "$2"}} {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	a.hit = 0
+	y, x := clickRow(t, a, "second words")
+	next, _ := a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	a = next.(App)
+	if a.hit != 1 || a.mode != Normal || a.quote != nil {
+		t.Fatalf("other line: hit %d mode %v quote %v", a.hit, a.mode, a.quote)
 	}
 }

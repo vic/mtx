@@ -2327,7 +2327,7 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		}
-		l, row, ok := a.lineAt(i - rows - sep)
+		l, idx, row, ok := a.lineAt(i - rows - sep)
 		if !ok {
 			break
 		}
@@ -2351,7 +2351,11 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 		if path, cmd, hit := clickTarget(row, m.X-chanW-3); hit { // the text starts after the border and a space
 			return a.openTarget(path, cmd)
 		}
-		if l.Nick != "" && l.Nick != a.user {
+		if a.hit != idx { // first click: the line becomes current, as if moved there with up/down
+			a.hit = idx
+			return a, nil
+		}
+		if l.Nick != "" && l.Nick != a.user { // a click on the current line: reply to it
 			a = a.mention(l.Nick)
 			a.quote = &l
 		}
@@ -2397,16 +2401,16 @@ func execDone(what string) func(error) tea.Msg {
 }
 
 // lineAt is the shown line of lines-pane row i, as render draws it, and the row's plain text.
-func (a App) lineAt(i int) (model.Line, string, bool) {
+func (a App) lineAt(i int) (model.Line, int, string, bool) {
 	if i < 0 {
-		return model.Line{}, "", false
+		return model.Line{}, -1, "", false
 	}
 	shown := a.lines(a.m.Current())
 	rows, of := tailRows(shown, a.page(), a.off(), textWidth(a.w, a.h), a.wrap())
 	if i >= len(rows) {
-		return model.Line{}, "", false
+		return model.Line{}, -1, "", false
 	}
-	return shown[of[i]], rows[i], true
+	return shown[of[i]], of[i], rows[i], true
 }
 
 // mention starts an insert line with @nick, after any text already typed.

@@ -1,6 +1,10 @@
 package ui
 
-import "mtx/internal/model"
+import (
+	"strings"
+
+	"mtx/internal/model"
+)
 
 // nickLabel marks a group label row in the nick pane (never a selectable nick).
 const nickLabel = "\x00"
@@ -54,4 +58,65 @@ func (a App) nickRows() (rows []string, rowOf []int) {
 		}
 	}
 	return rows, rowOf
+}
+
+// chanGroupNames are the channel pane's groups, in pane order.
+var chanGroupNames = [...]string{"favourites", "rooms", "people", "low priority"}
+
+// chanGroup is the index in chanGroupNames of channel c with tag group tag ("favourite", "lowpriority", "").
+func chanGroup(c model.Channel, tag string) int {
+	switch {
+	case tag == "favourite":
+		return 0
+	case tag == "lowpriority":
+		return 3
+	case strings.HasPrefix(c.Name, "@"):
+		return 2
+	}
+	return 1
+}
+
+// chanRows is the channel pane: favourites, then each space (a tag "space:name"), rooms, people and low
+// priority, each channel group under a nickLabel row when more than one group has channels.
+// Label rows are not channels.
+func (a App) chanRows() []string {
+	var groups [len(chanGroupNames)][]string
+	var spaceOrder []string
+	spaceRooms := map[string][]string{}
+	for _, c := range a.m.All() {
+		tag := a.tags[c.Name]
+		if name, ok := strings.CutPrefix(tag, "space:"); ok {
+			if _, seen := spaceRooms[name]; !seen {
+				spaceOrder = append(spaceOrder, name)
+			}
+			spaceRooms[name] = append(spaceRooms[name], c.Name)
+			continue
+		}
+		g := chanGroup(c, tag)
+		groups[g] = append(groups[g], c.Name)
+	}
+	type section struct {
+		label string
+		names []string
+	}
+	var sections []section
+	if len(groups[0]) > 0 {
+		sections = append(sections, section{chanGroupNames[0], groups[0]})
+	}
+	for _, s := range spaceOrder {
+		sections = append(sections, section{s, spaceRooms[s]})
+	}
+	for i := 1; i < len(groups); i++ {
+		if len(groups[i]) > 0 {
+			sections = append(sections, section{chanGroupNames[i], groups[i]})
+		}
+	}
+	var out []string
+	for _, s := range sections {
+		if len(sections) > 1 {
+			out = append(out, nickLabel+s.label)
+		}
+		out = append(out, s.names...)
+	}
+	return out
 }

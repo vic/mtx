@@ -90,3 +90,25 @@ func (a App) helpClick(m tea.Mouse) (App, tea.Cmd) {
 	}
 	return a, nil
 }
+
+// sponsorLabel is the muted button at the bottom right of the main screen.
+const sponsorLabel = " sponsor @vic "
+
+// sponsorButton is sponsorLabel in the muted button style.
+var sponsorButton = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Background(lipgloss.Color("236")).Render(sponsorLabel)
+
+// withSponsor draws sponsorButton at the right end of the screen's last row (w columns wide).
+func withSponsor(screen string, w int) string {
+	bw := lipgloss.Width(sponsorLabel)
+	if w < bw+10 {
+		return screen
+	}
+	i := strings.LastIndexByte(screen, '\n') + 1
+	return screen[:i] + ansi.Cut(screen[i:], 0, w-bw) + sponsorButton
+}
+
+// onSponsor reports whether screen cell (x, y) is on the sponsor button.
+func (a App) onSponsor(x, y int) bool {
+	bw := lipgloss.Width(sponsorLabel)
+	return a.w >= bw+10 && y == a.h-1 && x >= a.w-bw
+}

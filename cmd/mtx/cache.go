@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"maunium.net/go/mautrix/id"
@@ -60,6 +61,9 @@ func (r *runner) loadCache(ctx context.Context, rooms func(context.Context) (map
 		return
 	}
 	for room, label := range labels {
+		if !strings.HasPrefix(label, "#") && !strings.HasPrefix(label, "@") { // an older build saved bare names
+			continue
+		}
 		r.register(room, label)
 	}
 	r.emitRooms()

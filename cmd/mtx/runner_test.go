@@ -66,7 +66,7 @@ func TestRunnerJoinSendReceive(t *testing.T) {
 	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
 
 	require.NoError(t, cs.join("r"))
-	require.NoError(t, r.send("r", "hi"))
+	require.NoError(t, r.send("#r", "hi"))
 	require.Equal(t, []string{"hi"}, sent)
 
 	require.NoError(t, r.onEvent(ctx, &event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$b1", Sender: "@bob:mock.test",
@@ -83,11 +83,11 @@ func TestRunnerJoinSendReceive(t *testing.T) {
 		case ui.FocusMsg:
 			focus = v
 		case ui.LineMsg:
-			require.Equal(t, "r", v.Ch)
+			require.Equal(t, "#r", v.Ch)
 			lines = append(lines, v.L)
 		}
 	}
-	require.Equal(t, ui.FocusMsg("r"), focus)
+	require.Equal(t, ui.FocusMsg("#r"), focus)
 	require.Len(t, lines, 2, "own message comes back in sync and is shown once")
 	require.Equal(t, "bob", lines[0].Nick)
 	require.Equal(t, "yo", lines[0].Text)
@@ -101,7 +101,7 @@ func TestRegisterClashUsesRoomID(t *testing.T) {
 	a := r.register("!one:s", "review")
 	b := r.register("!two:s", "review")
 	require.Equal(t, "review", a)
-	require.Equal(t, "two", b)
+	require.Equal(t, "#two", b)
 }
 
 // TestToastInviteNamesAliasAndInviter: the toast names the alias when there is one, and the inviter.
@@ -110,16 +110,21 @@ func TestToastInviteNamesAliasAndInviter(t *testing.T) {
 	r := newRunner(nil, func(m tea.Msg) { out = append(out, m) })
 	r.toastInvite(matrix.Invite{Room: "!x:s", Alias: "#review:s", Inviter: "@bob:s"})
 	r.toastInvite(matrix.Invite{Room: "!y:s", Inviter: "@carol:s"})
-	require.Equal(t, ui.ToastMsg{Text: "invited to #review:s by bob: joined"}, out[0])
-	require.Equal(t, ui.ToastMsg{Text: "invited to !y:s by carol: joined"}, out[1])
+	require.Equal(t, ui.ToastMsg{Text: "invited to #review:s by bob: /accept #review:s or /reject #review:s"}, out[0])
+	require.Equal(t, ui.ToastMsg{Text: "invited to !y:s by carol: /accept !y:s or /reject !y:s"}, out[1])
+	r.toastInvite(matrix.Invite{Room: "!x:s", Alias: "#review:s", Inviter: "@bob:s"}) // repeated by a sync
+	require.Len(t, out, 2)
+	in, err := r.pendingInvite("#review:s")
+	require.NoError(t, err)
+	require.Equal(t, id.RoomID("!x:s"), in.Room)
 }
 
 // TestRoomLabelPrefersRoomName: the channel takes the room name as Element shows it, else the alias.
 func TestRoomLabelPrefersRoomName(t *testing.T) {
-	require.Equal(t, "mi-sala", roomLabel(roomMeta{name: "  Mi   Sala ", alias: "#x:s"}, ""))
-	require.Equal(t, "x", roomLabel(roomMeta{alias: "#x:s"}, ""))
-	require.Equal(t, "ana", roomLabel(roomMeta{nicks: []string{"me", "ana"}}, "me"))
-	require.Equal(t, "a,b,c", roomLabel(roomMeta{nicks: []string{"a", "me", "b", "c", "d"}}, "me"))
+	require.Equal(t, "#mi-sala", roomLabel(roomMeta{name: "  Mi   Sala ", alias: "#x:s"}, ""))
+	require.Equal(t, "#x", roomLabel(roomMeta{alias: "#x:s"}, ""))
+	require.Equal(t, "@ana", roomLabel(roomMeta{nicks: []string{"me", "ana"}}, "me"))
+	require.Equal(t, "@a,b,c", roomLabel(roomMeta{nicks: []string{"a", "me", "b", "c", "d"}}, "me"))
 	require.Equal(t, "", roomLabel(roomMeta{nicks: []string{"me"}}, "me"))
 }
 
@@ -130,14 +135,48 @@ func TestHistoryLinesAreOld(t *testing.T) {
 	cli, err := mautrix.NewClient("https://mock.test", "@alice:mock.test", "tok")
 	require.NoError(t, err)
 	r := newRunner(cli, func(m tea.Msg) { out = append(out, m) })
-	r.register(testRoom, "r")
+	r.register(testRoom, "#r")
 	msg := &event.Event{Type: event.EventMessage, RoomID: testRoom, ID: "$h1", Sender: "@bob:mock.test",
 		Content: event.Content{Parsed: &event.MessageEventContent{MsgType: event.MsgText, Body: "old"}}}
 	require.NoError(t, r.onEvent(matrix.WithHistory(context.Background()), msg, nil))
 	require.Empty(t, out, "history waits for the batch")
-	r.flushHistory("r")
+	r.flushHistory("#r")
 	require.Len(t, out, 1)
 	require.Len(t, out[0].(ui.HistoryLinesMsg).L, 1)
 	require.NoError(t, r.onEvent(context.Background(), msg, nil))
 	require.False(t, out[1].(ui.LineMsg).Old)
+}
+
+// TestTagGroup: favourite wins over low priority; other tags are no group.
+func TestTagGroup(t *testing.T) {
+	require.Equal(t, "", tagGroup(nil))
+	require.Equal(t, "favourite", tagGroup(event.Tags{event.RoomTagFavourite: {}}))
+	require.Equal(t, "lowpriority", tagGroup(event.Tags{event.RoomTagLowPriority: {}}))
+	require.Equal(t, "favourite", tagGroup(event.Tags{event.RoomTagFavourite: {}, event.RoomTagLowPriority: {}}))
+	require.Equal(t, "", tagGroup(event.Tags{"u.work": {}}))
+}
+
+// TestReactCounts: each user counts once per key; a redacted reaction leaves the summary without it.
+func TestReactCounts(t *testing.T) {
+	r := newRunner(nil, func(tea.Msg) {})
+	require.Equal(t, "👍1", r.addReact("$e", "👍", "@a", "$r1"))
+	require.Equal(t, "👍1 ❤️1", r.addReact("$e", "❤️", "@b", "$r2"))
+	require.Equal(t, "👍2 ❤️1", r.addReact("$e", "👍", "@b", "$r3"))
+	target, sum, ok := r.dropReact("$r1")
+	require.True(t, ok)
+	require.Equal(t, id.EventID("$e"), target)
+	require.Equal(t, "👍1 ❤️1", sum)
+	_, _, ok = r.dropReact("$zz")
+	require.False(t, ok)
+}
+
+// TestSpaceEventsSkipRefresh: an event from a known space is ignored, with no room refresh (the nil client
+// would panic in one).
+func TestSpaceEventsSkipRefresh(t *testing.T) {
+	r := newRunner(nil, func(tea.Msg) {})
+	r.spaces = map[id.RoomID]bool{"!sp:s": true}
+	name, ok, err := r.roomName("!sp:s")
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Equal(t, "", name)
 }

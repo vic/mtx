@@ -30,6 +30,7 @@ type Client struct {
 	user        id.UserID
 	onInvite    func(Invite)
 	onTyping    func(id.RoomID, []id.UserID)
+	onReceipt   func(id.RoomID, id.EventID, id.UserID)
 	progress    func(Progress)
 	mu          sync.Mutex          // one event at a time: see lock
 	loaded      sync.Map            // rooms whose history LoadRoom has started
@@ -181,14 +182,11 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 	if err := c.retryPending(ctx, h); err != nil { // keys that just arrived unlock parked events
 		return err
 	}
-	// Invites are accepted by policy: join before the batch's room events are handled.
+	// Invites go to the hook; the user accepts or rejects them (/accept, /reject).
 	for roomID, inv := range resp.Rooms.Invite {
 		in, err := c.inviteOf(roomID, inv)
 		if err != nil {
 			return err
-		}
-		if _, err := c.cli.JoinRoomByID(ctx, roomID); err != nil {
-			return fmt.Errorf("auto-join %s: %w", roomID, err)
 		}
 		if c.onInvite != nil {
 			c.onInvite(in)
@@ -204,6 +202,9 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 		if !known { // a room this store has not seen: its older events are history, from prev_batch
 			rctx = WithHistory(ctx)
 			newRooms = append(newRooms, roomID)
+		}
+		if err := c.receiptsOf(roomID, room.Ephemeral.Events); err != nil {
+			return err
 		}
 		if err := c.typingOf(roomID, room.Ephemeral.Events); err != nil {
 			return err

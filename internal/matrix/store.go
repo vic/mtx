@@ -120,7 +120,7 @@ func (s *SyncStore) LoadNextBatch(ctx context.Context, user id.UserID) (string, 
 }
 
 // schemaVersion is PRAGMA user_version. Each step is one migration; a newer DB than this is an error.
-const schemaVersion = 5 // 2: rooms_seen (a room first seen in a sync gets its history); 3: session (sealed login); 4: no table, accepts stores from an uncommitted build that had room_backfill; 5: cache_rooms, cache_lines (start from disk)
+const schemaVersion = 6 // 2: rooms_seen (a room first seen in a sync gets its history); 3: session (sealed login); 4: no table, accepts stores from an uncommitted build that had room_backfill; 5: cache_rooms, cache_lines (start from disk), cache_kv, cache_input; 6: cache_kv, cache_input
 
 // migrate brings mtx's own tables to schemaVersion. cryptohelper creates its tables on Init.
 func migrate(ctx context.Context, db *sql.DB) error {
@@ -167,7 +167,16 @@ CREATE TABLE IF NOT EXISTS cache_lines (
 	dim      INTEGER NOT NULL,
 	thread   TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS cache_lines_room_ts ON cache_lines(room_id, ts);`); err != nil {
+CREATE INDEX IF NOT EXISTS cache_lines_room_ts ON cache_lines(room_id, ts);
+CREATE TABLE IF NOT EXISTS cache_kv (
+	key   TEXT PRIMARY KEY,
+	value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS cache_input (
+	id   INTEGER PRIMARY KEY AUTOINCREMENT,
+	chan TEXT NOT NULL,
+	text TEXT NOT NULL
+);`); err != nil {
 		return err
 	}
 	_, err := db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))

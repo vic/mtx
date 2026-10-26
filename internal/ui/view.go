@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -292,6 +293,10 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		}
 		var chans []model.Channel
 		for _, n := range p.chans[min(p.chanTop, len(p.chans)):] {
+			if strings.HasPrefix(n, nickLabel) {
+				chans = append(chans, model.Channel{Name: n}) // a group label row
+				continue
+			}
 			chans = append(chans, byName[n])
 		}
 		mid := w - chanW - nickW - 4 // four border columns
@@ -345,7 +350,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			if i < tRows {
 				midCell = threadsRow(p, i, mid)
 			} else {
-				midCell = lineRow(lines, of, shown, hit, i-tRows-sep, mid, " ", code, q)
+				midCell = lineRow(lines, of, shown, hit, i-tRows-sep, mid, p.lead(of, shown, i-tRows-sep), code, q)
 			}
 			rows = append(rows, edge(0, "│")+cc+edge(1, "│")+midCell+
 				edge(2, "│")+nc+edge(3, "│"))
@@ -423,6 +428,9 @@ func chanCellUncached(chans []model.Channel, curName string, i int) string {
 	if i >= len(chans) {
 		return fit(cell, "", chanW)
 	}
+	if l, ok := strings.CutPrefix(chans[i].Name, nickLabel); ok {
+		return fit(dimmed, " "+l, chanW)
+	}
 	c := chans[i]
 	marker, markSt, nameSt := "", cell, nickStyle(strings.TrimPrefix(c.Name, "#")) // a session is its main agent nick
 	if c.Kind == model.RoomChan {
@@ -453,11 +461,18 @@ func textWidth(w, h int) int {
 // wrapLine word-wraps l to width columns: "<nick>" on the first row, the text
 // aligned under itself on the rows after it.
 func wrapLine(l model.Line, width int) []string {
-	nk := "<" + l.Nick + ">"
-	nk += strings.Repeat(" ", max(nickCol-lipgloss.Width(nk), 1))
+	nk := strings.Repeat(" ", nickCol) // a system line (no nick) has no <> mark
+	if l.Nick != "" {
+		nk = "<" + l.Nick + ">"
+		nk += strings.Repeat(" ", max(nickCol-lipgloss.Width(nk), 1))
+	}
 	bw := max(width-lipgloss.Width(nk), 1)
 	var out []string
-	for i, r := range strings.Split(lipgloss.NewStyle().Width(bw).Render(l.Text), "\n") {
+	text := l.Text
+	if l.Reacts != "" {
+		text += "  [" + l.Reacts + "]"
+	}
+	for i, r := range strings.Split(lipgloss.NewStyle().Width(bw).Render(text), "\n") {
 		r = strings.TrimRight(r, " ")
 		if i == 0 {
 			out = append(out, nk+r)
@@ -657,12 +672,12 @@ func mentions(s string, st lipgloss.Style) string {
 // wrapFunc wraps one line to rows of a width: wrapLine, or wrapStamped with s on.
 type wrapFunc func(model.Line, int) []string
 
-// stampRE is the "15:04 " that wrapStamped puts before a nick.
-var stampRE = regexp.MustCompile(`^\d\d:\d\d `)
+// stampRE is the "2006-01-02 15:04 " that wrapStamped puts before a nick.
+var stampRE = regexp.MustCompile(`^\d{4}-\d\d-\d\d \d\d:\d\d `)
 
-// wrapStamped is wrapLine after a short "15:04 " time; later rows are indented under it.
+// wrapStamped is wrapLine after a short "2006-01-02 15:04 " time; later rows are indented under it.
 func wrapStamped(l model.Line, width int) []string {
-	st := l.At.Format("15:04") + " "
+	st := l.At.Format("2006-01-02 15:04") + " "
 	rs := wrapLine(l, max(width-len(st), 1))
 	for i := range rs {
 		if i == 0 {
@@ -686,6 +701,9 @@ type sidePanes struct {
 	thread           string         // selected head root
 	unread           []int          // per head: live replies not yet read (same order as heads)
 	mainUnread       int            // main-thread lines not on screen (the main thread row)
+	mainLast         string         // the main thread's newest line, "nick: text"
+	readAt           time.Time      // own lines at or before it are read by someone
+	user             string         // the local nick
 	threadTop        int            // first shown row of the threads box (its main thread is the last row)
 	chanTop, nickTop int            // first shown row of the channel and nick panes
 }
@@ -808,4 +826,20 @@ func borderGlyph(focused bool, s string) string {
 	g := st.Render(s)
 	borderGlyphs.m[k] = g
 	return g
+}
+
+// readMark is the lead column of an own line another member has read.
+var readMark = dimmed.Render("✓")
+
+// lead is the one-column lead of scrollback row k: readMark on the first row of an own line that was
+// read, else a space.
+func (p sidePanes) lead(of []int, shown []model.Line, k int) string {
+	if k < 0 || k >= len(of) || (k > 0 && of[k] == of[k-1]) {
+		return " "
+	}
+	l := shown[of[k]]
+	if p.user != "" && l.Nick == p.user && !p.readAt.IsZero() && !l.At.After(p.readAt) {
+		return readMark
+	}
+	return " "
 }

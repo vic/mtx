@@ -41,10 +41,10 @@ func TestCreateRoomAliasAndFocus(t *testing.T) {
 	defer mu.Unlock()
 	require.Equal(t, "review", req["room_alias_name"])
 	require.Equal(t, "private_chat", req["preset"])
-	require.Equal(t, ui.FocusMsg("review"), out[len(out)-1])
+	require.Equal(t, ui.FocusMsg("#review"), out[len(out)-1])
 	name, ok := r.nameOf(testRoom)
 	require.True(t, ok)
-	require.Equal(t, "review", name)
+	require.Equal(t, "#review", name)
 }
 
 // TestCreateFocusesInApp: the whole UI path: CmdMsg -> command -> RoomsMsg and FocusMsg -> focus.
@@ -72,5 +72,5 @@ func TestCreateFocusesInApp(t *testing.T) {
 		next, _ := app.Update(msg)
 		app = next.(ui.App)
 	}
-	require.Equal(t, "review", app.Channel())
+	require.Equal(t, "#review", app.Channel())
 }

@@ -31,8 +31,8 @@ func addInviteSync(ts *mockserver.MockServer, onEmpty func()) {
 	})
 }
 
-// TestInviteAutoJoin: an invite in sync is joined by the loop.
-func TestInviteAutoJoin(t *testing.T) {
+// TestInviteWaits: an invite in sync reaches the hook and is NOT joined.
+func TestInviteWaits(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ts := mockserver.Create(t)
@@ -57,29 +57,5 @@ func TestInviteAutoJoin(t *testing.T) {
 	require.Equal(t, []Invite{{Room: inviteRoom, Inviter: "@bob:mock.test"}}, invites)
 	mu.Lock()
 	defer mu.Unlock()
-	require.Equal(t, []string{string(inviteRoom)}, joined)
-}
-
-// TestInviteJoinFailureStopsLoud: a failed auto-join is an error, and the token does not move.
-func TestInviteJoinFailureStopsLoud(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ts := mockserver.Create(t)
-	addWhoami(ts)
-	ts.Router.HandleFunc("POST /_matrix/client/v3/rooms/{roomID}/join", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		fmt.Fprint(w, `{"errcode":"M_FORBIDDEN","error":"no"}`)
-	})
-	addInviteSync(ts, cancel)
-
-	tok := tokenFor(t, ctx, ts, testUser, "DEV1")
-	cfg := testConfig(t, ts.Server.URL, tok, "DEV1")
-	c, err := New(ctx, cfg)
-	require.NoError(t, err)
-	defer c.Close()
-	err = c.Run(ctx, func(context.Context, *event.Event, error) error { return nil })
-	require.ErrorContains(t, err, "auto-join")
-	tokenNow, err := c.store().LoadNextBatch(ctx, testUser)
-	require.NoError(t, err)
-	require.Equal(t, "", tokenNow, "a failed batch must not move the token")
+	require.Empty(t, joined)
 }

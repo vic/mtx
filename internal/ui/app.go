@@ -34,6 +34,15 @@ type ReplaceLineMsg struct {
 	L      model.Line
 }
 
+// ReadMsg says another member read channel Ch up to the line with event ID; own lines up to it show read.
+type ReadMsg struct{ Ch, ID string }
+
+// ReactsMsg sets the reaction summary of the line with event ID ID.
+type ReactsMsg struct{ Ch, ID, Reacts string }
+
+// RemoveLineMsg drops a placeholder line (same ID).
+type RemoveLineMsg struct{ Ch, ID string }
+
 // HistoryLinesMsg is a batch of history lines for one channel: one update, one render.
 type HistoryLinesMsg struct {
 	Ch string
@@ -62,6 +71,12 @@ type NickMsg struct{ Nick string }
 // RoomsMsg sets the visible room (&) channels to exactly these names.
 type RoomsMsg []string
 
+// TagsMsg sets each channel's tag group: "favourite", "lowpriority" or "" (none).
+type TagsMsg map[string]string
+
+// IDsMsg maps channel names to Matrix room IDs.
+type IDsMsg map[string]string
+
 // LiteralResultMsg reports a finished : send; Err is nil on success.
 type LiteralResultMsg struct{ Err error }
 
@@ -70,6 +85,27 @@ type ToastMsg struct {
 	Text string
 	Err  bool
 }
+
+// WithTyping sets the hook that sends my typing notice (it must not block).
+func (a App) WithTyping(f func(ch string)) App {
+	a.typingFn = f
+	return a
+}
+
+// WithInputSave sets the hook that stores each sent input line (it must not block).
+func (a App) WithInputSave(f func(ch, text string)) App {
+	a.inputSave = f
+	return a
+}
+
+// WithFocusSave sets the hook that stores the focused channel on each switch (it must not block).
+func (a App) WithFocusSave(f func(ch string)) App {
+	a.focusSave = f
+	return a
+}
+
+// InputsMsg sets every channel's sent input lines (from the store), oldest first.
+type InputsMsg map[string][]string
 
 // FocusMsg makes channel Ch current (after /join).
 type FocusMsg string
@@ -121,10 +157,12 @@ type App struct {
 	m          model.Model
 	mode       EditMode
 	pending    string
-	in         textarea.Model // multi-line input: shift+enter adds a line, enter sends
-	hist       []string       // sent input lines, oldest first (in memory only)
-	histAt     int            // index into hist while browsing; -1 = not browsing
-	histDraft  string         // the unsent input held while browsing
+	in         textarea.Model        // multi-line input: shift+enter adds a line, enter sends
+	hist       map[string][]string   // sent input lines per channel, oldest first (InputsMsg loads them)
+	inputSave  func(ch, text string) // stores a sent input line; must not block; nil = off
+	focusSave  func(ch string)       // stores the focused channel; must not block; nil = off
+	histAt     int                   // index into hist while browsing; -1 = not browsing
+	histDraft  string                // the unsent input held while browsing
 	send       func(ch, text string) error
 	cmdf       func(ch string, c model.Cmd) tea.Cmd // runs a parsed command; ch is the focused channel
 	literal    func(ch, text string) error          // the : prompt: text as is to the session socket
@@ -164,6 +202,12 @@ type App struct {
 	seen       func(ch string) error                                 // the channel's newest line is on screen (read markers); nil = none
 	threads    map[string][]model.Thread                             // per channel: thread heads (ThreadsMsg)
 	thread     string                                                // selected thread root ("" = main chat): the chat pane shows it, sends go to it
+	tags       map[string]string                                     // channel -> tag group (TagsMsg)
+	tagsVer    int                                                   // bumped by TagsMsg: the side pane cache key
+	typingFn   func(ch string)                                       // tells the room I am typing; must not block; nil = off
+	typedAt    time.Time                                             // last typing notice sent
+	readAt     map[string]time.Time                                  // per channel: newest line another member has read (ReadMsg)
+	tscroll    int                                                   // wheel offset of the threads box, negative = up; 0 on a channel switch
 	lastThread string                                                // the last thread opened (T toggles between main and this)
 	mainUnread map[string]int                                        // per channel: main-thread lines not on screen (main thread row count)
 	edit       *model.Line                                           // C: the message being edited; the next send replaces it
@@ -191,6 +235,9 @@ type tickMsg struct{}
 // toastFor is how long a toast shows (jjui default: 4 s).
 const toastFor = 4 * time.Second
 
+// typingEvery is the gap between typing notices while typing.
+const typingEvery = 4 * time.Second
+
 type toast struct {
 	text    string
 	err     bool
@@ -215,6 +262,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch {
 	case ch == "":
 	case ch != before: // a switch: wait, so arrowing past channels does not load each one
+		if app.focusSave != nil {
+			app.focusSave(ch)
+		}
 		cmd = tea.Batch(cmd, tea.Tick(seenDelay, func(time.Time) tea.Msg { return seenDueMsg(ch) }))
 	case newLineFor(msg, ch), msg == seenDueMsg(ch):
 		cmd = tea.Batch(cmd, seenCmd(app.seen, ch))
@@ -286,9 +336,19 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m, err := a.m.ReplaceLine(msg.Ch, msg.ID, msg.L); err == nil {
 			a.m = m
 		}
+	case ReactsMsg:
+		if m, err := a.m.SetReacts(msg.Ch, msg.ID, msg.Reacts); err == nil {
+			a.m = m
+		}
+	case RemoveLineMsg:
+		if m, err := a.m.RemoveLine(msg.Ch, msg.ID); err == nil {
+			a.m = m
+		}
+	case InputsMsg:
+		a.hist = maps.Clone(msg)
 	case HistoryLinesMsg:
 		if m, err := a.m.AddHistoryLines(msg.Ch, msg.L); err == nil {
-			a.m = m
+			a.m = m.SortRecent()
 		}
 	case LineMsg:
 		if msg.Old {
@@ -303,8 +363,31 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a = a.note("line for unknown channel " + msg.Ch)
 		}
+	case ReadMsg:
+		c, ok := a.chanByName(msg.Ch)
+		if !ok {
+			break
+		}
+		for i := range c.Lines.Len() {
+			if l := c.Lines.At(i); l.ID == msg.ID && l.At.After(a.readAt[msg.Ch]) {
+				if a.readAt == nil {
+					a.readAt = map[string]time.Time{}
+				}
+				a.readAt[msg.Ch] = l.At
+			}
+		}
+	case TagsMsg:
+		if a.tags == nil {
+			a.tags = map[string]string{}
+		}
+		for ch, g := range msg { // merge: a tag change names one room, the rest keep theirs
+			a.tags[ch] = g
+		}
+		a.tagsVer++
+	case IDsMsg:
+		a.m = a.m.WithIDs(msg)
 	case RoomsMsg:
-		a.m = a.m.WithRooms(msg)
+		a.m = a.m.WithRooms(msg).SortRecent()
 	case CmdMsg:
 		if a.cmdf == nil {
 			return a.note("no command handler installed"), nil
@@ -373,6 +456,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.onSponsor(msg.X, msg.Y) {
+			return a, openURL(donateURL)
+		}
 		if msg.Button == tea.MouseLeft && a.help {
 			return a.helpClick(tea.Mouse(msg))
 		}
@@ -448,6 +534,10 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case act.Kind == None:
 			var cmd tea.Cmd
 			a.in, cmd = a.in.Update(msg)
+			if a.typingFn != nil && a.in.Value() != "" && a.now().Sub(a.typedAt) >= typingEvery {
+				a.typedAt = a.now()
+				a.typingFn(a.m.Current().Name)
+			}
 			if a.in.Value() == "" { // deleting back to the start ends the reply
 				a.quote = nil
 			}
@@ -539,7 +629,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case NextTurn, PrevTurn:
 		a = a.turn(act.Kind == NextTurn)
 	case FocusPane:
-		a.focus, a.fq, a.fsel = focusChans, "", max(slices.Index(a.chanNames(), a.m.Current().Name), 0) // start on the current channel
+		a.focus, a.fq, a.fsel = focusChans, "", max(slices.Index(a.chanRows(), a.m.Current().Name), 0) // start on the current channel
 	case NextChan, PrevChan, GotoChan:
 		a = a.switchChan(act)
 	}
@@ -618,6 +708,8 @@ func (a App) focusName(name string) App {
 			a.m, _ = a.m.Focus(i)                   // i is in range: it comes from Channels
 			a.hit, a.speakers, a.grep = -1, nil, "" // the speaker and grep filters belong to the channel they were set in
 			a.thread = ""                           // a channel opens on its main thread
+			a.tscroll = 0
+			a.histAt = -1
 		}
 	}
 	return a
@@ -625,8 +717,15 @@ func (a App) focusName(name string) App {
 
 func (a App) sendLine() (tea.Model, tea.Cmd) {
 	text := a.in.Value()
-	if strings.TrimSpace(text) != "" {
-		a.hist = append(a.hist, text)[max(len(a.hist)+1-histMax, 0):]
+	if strings.TrimSpace(text) != "" && !strings.HasPrefix(text, "/recover") { // the recovery key never reaches history
+		ch := a.m.Current().Name
+		if a.hist == nil {
+			a.hist = map[string][]string{}
+		}
+		a.hist[ch] = append(a.hist[ch], text)[max(len(a.hist[ch])+1-histMax, 0):]
+		if a.inputSave != nil {
+			a.inputSave(ch, text)
+		}
 	}
 	a.histAt = -1
 	a.in.Reset()
@@ -671,6 +770,27 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 }
 
 func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
+	if word, rest, _ := strings.Cut(line, " "); word == "/react" { // the target is the cursor line
+		l, ok := a.lastWithID(a.hit)
+		if !ok {
+			return a.note("react: no message with an ID here"), nil
+		}
+		line = "/react " + strings.TrimSpace(rest) + " " + l.ID
+	}
+	if word, rest, _ := strings.Cut(line, " "); word == "/redact" { // the target is my cursor line
+		l, ok := a.ownTarget()
+		if !ok {
+			return a.note("redact: no message of mine here"), nil
+		}
+		line = strings.TrimSpace("/redact " + l.ID + " " + strings.TrimSpace(rest))
+	}
+	if line == "/open" {
+		l, ok := a.lastWithID(a.hit)
+		if !ok {
+			return a.note("open: no message with an ID here"), nil
+		}
+		line = "/open " + l.ID
+	}
 	c, err := model.ParseCmd(line)
 	if err != nil {
 		return a.note(err.Error()), nil
@@ -767,8 +887,8 @@ func (a App) chatScreen() string {
 	label, input, hint := a.inputLine()
 	screen := render(a.m, model.Status(a.m, label, a.info, a.now()), input, a.w, a.h, a.off(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
 	modeline := a.h - len(inputRows(input, a.w, a.h)) - 1
-	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest()) // floats above the prompt: the layout does not move
-	return overlayToasts(screen, a.w, modeline-1, a.toasts)       // cards sit just above the modeline
+	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest())             // floats above the prompt: the layout does not move
+	return withSponsor(overlayToasts(screen, a.w, modeline-1, a.toasts), a.w) // cards sit just above the modeline
 }
 
 // page is the number of scrollback rows View shows; a long input takes rows from it.
@@ -818,7 +938,7 @@ func (a App) sent(r SendResultMsg) App {
 	if r.Err != nil {
 		return a.note("send failed: " + r.Err.Error())
 	}
-	if chanKind(r.Ch) == model.RoomChan {
+	if a.chanKind(r.Ch) == model.RoomChan {
 		return a // room lines are echoed by the room runtime, which also logs them
 	}
 	if m, err := a.m.AddLine(r.Ch, model.Line{At: a.now(), Nick: a.user, Text: r.Text}); err == nil {
@@ -840,7 +960,7 @@ func (a App) addLine(ch string, l model.Line) (App, error) {
 		return a, err
 	}
 	a.m = m
-	if a.offs[ch] > 0 && a.shows(chanKind(ch), l) {
+	if a.offs[ch] > 0 && a.shows(a.chanKind(ch), l) {
 		a = a.setOff(ch, a.offs[ch]+len(a.wrap()(l, textWidth(a.w, a.h))))
 	}
 	return a, nil
@@ -1171,12 +1291,39 @@ func (a App) suggest() []string {
 	return []string{ansi.Truncate(dimmed.Render("tab ")+strings.Join(parts, "  "), max(a.w-6, 1), "…")} // fits in the box
 }
 
-// chanKind is the kind a channel name has: # sessions, else rooms.
-func chanKind(name string) model.ChanKind {
-	if strings.HasPrefix(name, "#") {
-		return model.SessionChan
+// chanKind is the kind of channel name in the model; a name not there is a room.
+func (a App) chanKind(name string) model.ChanKind {
+	for _, c := range a.m.All() {
+		if c.Name == name {
+			return c.Kind
+		}
 	}
 	return model.RoomChan
+}
+
+// mainLast is the newest main-thread line of the current channel as "nick: text" (one line), "" if none.
+func (a App) mainLast() string {
+	c := a.m.Current()
+	for i := c.Lines.Len() - 1; i >= 0; i-- {
+		if l := c.Lines.At(i); l.Thread == "" {
+			s := l.Text
+			if l.Nick != "" {
+				s = l.Nick + ": " + s
+			}
+			return strings.ReplaceAll(s, "\n", " ")
+		}
+	}
+	return ""
+}
+
+// chanByName is the channel named name.
+func (a App) chanByName(name string) (model.Channel, bool) {
+	for _, c := range a.m.All() {
+		if c.Name == name {
+			return c, true
+		}
+	}
+	return model.Channel{}, false
 }
 
 // lastMention is the newest @nick in the current channel's shown lines that is
@@ -1295,7 +1442,10 @@ func (a App) paneItems(f paneFocus) (show, names []string) {
 		names = append(names, mainThreadLabel)
 		show = names
 	} else if f == focusChans {
-		names = a.chanNames()
+		names = a.chanRows()
+		if f == a.focus && strings.TrimSpace(a.fq) != "" {
+			names = a.chanNames() // a filter matches channel names, never group labels
+		}
 		show = names
 	} else {
 		names = chanNicks(a.m.Current(), a.user)
@@ -1383,9 +1533,25 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 			a = a.mention(names[i])
 		}
 	default: // the lines pane: a file or `command` opens, else a click replies to that line's nick
-		l, row, ok := a.lineAt(i)
+		rows, sep := a.threadRows()
+		if i < rows { // a threads box row: open that thread (the last row is the main thread)
+			heads := a.threads[a.m.Current().Name]
+			top := threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)
+			if j := top + i; j < len(heads) {
+				a = a.selectThread(heads[j].Root)
+			} else if j == len(heads) {
+				a = a.selectThread("")
+			}
+			return a, nil
+		}
+		l, row, ok := a.lineAt(i - rows - sep)
 		if !ok {
 			break
+		}
+		if key := reactAt(row, m.X-chanW-3); key != "" && l.ID != "" { // a reaction: toggle mine
+			if c, err := model.ParseCmd("/react " + key + " " + l.ID); err == nil {
+				return a, func() tea.Msg { return CmdMsg{c} }
+			}
 		}
 		if url := urlAt(row, m.X-chanW-3); url != "" { // a link opens in the browser
 			return a, openURL(url)
@@ -1444,6 +1610,9 @@ func execDone(what string) func(error) tea.Msg {
 
 // lineAt is the shown line of lines-pane row i, as render draws it, and the row's plain text.
 func (a App) lineAt(i int) (model.Line, string, bool) {
+	if i < 0 {
+		return model.Line{}, "", false
+	}
 	shown := a.lines(a.m.Current())
 	rows, of := tailRows(shown, a.page(), a.off(), textWidth(a.w, a.h), a.wrap())
 	if i >= len(rows) {
@@ -1624,22 +1793,23 @@ const histMax = 100
 // histStep moves the input through sent lines: back (ctrl+p) to older, forward (ctrl+n)
 // to newer; past the newest it returns the unsent draft. Not persisted.
 func (a App) histStep(back bool) App {
-	if len(a.hist) == 0 || (!back && a.histAt < 0) {
+	h := a.hist[a.m.Current().Name]
+	if len(h) == 0 || (!back && a.histAt < 0) {
 		return a
 	}
 	if a.histAt < 0 {
-		a.histDraft, a.histAt = a.in.Value(), len(a.hist)
+		a.histDraft, a.histAt = a.in.Value(), len(h)
 	}
 	if back {
 		a.histAt = max(a.histAt-1, 0)
 	} else {
 		a.histAt++
 	}
-	if a.histAt >= len(a.hist) {
+	if a.histAt >= len(h) {
 		a.histAt = -1
 		a.in.SetValue(a.histDraft)
 	} else {
-		a.in.SetValue(a.hist[a.histAt])
+		a.in.SetValue(h[a.histAt])
 	}
 	a.in.MoveToEnd()
 	return a
@@ -1755,11 +1925,11 @@ func (a App) wrap() wrapFunc {
 
 // rowKey is what a wrapped row depends on.
 type rowKey struct {
-	at                     int64
-	nick, text, id, thread string
-	kind                   model.LineKind
-	dim, stamped           bool
-	width                  int
+	at                             int64
+	nick, text, id, thread, reacts string
+	kind                           model.LineKind
+	dim, stamped                   bool
+	width                          int
 }
 
 // rowCache holds wrapped rows; it is shared by copies of App, so it lives behind a pointer.
@@ -1773,7 +1943,7 @@ const rowCacheMax = 50000 // rows; the cache is cleared when it is full
 func (c *rowCache) memo(base wrapFunc, stamped bool) wrapFunc {
 	return func(l model.Line, width int) []string {
 		k := rowKey{at: l.At.UnixNano(), nick: l.Nick, text: l.Text, id: l.ID, thread: l.Thread,
-			kind: l.Kind, dim: l.Dim, stamped: stamped, width: width}
+			kind: l.Kind, dim: l.Dim, stamped: stamped, width: width, reacts: l.Reacts}
 		c.mu.Lock()
 		rs, ok := c.m[k]
 		c.mu.Unlock()
@@ -1820,6 +1990,10 @@ func (a App) wheel(m tea.MouseWheelMsg, n int) App {
 	}
 	if p := paneAt(m.X, a.w, a.h); p != focusChat {
 		return a.paneWheel(p, step)
+	}
+	if rows, _ := a.threadRows(); rows > 0 && m.Y >= 1 && m.Y-1 < rows {
+		a.tscroll += step
+		return a
 	}
 	return a.scroll(Action{Scroll, step})
 }
@@ -1873,13 +2047,15 @@ type sideKey struct {
 	focus                               paneFocus
 	fsel, mainUnread                    int
 	tools, mentions                     bool
+	tagsVer                             int
 	heads                               []model.Thread
 }
 
 func (k sideKey) same(o sideKey) bool {
 	return k.ver == o.ver && k.cur == o.cur && k.fq == o.fq && k.thread == o.thread && k.user == o.user &&
 		k.grep == o.grep && k.typing == o.typing && k.focus == o.focus && k.fsel == o.fsel &&
-		k.mainUnread == o.mainUnread && k.tools == o.tools && k.mentions == o.mentions && slices.Equal(k.heads, o.heads)
+		k.mainUnread == o.mainUnread && k.tools == o.tools && k.mentions == o.mentions && slices.Equal(k.heads, o.heads) &&
+		k.tagsVer == o.tagsVer
 }
 
 // sides are the side panes of the current frame.
@@ -1888,7 +2064,7 @@ func (a App) sides() sidePanes {
 	heads := a.threads[cur]
 	k := sideKey{ver: a.m.Version(), cur: cur, fq: a.fq, thread: a.thread, user: a.user, grep: a.grep,
 		typing: a.in.Value(), focus: a.focus, fsel: a.fsel, mainUnread: a.mainUnread[cur], tools: a.tools,
-		mentions: a.mentions, heads: slices.Clone(heads)}
+		mentions: a.mentions, heads: slices.Clone(heads), tagsVer: a.tagsVer}
 	p, hit := sidePanes{}, false
 	if a.sc != nil && len(a.info) == 0 && a.sc.key.same(k) {
 		p, hit = a.sc.val, true
@@ -1906,7 +2082,9 @@ func (a App) sides() sidePanes {
 			a.sc.key, a.sc.val = k, p
 		}
 	}
+	p.mainLast = a.mainLast()
+	p.readAt, p.user = a.readAt[cur], a.user
 	p.unread = a.unreadAll()
-	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads)
+	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)
 	return p
 }

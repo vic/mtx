@@ -23,7 +23,7 @@ func TestMessageTextEditMentionAndUndecryptable(t *testing.T) {
 	text, dim, ok := r.messageText(edit, nil)
 	require.True(t, ok)
 	require.False(t, dim)
-	require.Equal(t, "(edited) fix", text)
+	require.Equal(t, "fix (edited)", text)
 
 	mention := &event.Event{Type: event.EventMessage, Sender: "@bob:s",
 		Content: event.Content{Parsed: &event.MessageEventContent{Body: "Alice, ping", Mentions: &event.Mentions{UserIDs: []id.UserID{"@alice:s"}}}}}

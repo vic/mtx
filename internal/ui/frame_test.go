@@ -755,11 +755,11 @@ func TestCmdUsageHint(t *testing.T) {
 	a, _ := press(t, newApp(t, &log, nil), "i")
 	hint := func() string { _, _, h := a.inputLine(); return ansi.Strip(h) }
 	a = typeText(t, a, "/inv")
-	if hint() != "usage /invite <nick> &room" {
+	if hint() != "usage /invite <nick> &room  ·  /invites" {
 		t.Fatalf("inv %q", hint())
 	}
 	a = typeText(t, a, " dave &r") // the usage stays while typing the args
-	if hint() != "usage /invite <nick> &room" {
+	if hint() != "usage /invite <nick> &room  ·  /invites" {
 		t.Fatalf("args %q", hint())
 	}
 	a, _ = press(t, newApp(t, &log, nil), "i")
@@ -886,6 +886,7 @@ func TestFileFinderFromPrompt(t *testing.T) {
 func TestGrepFiltersLines(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
+	a.w = 120 // the footer states and the sponsor button both fit
 	for _, text := range []string{"build passed", "lint failed", "build failed"} {
 		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "vic", Text: text}})
 		a = next.(App)
@@ -952,7 +953,7 @@ func TestUpDownInMultiLineInput(t *testing.T) {
 func TestInputHistory(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a.hist = []string{"one", "two"}
+	a.hist = map[string][]string{a.m.Current().Name: {"one", "two"}}
 	a, _ = press(t, a, "i")
 	a = typeText(t, a, "dra")
 	a, _ = press(t, a, "ctrl+p")

@@ -215,3 +215,21 @@ func TestEnterReturnsToNormal(t *testing.T) {
 	require.NotNil(t, cmd)
 	require.Equal(t, Normal, next.(App).mode)
 }
+
+// TestMainThreadRowShowsLast: the main thread row ends with its newest line.
+func TestMainThreadRowShowsLast(t *testing.T) {
+	r := ansi.Strip(mainThreadRow(true, 0, "bob: hi", 60))
+	if !strings.Contains(r, "main thread: bob: hi") {
+		t.Fatalf("row %q", r)
+	}
+}
+
+// TestClickThreadHeadOpensIt: a click on a threads box row opens that thread.
+func TestClickThreadHeadOpensIt(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1}, {Root: "$a2", Nick: "ann", Text: "later", Count: 1}}}
+	next, _ := a.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 40, Y: 1 + threadTopOf(3, 0, false, 0)})
+	require.Equal(t, "$a1", next.(App).thread)
+}

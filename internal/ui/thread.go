@@ -124,6 +124,11 @@ func (a App) lastWithID(i int) (model.Line, bool) {
 	return model.Line{}, false
 }
 
+// threadRows is the height of the current channel's threads box and its separator (0, 0 when none).
+func (a App) threadRows() (rows, sep int) {
+	return threadBox(sidePanes{heads: a.threads[a.m.Current().Name]}, wide(a.w, a.h))
+}
+
 // mainThreadLabel is the first row of the threads box: the channel's main chat (no thread selected).
 const mainThreadLabel = "main thread"
 
@@ -176,13 +181,13 @@ func threadState(root string) string {
 }
 
 // threadStampW is the width of a thread row's left column: time, then unread count.
-const threadStampW = 10
+const threadStampW = 16
 
 // threadStamp is the left column of a thread row: the newest reply's time and its unread count.
 func threadStamp(at time.Time, unread int) string {
-	t := "     "
+	t := "           "
 	if !at.IsZero() {
-		t = at.Format("15:04")
+		t = at.Format("01-02 15:04")
 	}
 	u := "   "
 	if unread > 0 {
@@ -204,13 +209,18 @@ func threadRow(h model.Thread, selected bool, unread, w int) string {
 	return threadStamp(h.At, unread) + body
 }
 
-// mainThreadRow is the last row of the threads box: the channel's main chat.
-func mainThreadRow(selected bool, unread, w int) string {
+// mainThreadRow is the last row of the threads box: the channel's main chat, then its newest line
+// (last, "nick: text") when there is one.
+func mainThreadRow(selected bool, unread int, last string, w int) string {
 	mark := "  "
 	if selected {
 		mark = "▸ "
 	}
-	return threadStamp(time.Time{}, unread) + fit(cell, mark+mainThreadLabel, w-threadStampW)
+	text := mark + mainThreadLabel
+	if last != "" {
+		text += ": " + last
+	}
+	return threadStamp(time.Time{}, unread) + fit(cell, text, w-threadStampW)
 }
 
 // threadsRow is row i of the threads box, width w: the heads, then the main thread last.
@@ -218,7 +228,7 @@ func threadsRow(p sidePanes, i, w int) string {
 	j := p.threadTop + i
 	focused := p.focus == focusThreads && p.sel == j
 	if j == len(p.heads) {
-		return mainThreadRow(p.thread == "" || focused, p.mainUnread, w)
+		return mainThreadRow(p.thread == "" || focused, p.mainUnread, p.mainLast, w)
 	}
 	if j > len(p.heads) {
 		return fit(cell, "", w)
@@ -233,9 +243,10 @@ func threadsRow(p sidePanes, i, w int) string {
 
 // threadTopOf is the first shown row of a threads box of n rows (heads plus the main thread):
 // it starts at the bottom, so the main thread shows, and follows the selection sel.
-func threadTopOf(n, sel int, focused bool) int {
+func threadTopOf(n, sel int, focused bool, scroll int) int {
 	vis := min(n, threadRowsMax)
 	top := n - vis
+	top = min(max(top+scroll, 0), n-vis) // the wheel moves the box; it starts at the bottom
 	if focused {
 		if sel < top {
 			top = sel

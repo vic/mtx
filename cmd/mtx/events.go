@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 
 	"mtx/internal/model"
+	"mtx/internal/ui"
 )
 
 // systemLine is a dim line for a state change (membership, topic). Nick is empty.
@@ -84,4 +86,27 @@ func threadOf(evt *event.Event) string {
 		return string(m.RelatesTo.GetThreadParent())
 	}
 	return ""
+}
+
+// onReceipt passes other members' read receipts to the UI.
+func (r *runner) onReceipt(room id.RoomID, ev id.EventID, user id.UserID) {
+	if user == r.mx.UserID {
+		return
+	}
+	if name, ok := r.nameOf(room); ok {
+		r.emit(ui.ReadMsg{Ch: name, ID: ev.String()})
+	}
+}
+
+// typing tells channel ch's room that I am typing, for 10 s; best effort, off the UI loop.
+func (r *runner) typing(ch string) {
+	room, err := r.roomOf(ch)
+	if err != nil {
+		return
+	}
+	go func() {
+		ctx, cancel := callCtx()
+		defer cancel()
+		_, _ = r.mx.UserTyping(ctx, room, true, 10*time.Second)
+	}()
 }

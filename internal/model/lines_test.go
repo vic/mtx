@@ -186,3 +186,72 @@ func TestAddHistoryLinesMerges(t *testing.T) {
 		t.Fatalf("got %v", got)
 	}
 }
+
+// TestSortRecent: channels order by their newest line; focus stays on the same channel.
+func TestSortRecent(t *testing.T) {
+	m, err := New(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = m.WithRooms([]string{"&a", "&b", "&c"})
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	m, _ = m.AddHistoryLines("&a", []Line{{At: t0, Text: "x", ID: "$a"}})
+	m, _ = m.AddHistoryLines("&c", []Line{{At: t0.Add(time.Hour), Text: "y", ID: "$c"}})
+	for i, c := range m.Channels() {
+		if c.Name == "&a" {
+			m, _ = m.Focus(i)
+		}
+	}
+	m = m.SortRecent()
+	var names []string
+	for _, c := range m.Channels() {
+		names = append(names, c.Name)
+	}
+	if got := strings.Join(names, ","); got != "&c,&a,&b" {
+		t.Fatalf("order %s", got)
+	}
+	if cur := m.Current().Name; cur != "&a" {
+		t.Fatalf("focus moved to %s", cur)
+	}
+}
+
+// TestRemoveLine: the line with the given ID is dropped; the others stay in order.
+func TestRemoveLine(t *testing.T) {
+	m, err := New(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = m.WithRooms([]string{"&r"})
+	m, _ = m.AddLine("&r", Line{Text: "one", ID: "$1"})
+	m, _ = m.AddLine("&r", Line{Text: "two", ID: "$2"})
+	m, err = m.RemoveLine("&r", "$1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := m.Current()
+	var got []string
+	for _, l := range c.Lines.All() {
+		got = append(got, l.Text)
+	}
+	if strings.Join(got, ",") != "two" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+// TestSetReacts: a reaction summary lands on its line.
+func TestSetReacts(t *testing.T) {
+	m, err := New(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = m.WithRooms([]string{"&r"})
+	m, _ = m.AddLine("&r", Line{Text: "hi", ID: "$1"})
+	m, err = m.SetReacts("&r", "$1", "👍2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := m.Current()
+	if got := c.Lines.At(0).Reacts; got != "👍2" {
+		t.Fatalf("reacts %q", got)
+	}
+}

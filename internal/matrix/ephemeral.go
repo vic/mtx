@@ -26,3 +26,33 @@ func (c *Client) typingOf(room id.RoomID, events []*event.Event) error {
 	}
 	return nil
 }
+
+// OnReceipt sets the hook called for each read receipt of a joined room: user read up to ev.
+func (c *Client) OnReceipt(fn func(room id.RoomID, ev id.EventID, user id.UserID)) { c.onReceipt = fn }
+
+// receiptsOf delivers the m.receipt ephemeral events of room to the hook.
+func (c *Client) receiptsOf(room id.RoomID, events []*event.Event) error {
+	for _, e := range events {
+		if e.Type.Type != event.EphemeralEventReceipt.Type || c.onReceipt == nil {
+			continue
+		}
+		if err := e.Content.ParseRaw(event.EphemeralEventReceipt); err != nil {
+			return fmt.Errorf("receipt %s: %w", room, err)
+		}
+		r := e.Content.AsReceipt()
+		if r == nil {
+			continue
+		}
+		for ev, rs := range *r {
+			for typ, users := range rs {
+				if typ != event.ReceiptTypeRead && typ != event.ReceiptTypeReadPrivate {
+					continue
+				}
+				for u := range users {
+					c.onReceipt(room, ev, u)
+				}
+			}
+		}
+	}
+	return nil
+}

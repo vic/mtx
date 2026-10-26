@@ -80,3 +80,136 @@ func TestUsageOnBadArgs(t *testing.T) {
 		}
 	}
 }
+
+// TestParseReact: /react takes an emoji and an event ID; the UI adds the ID of the cursor line.
+func TestParseReact(t *testing.T) {
+	c, err := ParseCmd("/react 👍 $ev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 2 || got[0] != "👍" || got[1] != "$ev" {
+		t.Fatalf("args %q", got)
+	}
+	if _, err := ParseCmd("/react 👍"); err == nil {
+		t.Fatal("one arg must be an error")
+	}
+}
+
+// TestParseRedact: /redact takes an event ID and a free-form reason; the reason is optional.
+func TestParseRedact(t *testing.T) {
+	c, err := ParseCmd("/redact $ev spam here")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 3 || got[0] != "$ev" || got[1] != "spam" || got[2] != "here" {
+		t.Fatalf("args %q", got)
+	}
+	c, err = ParseCmd("/redact $ev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "$ev" {
+		t.Fatalf("args %q", got)
+	}
+}
+
+// TestParseNameAndTag: /name takes raw text; /tag takes one word, and needs it.
+func TestParseNameAndTag(t *testing.T) {
+	c, err := ParseCmd("/name My  Room")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "My  Room" {
+		t.Fatalf("name args %q", got)
+	}
+	c, err = ParseCmd("/tag fav")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "fav" {
+		t.Fatalf("tag args %q", got)
+	}
+	if _, err := ParseCmd("/tag"); err == nil {
+		t.Fatal("/tag without a group must be an error")
+	}
+}
+
+// TestParseNickIgnore: /nick takes raw text; /ignore and /unignore take one user.
+func TestParseNickIgnore(t *testing.T) {
+	c, err := ParseCmd("/nick Vic B")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "Vic B" {
+		t.Fatalf("nick args %q", got)
+	}
+	for _, line := range []string{"/ignore bob", "/unignore bob"} {
+		c, err := ParseCmd(line)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := c.Args(); len(got) != 1 || got[0] != "bob" {
+			t.Fatalf("%s args %q", line, got)
+		}
+	}
+}
+
+// TestParseMe: /me takes the action text as is.
+func TestParseMe(t *testing.T) {
+	c, err := ParseCmd("/me waves  hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "waves  hello" {
+		t.Fatalf("args %q", got)
+	}
+}
+
+// TestParseOpen: /open takes the event ID the UI adds.
+func TestParseOpen(t *testing.T) {
+	c, err := ParseCmd("/open $ev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "$ev" {
+		t.Fatalf("args %q", got)
+	}
+}
+
+// TestParseUpload: /upload takes the rest of the line as the path, spaces included.
+func TestParseUpload(t *testing.T) {
+	c, err := ParseCmd("/upload ~/a b.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "~/a b.png" {
+		t.Fatalf("args %q", got)
+	}
+}
+
+// TestParseInvites: /accept and /reject take an optional room; /invites takes none.
+func TestParseInvites(t *testing.T) {
+	c, err := ParseCmd("/accept #a:s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name() != CmdAccept || len(c.Args()) != 1 || c.Args()[0] != "#a:s" {
+		t.Fatalf("accept %v %q", c.Name(), c.Args())
+	}
+	for _, line := range []string{"/reject", "/invites"} {
+		if _, err := ParseCmd(line); err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+	}
+}
+
+// TestParseRecover: /recover takes the whole recovery key as one argument.
+func TestParseRecover(t *testing.T) {
+	c, err := ParseCmd("/recover EsT1 abcd efgh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "EsT1 abcd efgh" {
+		t.Fatalf("args %q", got)
+	}
+}

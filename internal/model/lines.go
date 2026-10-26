@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -142,7 +143,7 @@ func (m Model) AddHistoryLines(ch string, ls []Line) (Model, error) {
 	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
 }
 
-// ReplaceLine swaps the line with the given ID in channel ch for l (a decrypted placeholder).
+// ReplaceLine swaps the line with the given ID in channel ch for l (a decrypted placeholder, or an edit).
 // No line with that ID is a no-op.
 func (m Model) ReplaceLine(ch, id string, l Line) (Model, error) {
 	for i, c := range m.chans {
@@ -150,10 +151,63 @@ func (m Model) ReplaceLine(ch, id string, l Line) (Model, error) {
 			continue
 		}
 		c.Lines = c.Lines.clone()
-		c.Lines.Replace(func(old Line) bool { return old.ID == id }, func(Line) Line {
+		c.Lines.Replace(func(old Line) bool { return old.ID == id }, func(old Line) Line {
+			l.At, l.Thread = old.At, old.Thread // a decrypt or an edit changes the text, not the place
 			l.Nick, l.Text = clean(l.Nick), cleanText(l.Text)
 			return l
 		})
+		return m.withChan(i, c), nil
+	}
+	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
+}
+
+// SortRecent orders the channels by their newest line, newest first; channels with no lines keep their
+// order after them. Focus stays on the same channel.
+func (m Model) SortRecent() Model {
+	newest := func(c Channel) time.Time {
+		if c.Lines.Len() == 0 {
+			return time.Time{}
+		}
+		return c.Lines.At(c.Lines.Len() - 1).At
+	}
+	cur := m.Current().Name
+	chans := slices.Clone(m.chans)
+	slices.SortStableFunc(chans, func(a, b Channel) int { return newest(b).Compare(newest(a)) })
+	m.chans = chans
+	for i, c := range chans {
+		if c.Name == cur {
+			m.cur = i
+		}
+	}
+	m.ver++
+	return m
+}
+
+// RemoveLine drops the line with the given ID from channel ch (a placeholder whose event turned out
+// to be an edit). No line with that ID is a no-op.
+func (m Model) RemoveLine(ch, id string) (Model, error) {
+	for i, c := range m.chans {
+		if c.Name != ch {
+			continue
+		}
+		all := slices.DeleteFunc(c.Lines.All(), func(l Line) bool { return l.ID == id })
+		c.Lines = RingOf[Line](m.cap)
+		for _, l := range all {
+			c.Lines.Push(l)
+		}
+		return m.withChan(i, c), nil
+	}
+	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
+}
+
+// SetReacts sets the reaction summary of the line with the given ID in channel ch. No such line is a no-op.
+func (m Model) SetReacts(ch, id, reacts string) (Model, error) {
+	for i, c := range m.chans {
+		if c.Name != ch {
+			continue
+		}
+		c.Lines = c.Lines.clone()
+		c.Lines.Replace(func(l Line) bool { return l.ID == id }, func(l Line) Line { l.Reacts = clean(reacts); return l })
 		return m.withChan(i, c), nil
 	}
 	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)

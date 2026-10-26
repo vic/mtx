@@ -1,6 +1,7 @@
 package matrix
 
 import (
+	"context"
 	"fmt"
 
 	"maunium.net/go/mautrix"
@@ -15,7 +16,7 @@ type Invite struct {
 	Inviter id.UserID
 }
 
-// OnInvite sets the hook called after an invite is joined.
+// OnInvite sets the hook called for each pending invite in a sync.
 func (c *Client) OnInvite(fn func(Invite)) { c.onInvite = fn }
 
 // inviteOf reads the inviter (the sender of our own m.room.member invite) and the canonical alias
@@ -36,4 +37,16 @@ func (c *Client) inviteOf(room id.RoomID, inv *mautrix.SyncInvitedRoom) (Invite,
 		}
 	}
 	return in, nil
+}
+
+// Accept joins an invited room.
+func (c *Client) Accept(ctx context.Context, room id.RoomID) error {
+	_, err := c.cli.JoinRoomByID(ctx, room)
+	return err
+}
+
+// Reject declines an invite (leaves the invited room).
+func (c *Client) Reject(ctx context.Context, room id.RoomID) error {
+	_, err := c.cli.LeaveRoom(ctx, room)
+	return err
 }

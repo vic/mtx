@@ -542,3 +542,76 @@ func notes(a App) []model.Line {
 	}
 	return out
 }
+
+// TestChanGroups: the channel pane groups by tag with label rows, in the order favourites, rooms, people.
+func TestChanGroups(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(RoomsMsg{"#r", "@ana"})
+	a = next.(App)
+	next, _ = a.Update(TagsMsg{"#r": "favourite"})
+	a = next.(App)
+	rows := a.chanRows()
+	pos := func(s string) int {
+		for i, r := range rows {
+			if r == s {
+				return i
+			}
+		}
+		return -1
+	}
+	fav, fr, rooms, people, ana := pos(nickLabel+"favourites"), pos("#r"), pos(nickLabel+"rooms"), pos(nickLabel+"people"), pos("@ana")
+	if !(fav >= 0 && fav < fr && fr < rooms && rooms < people && people < ana) {
+		t.Fatalf("rows %q", rows)
+	}
+}
+
+// TestTypingThrottled: a burst of typing sends one typing notice within typingEvery.
+func TestTypingThrottled(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	var calls []string
+	a = a.WithTyping(func(ch string) { calls = append(calls, ch) })
+	a, _ = press(t, a, "i")
+	a = typeText(t, a, "abc")
+	if len(calls) != 1 {
+		t.Fatalf("typing notices %v", calls)
+	}
+}
+
+// TestRecoverNotInHistory: a /recover line, which carries the recovery key, is not kept as input history.
+func TestRecoverNotInHistory(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	var saved []string
+	a = a.WithInputSave(func(ch, text string) { saved = append(saved, text) })
+	a, _ = press(t, a, "i")
+	a = typeText(t, a, "/recover abc")
+	a, _ = press(t, a, "enter")
+	if len(saved) != 0 || len(a.hist[cur(a)]) != 0 {
+		t.Fatalf("saved %q hist %q", saved, a.hist[cur(a)])
+	}
+}
+
+// TestChanGroupsSpaces: a room tagged with a space is grouped under the space's label, before the rooms.
+func TestChanGroupsSpaces(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(RoomsMsg{"#r1", "#r2"})
+	a = next.(App)
+	next, _ = a.Update(TagsMsg{"#r1": "space:nix"})
+	a = next.(App)
+	rows := a.chanRows()
+	pos := func(s string) int {
+		for i, r := range rows {
+			if r == s {
+				return i
+			}
+		}
+		return -1
+	}
+	nix, r1, rooms, r2 := pos(nickLabel+"nix"), pos("#r1"), pos(nickLabel+"rooms"), pos("#r2")
+	if !(nix >= 0 && nix < r1 && r1 < rooms && rooms < r2) {
+		t.Fatalf("rows %q", rows)
+	}
+}

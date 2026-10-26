@@ -92,11 +92,19 @@ func listFiles(dir string) []string {
 }
 
 // urlAt is the http(s) URL of the word under column col of row, "" when there is none.
+// mdLinkRE is a markdown link [text](http...): a click anywhere on it opens the URL.
+var mdLinkRE = regexp.MustCompile(`\[[^\]]*\]\((https?://[^)\s]+)\)`)
+
 func urlAt(row string, col int) string {
 	if col < 0 || col >= lipgloss.Width(row) {
 		return ""
 	}
 	b := byteAt(row, col)
+	for _, m := range mdLinkRE.FindAllStringSubmatchIndex(row, -1) {
+		if b >= m[0] && b < m[1] {
+			return row[m[2]:m[3]]
+		}
+	}
 	start := strings.LastIndexAny(row[:b], " \t") + 1
 	if row[b] == ' ' || row[b] == '\t' { // a click on the space between words
 		return ""
@@ -108,6 +116,26 @@ func urlAt(row string, col int) string {
 	word := strings.Trim(row[start:end], "\"'()[]{}<>,;")
 	if strings.HasPrefix(word, "https://") || strings.HasPrefix(word, "http://") {
 		return word
+	}
+	return ""
+}
+
+// reactAt is the reaction key under display column col of a lines-pane row whose text ends with a
+// summary "  [👍2 ❤️1]", "" when the click is elsewhere.
+func reactAt(row string, col int) string {
+	row = strings.TrimRight(row, " ")
+	i := strings.LastIndex(row, "  [")
+	if i < 0 || !strings.HasSuffix(row, "]") {
+		return ""
+	}
+	pos := i + len("  [")
+	for _, part := range strings.Fields(row[pos : len(row)-1]) {
+		at := strings.Index(row[pos:], part) + pos
+		start := lipgloss.Width(row[:at])
+		if col >= start && col < start+lipgloss.Width(part) {
+			return strings.TrimRight(part, "0123456789")
+		}
+		pos = at + len(part)
 	}
 	return ""
 }

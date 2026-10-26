@@ -35,6 +35,7 @@ type Line struct {
 	Kind       LineKind
 	ID         string // producer's event ID (a reply target); not shown
 	Thread     string // thread root event ID of this message; "" = main chat
+	Reacts     string // reaction summary shown after the text ("👍2 ❤️1"); "" none
 }
 
 // ChanKind tells a session channel (#) from a room (&).
@@ -56,6 +57,7 @@ type Channel struct {
 	Lines   Ring[Line]
 	Members []Member // rooms only; set by WithRoomMembers
 	Agents  []Agent  // # channels only: the session's subagents; set by WithAgents
+	ID      string   // Matrix room ID; "" for ircc channels
 }
 
 // Model is the channel list. Updates return a new Model; AddLine gives the
@@ -200,3 +202,16 @@ type Thread struct {
 
 // Version changes whenever the channels or the current channel change.
 func (m Model) Version() uint64 { return m.ver }
+
+// WithIDs sets each named channel's Matrix room ID; unknown names are skipped.
+func (m Model) WithIDs(ids map[string]string) Model {
+	chans := slices.Clone(m.chans)
+	for i := range chans {
+		if id, ok := ids[chans[i].Name]; ok {
+			chans[i].ID = id
+		}
+	}
+	m.chans = chans
+	m.ver++
+	return m
+}

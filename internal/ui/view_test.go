@@ -6,9 +6,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/stretchr/testify/require"
 
 	"mtx/internal/model"
 )
@@ -260,4 +262,23 @@ func TestViewWrapsOnlyVisibleLines(t *testing.T) {
 func hitNick(nick string) string {
 	br := fg("13").Bold(true).Italic(true)
 	return br.Render("<") + nickStyle(nick).Bold(true).Italic(true).Render(nick) + br.Render(">")
+}
+
+// TestWrapLineSystemNoBrackets: a line with no nick shows no empty <> mark.
+func TestWrapLineSystemNoBrackets(t *testing.T) {
+	rs := wrapLine(model.Line{Text: "ana joined"}, 40)
+	if strings.Contains(rs[0], "<>") || !strings.HasSuffix(rs[0], "ana joined") {
+		t.Fatalf("row %q", rs[0])
+	}
+}
+
+// TestReadMarkLead: an own line at or before the read mark shows the check, on its first row only.
+func TestReadMarkLead(t *testing.T) {
+	t0 := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	shown := []model.Line{{Nick: "me", At: t0}, {Nick: "bob", At: t0}, {Nick: "me", At: t0.Add(time.Hour)}}
+	of := []int{0, 1, 2}
+	p := sidePanes{user: "me", readAt: t0}
+	require.Equal(t, readMark, p.lead(of, shown, 0))
+	require.Equal(t, " ", p.lead(of, shown, 1))
+	require.Equal(t, " ", p.lead(of, shown, 2))
 }

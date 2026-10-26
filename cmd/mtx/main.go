@@ -87,16 +87,32 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 	}
 	c.OnInvite(r.toastInvite)
 	c.OnTyping(r.onTyping)
-	_, server, _ := strings.Cut(cfg.UserID, ":")
-	cs := &cmds{r: r, me: id.UserID(cfg.UserID), server: server}
+	c.OnReceipt(r.onReceipt)
+	me := c.MX().UserID.String() // cfg.UserID is empty when the login came from the store
+	_, server, _ := strings.Cut(me, ":")
+	cs := &cmds{r: r, me: id.UserID(me), server: server, inv: c, rec: c}
 
 	closeLog, err := openLog()
 	if err != nil {
 		return err
 	}
 	defer closeLog()
-	logf("start user=%s", cfg.UserID)
-	app := ui.New(m, r.send).WithUser(localpart(cfg.UserID)).WithCmd(cs.cmd).WithLiteral(r.sendLiteral).WithSeen(r.seen).WithReply(r.reply).WithEdit(r.edit).WithPicker()
+	logf("start user=%s", me)
+	app := ui.New(m, r.send).WithUser(localpart(me)).WithCmd(cs.cmd).WithLiteral(r.sendLiteral).WithSeen(r.seen).WithReply(r.reply).WithEdit(r.edit).
+		WithInputSave(func(ch, text string) {
+			go func() {
+				if err := c.AddInput(ctx, ch, text); err != nil {
+					logf("input history: %v", err)
+				}
+			}()
+		}).
+		WithFocusSave(func(ch string) {
+			go func() {
+				if err := c.SetKV(ctx, "focus", ch); err != nil {
+					logf("focus: %v", err)
+				}
+			}()
+		}).WithTyping(r.typing).WithPicker()
 	p = tea.NewProgram(app, tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
 		switch msg.(type) {
 		case tea.MouseWheelMsg, tea.KeyPressMsg: // in order, summed per batch: one render
@@ -113,6 +129,12 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 	syncErr := make(chan error, 1)
 	go func() {
 		r.loadCache(ctx, c.LoadRooms, c.LoadLines)
+		if ins, err := c.Inputs(ctx); err == nil {
+			r.emit(ui.InputsMsg(ins))
+		}
+		if f, err := c.KV(ctx, "focus"); err == nil && f != "" {
+			r.emit(ui.FocusMsg(f)) // the channel that had focus when mtx last quit
+		}
 		go func() { // the room list loads beside sync: cached rooms already show
 			r.refreshMu.Lock()
 			defer r.refreshMu.Unlock()

@@ -10,23 +10,37 @@ import (
 type CmdName string
 
 const (
-	CmdJoin   CmdName = "join"
-	CmdCreate CmdName = "create"
-	CmdPart   CmdName = "part"
-	CmdClose  CmdName = "close"
-	CmdInvite CmdName = "invite"
-	CmdKick   CmdName = "kick"
-	CmdTopic  CmdName = "topic"
-	CmdWhois  CmdName = "whois"
-	CmdNames  CmdName = "names"
-	CmdMsg    CmdName = "msg"
-	CmdQuit   CmdName = "quit"
-	CmdHelp   CmdName = "help"
+	CmdJoin     CmdName = "join"
+	CmdCreate   CmdName = "create"
+	CmdPart     CmdName = "part"
+	CmdClose    CmdName = "close"
+	CmdInvite   CmdName = "invite"
+	CmdKick     CmdName = "kick"
+	CmdTopic    CmdName = "topic"
+	CmdRename   CmdName = "name"
+	CmdTag      CmdName = "tag"
+	CmdWhois    CmdName = "whois"
+	CmdNick     CmdName = "nick"
+	CmdIgnore   CmdName = "ignore"
+	CmdUnignore CmdName = "unignore"
+	CmdNames    CmdName = "names"
+	CmdMsg      CmdName = "msg"
+	CmdMe       CmdName = "me"
+	CmdOpen     CmdName = "open"
+	CmdUpload   CmdName = "upload"
+	CmdRecover  CmdName = "recover"
+	CmdAccept   CmdName = "accept"
+	CmdReject   CmdName = "reject"
+	CmdInvites  CmdName = "invites"
+	CmdReact    CmdName = "react"
+	CmdRedact   CmdName = "redact"
+	CmdQuit     CmdName = "quit"
+	CmdHelp     CmdName = "help"
 )
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "whois", "names", "msg", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "recover", "accept", "reject", "invites", "react", "redact", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -45,12 +59,34 @@ func arity(n CmdName) (count int, raw, ok bool) {
 		return 1, false, true
 	case CmdInvite:
 		return 2, false, true
+	case CmdRename:
+		return 1, true, true
+	case CmdTag:
+		return 1, false, true
 	case CmdTopic:
+		return 1, true, true
+	case CmdAccept, CmdReject, CmdInvites:
+		return -1, false, true
+	case CmdRecover:
+		return 1, true, true
+	case CmdUpload:
+		return 1, true, true
+	case CmdOpen:
+		return 1, false, true
+	case CmdMe:
 		return 1, true, true
 	case CmdMsg:
 		return 2, true, true
+	case CmdNick:
+		return 1, true, true
+	case CmdIgnore, CmdUnignore:
+		return 1, false, true
 	case CmdWhois:
 		return 1, false, true
+	case CmdRedact:
+		return -1, false, true
+	case CmdReact:
+		return 2, false, true
 	case CmdPart, CmdClose, CmdNames, CmdQuit, CmdHelp:
 		return -1, false, true
 	}
@@ -104,18 +140,32 @@ func ParseCmd(line string) (Cmd, error) {
 
 // usage is shown when a command gets the wrong arguments (vic 2026-10-23).
 var usage = map[CmdName]string{
-	CmdJoin:   "/join &room",
-	CmdCreate: "/create &room",
-	CmdPart:   "/part [&room]",
-	CmdClose:  "/close [&room] (or /rm)",
-	CmdInvite: "/invite <nick> &room",
-	CmdKick:   "/kick <nick>",
-	CmdTopic:  "/topic <text>",
-	CmdWhois:  "/whois <nick>",
-	CmdNames:  "/names [&room]",
-	CmdMsg:    "/msg <nick> <text>",
-	CmdQuit:   "/quit",
-	CmdHelp:   "/help",
+	CmdJoin:     "/join &room",
+	CmdCreate:   "/create &room",
+	CmdPart:     "/part [&room]",
+	CmdClose:    "/close [&room] (or /rm)",
+	CmdInvite:   "/invite <nick> &room",
+	CmdKick:     "/kick <nick>",
+	CmdTopic:    "/topic <text>",
+	CmdRename:   "/name <text>",
+	CmdTag:      "/tag fav|low|none",
+	CmdWhois:    "/whois <nick>",
+	CmdNick:     "/nick <display name>",
+	CmdIgnore:   "/ignore <user>",
+	CmdUnignore: "/unignore <user>",
+	CmdNames:    "/names [&room]",
+	CmdMsg:      "/msg <nick> <text>",
+	CmdMe:       "/me <action>",
+	CmdOpen:     "/open (the selected line's media)",
+	CmdUpload:   "/upload <path>",
+	CmdRecover:  "/recover <recovery key>",
+	CmdAccept:   "/accept [room]",
+	CmdReject:   "/reject [room]",
+	CmdInvites:  "/invites",
+	CmdReact:    "/react <emoji> (on the selected line)",
+	CmdRedact:   "/redact [reason] (on my selected line)",
+	CmdQuit:     "/quit",
+	CmdHelp:     "/help",
 }
 
 // Usages lists the usage of every command whose word starts with prefix (no "/"),

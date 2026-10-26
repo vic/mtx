@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,11 +23,25 @@ type cmds struct {
 	r      *runner
 	me     id.UserID
 	server string
+	inv    inviteAnswerer
+	rec    interface {
+		Recover(context.Context, string) error
+	}
+}
+
+// inviteAnswerer accepts or rejects invites (the matrix client; a fake in tests).
+type inviteAnswerer interface {
+	Accept(ctx context.Context, room id.RoomID) error
+	Reject(ctx context.Context, room id.RoomID) error
 }
 
 // cmd is the ui.App handler: the work runs in the returned tea.Cmd; an error comes back as a dim note.
 func (c *cmds) cmd(ch string, cm model.Cmd) tea.Cmd {
-	logf("cmd %s args=%q focus=%q", cm.Name(), cm.Args(), ch)
+	args := cm.Args()
+	if cm.Name() == model.CmdRecover {
+		args = []string{"[redacted]"} // the recovery key is a secret
+	}
+	logf("cmd %s args=%q focus=%q", cm.Name(), args, ch)
 	return func() tea.Msg {
 		err := c.do(ch, cm)
 		logf("cmd %s done err=%v", cm.Name(), err)
@@ -69,6 +85,66 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.names(roomArg(args, ch))
 	case model.CmdWhois:
 		return c.whois(args[0])
+	case model.CmdMe:
+		return c.emote(ch, args[0])
+	case model.CmdOpen:
+		return c.r.open(args[0])
+	case model.CmdUpload:
+		return c.r.upload(ch, args[0])
+	case model.CmdRecover:
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := c.rec.Recover(ctx, args[0]); err != nil {
+			return err
+		}
+		c.r.emit(ui.ToastMsg{Text: "recovered: keys imported, old messages decrypt on the next sync"})
+		return nil
+	case model.CmdAccept, model.CmdReject:
+		in, err := c.r.pendingInvite(strings.Join(args, " "))
+		if err != nil {
+			return err
+		}
+		ctx, cancel := c.ctx()
+		defer cancel()
+		if cm.Name() == model.CmdAccept {
+			err = c.inv.Accept(ctx, in.Room)
+		} else {
+			err = c.inv.Reject(ctx, in.Room)
+		}
+		if err == nil {
+			c.r.dropInvite(in.Room)
+		}
+		return err
+	case model.CmdInvites:
+		c.r.mu.Lock()
+		var names []string
+		for _, in := range c.r.invites {
+			names = append(names, inviteName(in)+" from "+localpart(in.Inviter.String()))
+		}
+		c.r.mu.Unlock()
+		slices.Sort(names)
+		if len(names) == 0 {
+			names = []string{"none"}
+		}
+		c.r.emit(ui.NoteMsg{L: dim("invites: " + strings.Join(names, ", "))})
+		return nil
+	case model.CmdReact:
+		return c.react(ch, args[0], args[1])
+	case model.CmdRename:
+		return c.rename(ch, args[0])
+	case model.CmdTag:
+		return c.tag(ch, args[0])
+	case model.CmdNick:
+		ctx, cancel := c.ctx()
+		defer cancel()
+		return c.r.mx.SetDisplayName(ctx, args[0])
+	case model.CmdIgnore, model.CmdUnignore:
+		return c.ignore(args[0], cm.Name() == model.CmdIgnore)
+	case model.CmdRedact:
+		if len(args) == 0 {
+			return errors.New("usage: /redact [reason]")
+		}
+		return c.redact(ch, args[0], strings.Join(args[1:], " "))
 	}
 	return fmt.Errorf("command %q is not handled here", cm.Name())
 }
@@ -80,14 +156,18 @@ func (c *cmds) join(s string) error {
 	if s == "" {
 		return errors.New("usage: /join room")
 	}
-	alias := "#" + s + ":" + c.server
+	alias := joinTarget(s, c.server)
 	ctx, cancel := c.ctx()
 	defer cancel()
 	resp, err := c.r.mx.JoinRoom(ctx, alias, nil)
 	if err != nil {
 		return err
 	}
-	name := c.r.register(resp.RoomID, localpart(alias))
+	label := "#" + localpart(alias) // joined by alias: the channel is named after it
+	if strings.HasPrefix(alias, "!") {
+		label = roomLabel(c.r.fetchRoom(resp.RoomID), localpart(string(c.me))) // a bare room ID: name it like the room list does
+	}
+	name := c.r.register(resp.RoomID, label)
 	c.r.emitRooms()
 	if err := c.r.emitMembers(resp.RoomID); err != nil {
 		return err
@@ -276,7 +356,7 @@ func (c *cmds) create(s string) error {
 	}
 	alias := "#" + s + ":" + c.server
 	logf("create %s room=%s", s, resp.RoomID)
-	name := c.r.register(resp.RoomID, localpart(alias))
+	name := c.r.register(resp.RoomID, "#"+localpart(alias))
 	c.r.emitRooms()
 	c.r.emit(ui.FocusMsg(name))
 	return nil
@@ -291,4 +371,133 @@ func (c *cmds) fullUser(s string) (id.UserID, error) {
 		s += ":" + c.server
 	}
 	return id.UserID(s), nil
+}
+
+// react toggles my emoji reaction on event ev: sends it, or redacts mine when I already reacted with it.
+func (c *cmds) react(ch, emoji, ev string) error {
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	if mine := c.r.myReact(id.EventID(ev), emoji); mine != "" {
+		_, err = c.r.mx.RedactEvent(ctx, room, mine)
+		return err
+	}
+	_, err = c.r.mx.SendReaction(ctx, room, id.EventID(ev), emoji)
+	return err
+}
+
+// redact deletes my message ev in channel ch, with an optional reason.
+func (c *cmds) redact(ch, ev, reason string) error {
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	var req mautrix.ReqRedact
+	req.Reason = reason
+	_, err = c.r.mx.RedactEvent(ctx, room, id.EventID(ev), req)
+	return err
+}
+
+// rename sets the room name of channel ch.
+func (c *cmds) rename(ch, name string) error {
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	_, err = c.r.mx.SendStateEvent(ctx, room, event.StateRoomName, "", &event.RoomNameEventContent{Name: name})
+	return err
+}
+
+// tag sets my tag group of channel ch: fav, low, or none (both removed). The pane regroups at once.
+func (c *cmds) tag(ch, which string) error {
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	add, group := event.RoomTag(""), ""
+	switch which {
+	case "fav":
+		add, group = event.RoomTagFavourite, "favourite"
+	case "low":
+		add, group = event.RoomTagLowPriority, "lowpriority"
+	case "none":
+	default:
+		return errors.New("usage: /tag fav|low|none")
+	}
+	for _, t := range []event.RoomTag{event.RoomTagFavourite, event.RoomTagLowPriority} {
+		if t != add {
+			if err := c.r.mx.RemoveTag(ctx, room, t); err != nil {
+				return err
+			}
+		}
+	}
+	if add != "" {
+		if err := c.r.mx.AddTag(ctx, room, add, 0.5); err != nil {
+			return err
+		}
+	}
+	c.r.emit(ui.TagsMsg{ch: group})
+	return nil
+}
+
+// joinTarget is what /join s joins: a room ID or a full alias as given (a matrix.to link is unwrapped),
+// else the alias #s on our server.
+func joinTarget(s, server string) string {
+	if rest, ok := strings.CutPrefix(s, "https://matrix.to/#/"); ok {
+		s, _, _ = strings.Cut(rest, "?")
+		if u, err := url.PathUnescape(s); err == nil {
+			s = u
+		}
+	}
+	s = strings.TrimPrefix(s, "&")
+	if strings.HasPrefix(s, "!") || (strings.HasPrefix(s, "#") && strings.Contains(s, ":")) {
+		return s
+	}
+	return "#" + strings.TrimPrefix(s, "#") + ":" + server
+}
+
+// ignore adds user to (on) or removes it from my ignored users (m.ignored_user_list account data).
+func (c *cmds) ignore(user string, on bool) error {
+	uid, err := c.fullUser(user)
+	if err != nil {
+		return fmt.Errorf("usage: /ignore <user>")
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	var list struct {
+		Ignored map[id.UserID]struct{} `json:"ignored_users"`
+	}
+	if err := c.r.mx.GetAccountData(ctx, "m.ignored_user_list", &list); err != nil && !errors.Is(err, mautrix.MNotFound) {
+		return err
+	}
+	if list.Ignored == nil {
+		list.Ignored = map[id.UserID]struct{}{}
+	}
+	if on {
+		list.Ignored[uid] = struct{}{}
+	} else {
+		delete(list.Ignored, uid)
+	}
+	return c.r.mx.SetAccountData(ctx, "m.ignored_user_list", &list)
+}
+
+// emote sends text as an action (m.emote) to channel ch.
+func (c *cmds) emote(ch, text string) error {
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	_, err = c.r.mx.SendMessageEvent(ctx, room, event.EventMessage, &event.MessageEventContent{MsgType: event.MsgEmote, Body: text})
+	return err
 }

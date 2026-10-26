@@ -16,7 +16,7 @@ import (
 )
 
 // TestConduitEncryptedRoundTrip runs against a real homeserver (MTX_CONDUIT_* env, build tag conduit).
-// alice creates an encrypted room and invites bob. bob's client auto-joins and must receive
+// alice creates an encrypted room and invites bob. bob accepts the invite and must receive
 // alice's encrypted message, decrypted.
 func TestConduitEncryptedRoundTrip(t *testing.T) {
 	cfgA := conduitEnv(t, "A")
@@ -37,6 +37,7 @@ func TestConduitEncryptedRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, err)
 
+	require.NoError(t, bob.Accept(ctx, room.RoomID))
 	got := make(chan string, 1)
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()

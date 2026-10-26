@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
 	"maunium.net/go/mautrix/id"
 
 	"mtx/internal/matrix"
@@ -17,7 +18,9 @@ import (
 // content builds the m.room.message for text. A joined member written as @localpart is a mention
 // (m.mentions), so other clients highlight it.
 func (r *runner) content(ctx context.Context, room id.RoomID, text string) (*event.MessageEventContent, error) {
-	c := &event.MessageEventContent{MsgType: event.MsgText, Body: text}
+	md := format.RenderMarkdown(text, true, false) // markdown in, no raw HTML from the user
+	c := &md
+	c.Body = text // the plain body stays exactly what was typed
 	resp, err := r.mx.JoinedMembers(ctx, room)
 	if err != nil {
 		return nil, fmt.Errorf("members for mentions: %w", err)

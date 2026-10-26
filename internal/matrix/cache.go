@@ -3,6 +3,7 @@ package matrix
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	"maunium.net/go/mautrix/id"
 )
@@ -58,7 +59,7 @@ func loadRooms(ctx context.Context, db *sql.DB) (map[id.RoomID]string, error) {
 	return out, rows.Err()
 }
 
-// SaveLines stores lines in one transaction; a line already stored (same event ID) is replaced.
+// SaveLines stores lines in one transaction; a line already stored (same event ID) gets the new text and keeps its time and thread.
 func (c *Client) SaveLines(ctx context.Context, ls []CachedLine) error {
 	return saveLines(ctx, c.db.RawDB, ls)
 }
@@ -69,7 +70,7 @@ func saveLines(ctx context.Context, db *sql.DB, ls []CachedLine) error {
 		return err
 	}
 	for _, l := range ls {
-		if _, err := tx.ExecContext(ctx, `INSERT OR REPLACE INTO cache_lines(event_id, room_id, ts, nick, text, dim, thread) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+		if _, err := tx.ExecContext(ctx, `INSERT INTO cache_lines(event_id, room_id, ts, nick, text, dim, thread) VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET nick = excluded.nick, text = excluded.text, dim = excluded.dim`,
 			l.EventID.String(), l.Room.String(), l.TS, l.Nick, l.Text, l.Dim, l.Thread); err != nil {
 			_ = tx.Rollback()
 			return err
@@ -98,6 +99,52 @@ func loadLines(ctx context.Context, db *sql.DB, room id.RoomID, limit int) ([]Ca
 		}
 		l.EventID = id.EventID(ev)
 		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
+// SetKV stores value under key (UI state such as the focused channel).
+func (c *Client) SetKV(ctx context.Context, key, value string) error {
+	_, err := c.db.RawDB.ExecContext(ctx, `INSERT INTO cache_kv(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	return err
+}
+
+// KV is the value stored under key, "" when none.
+func (c *Client) KV(ctx context.Context, key string) (string, error) {
+	var v string
+	err := c.db.RawDB.QueryRowContext(ctx, `SELECT value FROM cache_kv WHERE key = ?`, key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return v, err
+}
+
+// inputKeep is how many sent input lines per channel are kept.
+const inputKeep = 100
+
+// AddInput stores one sent input line of channel ch and drops that channel's lines beyond inputKeep.
+func (c *Client) AddInput(ctx context.Context, ch, text string) error {
+	if _, err := c.db.RawDB.ExecContext(ctx, `INSERT INTO cache_input(chan, text) VALUES(?, ?)`, ch, text); err != nil {
+		return err
+	}
+	_, err := c.db.RawDB.ExecContext(ctx, `DELETE FROM cache_input WHERE chan = ? AND id NOT IN (SELECT id FROM cache_input WHERE chan = ? ORDER BY id DESC LIMIT ?)`, ch, ch, inputKeep)
+	return err
+}
+
+// Inputs is every channel's sent input lines, oldest first.
+func (c *Client) Inputs(ctx context.Context) (map[string][]string, error) {
+	rows, err := c.db.RawDB.QueryContext(ctx, `SELECT chan, text FROM cache_input ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var ch, t string
+		if err := rows.Scan(&ch, &t); err != nil {
+			return nil, err
+		}
+		out[ch] = append(out[ch], t)
 	}
 	return out, rows.Err()
 }

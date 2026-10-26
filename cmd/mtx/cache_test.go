@@ -37,7 +37,7 @@ func TestLoadCacheShowsRoomsAndLines(t *testing.T) {
 	var got []tea.Msg
 	r := newRunner(nil, func(m tea.Msg) { got = append(got, m) })
 	rooms := func(context.Context) (map[id.RoomID]string, error) {
-		return map[id.RoomID]string{"!a:s": "den"}, nil
+		return map[id.RoomID]string{"!a:s": "#den"}, nil
 	}
 	lines := func(_ context.Context, room id.RoomID, _ int) ([]matrix.CachedLine, error) {
 		return []matrix.CachedLine{
@@ -50,9 +50,9 @@ func TestLoadCacheShowsRoomsAndLines(t *testing.T) {
 	for _, m := range got {
 		switch m := m.(type) {
 		case ui.RoomsMsg:
-			sawRooms = len(m) == 1 && m[0] == "den"
+			sawRooms = len(m) == 1 && m[0] == "#den"
 		case ui.HistoryLinesMsg:
-			sawHistory = m.Ch == "den" && len(m.L) == 2 && m.L[0].Text == "one" && m.L[1].Text == "two"
+			sawHistory = m.Ch == "#den" && len(m.L) == 2 && m.L[0].Text == "one" && m.L[1].Text == "two"
 		}
 	}
 	if !sawRooms || !sawHistory {

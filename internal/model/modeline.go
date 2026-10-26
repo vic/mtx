@@ -47,6 +47,10 @@ func Status(m Model, mode string, info map[int]SessionInfo, now time.Time) Model
 	switch {
 	case c.Name == "":
 	case c.Kind == RoomChan:
+		if c.ID != "" { // a Matrix room: no ircc sessions, so no bypass count
+			ml.Left = fmt.Sprintf("%s · %d members · %d/min · %s", c.Name, len(c.Members), roomRate(c, now), c.ID)
+			break
+		}
 		bypass, unknown := 0, 0
 		seen := map[int]bool{} // teammates share the parent pid: count each pid once
 		for _, mb := range c.Members {
@@ -63,13 +67,7 @@ func Status(m Model, mode string, info map[int]SessionInfo, now time.Time) Model
 				bypass++
 			}
 		}
-		rate := 0
-		for i := range c.Lines.Len() { // At, not All: no copy of the ring per frame
-			if d := now.Sub(c.Lines.At(i).At); d >= 0 && d < rateWindow {
-				rate++
-			}
-		}
-		ml.Left = fmt.Sprintf("%s %d members %d bypass %d ? %d/min", c.Name, len(c.Members), bypass, unknown, rate)
+		ml.Left = fmt.Sprintf("%s %d members %d bypass %d ? %d/min", c.Name, len(c.Members), bypass, unknown, roomRate(c, now))
 		ml.Red = bypass > 0 || unknown > 0
 	default:
 		st, pm := "?", "?" // untrusted registry text: only known modes print, the rest is cleaned
@@ -85,4 +83,15 @@ func Status(m Model, mode string, info map[int]SessionInfo, now time.Time) Model
 		ml.Red = b || !known // no info or unknown mode: fail safe
 	}
 	return ml
+}
+
+// roomRate is how many of c's lines are from the last rateWindow.
+func roomRate(c Channel, now time.Time) int {
+	rate := 0
+	for i := range c.Lines.Len() { // At, not All: no copy of the ring per frame
+		if d := now.Sub(c.Lines.At(i).At); d >= 0 && d < rateWindow {
+			rate++
+		}
+	}
+	return rate
 }

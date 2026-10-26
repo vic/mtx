@@ -150,3 +150,16 @@ func TestStatusSanitizesInfo(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+// TestStatusMatrixRoom: a Matrix room's title shows its name, members, rate and room ID, not red.
+func TestStatusMatrixRoom(t *testing.T) {
+	m := newModel(t).WithRooms([]string{"#den"}).WithIDs(map[string]string{"#den": "!x:s"})
+	m, err := m.WithRoomMembers("#den", []Member{{Nick: "a", PID: 0}, {Nick: "b", PID: 0}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := Status(m, "NORMAL", nil, t0)
+	if got.Left != "#den · 2 members · 0/min · !x:s" || got.Red {
+		t.Fatalf("got %+v", got)
+	}
+}

@@ -7,7 +7,6 @@ require (
 	charm.land/bubbletea/v2 v2.0.9
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/charmbracelet/x/ansi v0.11.8
-	github.com/fsnotify/fsnotify v1.10.1
 	github.com/stretchr/testify v1.12.0
 	go.mau.fi/util v0.11.0
 	maunium.net/go/mautrix v0.32.0

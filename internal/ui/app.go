@@ -655,6 +655,14 @@ func (a App) promptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		a, _ = a.closePrompt()
+	case "tab":
+		if a.prompt == promptCmd {
+			v, comp := a.comp.step(":"+a.in.Value(), a.chanNames(), a.nickPool())
+			a.in.SetValue(strings.TrimPrefix(v, ":"))
+			a.in.MoveToEnd()
+			a.comp = comp
+		}
+		return a, nil
 	case "ctrl+t": // the file finder fills the prompt with a path
 		return a.openFilePick(pickFiles)
 	case "enter":
@@ -899,7 +907,8 @@ func (a App) chatScreen() string {
 // page is the number of scrollback rows View shows; a long input takes rows from it.
 func (a App) page() int {
 	_, input, _ := a.inputLine()
-	return paneRows(a.w, a.h, len(inputRows(input, a.w, a.h)))
+	rows, sep := a.threadRows()
+	return max(paneRows(a.w, a.h, len(inputRows(input, a.w, a.h)))-rows-sep, 1) // the threads box takes rows from the chat
 }
 
 // off is the current channel's scroll offset.
@@ -1307,7 +1316,7 @@ func (a App) chanKind(name string) model.ChanKind {
 }
 
 // mainLast is the newest main-thread line of the current channel as "nick: text" (one line), "" if none.
-func (a App) mainLast() string {
+func (a App) mainLast() (string, time.Time) {
 	c := a.m.Current()
 	for i := c.Lines.Len() - 1; i >= 0; i-- {
 		if l := c.Lines.At(i); l.Thread == "" {
@@ -1315,10 +1324,10 @@ func (a App) mainLast() string {
 			if l.Nick != "" {
 				s = l.Nick + ": " + s
 			}
-			return strings.ReplaceAll(s, "\n", " ")
+			return strings.ReplaceAll(s, "\n", " "), l.At
 		}
 	}
-	return ""
+	return "", time.Time{}
 }
 
 // chanByName is the channel named name.
@@ -2090,7 +2099,7 @@ func (a App) sides() sidePanes {
 			a.sc.key, a.sc.val = k, p
 		}
 	}
-	p.mainLast = a.mainLast()
+	p.mainLast, p.mainLastAt = a.mainLast()
 	p.readAt, p.user = a.readAt[cur], a.user
 	p.unread = a.unreadAll()
 	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)

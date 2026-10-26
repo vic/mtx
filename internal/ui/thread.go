@@ -211,7 +211,7 @@ func threadRow(h model.Thread, selected bool, unread, w int) string {
 
 // mainThreadRow is the last row of the threads box: the channel's main chat, then its newest line
 // (last, "nick: text") when there is one.
-func mainThreadRow(selected bool, unread int, last string, w int) string {
+func mainThreadRow(selected bool, unread int, at time.Time, last string, w int) string {
 	mark := "  "
 	if selected {
 		mark = "▸ "
@@ -220,7 +220,7 @@ func mainThreadRow(selected bool, unread int, last string, w int) string {
 	if last != "" {
 		text += ": " + last
 	}
-	return threadStamp(time.Time{}, unread) + fit(cell, text, w-threadStampW)
+	return threadStamp(at, unread) + fit(cell, text, w-threadStampW)
 }
 
 // threadsRow is row i of the threads box, width w: the heads, then the main thread last.
@@ -228,7 +228,7 @@ func threadsRow(p sidePanes, i, w int) string {
 	j := p.threadTop + i
 	focused := p.focus == focusThreads && p.sel == j
 	if j == len(p.heads) {
-		return mainThreadRow(p.thread == "" || focused, p.mainUnread, p.mainLast, w)
+		return mainThreadRow(p.thread == "" || focused, p.mainUnread, p.mainLastAt, p.mainLast, w)
 	}
 	if j > len(p.heads) {
 		return fit(cell, "", w)

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
@@ -218,7 +219,7 @@ func TestEnterReturnsToNormal(t *testing.T) {
 
 // TestMainThreadRowShowsLast: the main thread row ends with its newest line.
 func TestMainThreadRowShowsLast(t *testing.T) {
-	r := ansi.Strip(mainThreadRow(true, 0, "bob: hi", 60))
+	r := ansi.Strip(mainThreadRow(true, 0, time.Time{}, "bob: hi", 60))
 	if !strings.Contains(r, "main thread: bob: hi") {
 		t.Fatalf("row %q", r)
 	}
@@ -232,4 +233,21 @@ func TestClickThreadHeadOpensIt(t *testing.T) {
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1}, {Root: "$a2", Nick: "ann", Text: "later", Count: 1}}}
 	next, _ := a.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 40, Y: 1 + threadTopOf(3, 0, false, 0)})
 	require.Equal(t, "$a1", next.(App).thread)
+}
+
+// TestThreadsFocusLightsBoxOnly: with the threads box focused, only its rows carry the lit middle border.
+func TestThreadsFocusLightsBoxOnly(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 2}, {Root: "$a2", Nick: "ann", Text: "later", Count: 1}}}
+	a.focus = focusThreads
+	rows := strings.Split(a.View().Content, "\n")
+	lit, unlit := borderGlyph(true, "│"), borderGlyph(false, "│")
+	if !strings.Contains(rows[1], lit) {
+		t.Fatalf("box row not lit: %q", rows[1])
+	}
+	if strings.Contains(rows[6], lit) || !strings.Contains(rows[6], unlit) {
+		t.Fatalf("chat row lit: %q", rows[6])
+	}
 }

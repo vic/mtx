@@ -312,14 +312,31 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		edge := func(k int, s string) string { // vertical border k, or a corner on it
 			return borderGlyph(k == pane || k == pane+1, s)
 		}
+		threadsFocus := p.focus == focusThreads
+		midLit := func(inThreads bool) bool { return pane == 1 && inThreads == threadsFocus } // the middle column is lit for the box or the chat, never both
+		styleOf := func(lit bool) lipgloss.Style {
+			if lit {
+				return focusBorder
+			}
+			return border
+		}
+		vEdge := func(k int, s string, inThreads bool) string { // vertical border k of a row in the box (inThreads) or the chat
+			switch {
+			case k == 1 && pane == 0, k == 2 && pane == 2: // shared with a focused side pane
+				return borderGlyph(true, s)
+			case k == 1 || k == 2:
+				return borderGlyph(midLit(inThreads), s)
+			}
+			return edge(k, s)
+		}
 		line := func(k int) lipgloss.Style {
 			if k == pane {
 				return focusBorder
 			}
 			return border
 		}
-		rows = append(rows, edge(0, "┌")+seg(p.title("channels", focusChans), chanW, line(0))+edge(1, "┬")+
-			seg(midTitle(p, details), mid, line(1))+edge(2, "┬")+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
+		rows = append(rows, edge(0, "┌")+seg(p.title("channels", focusChans), chanW, line(0))+vEdge(1, "┬", tRows > 0)+
+			seg(midTitle(p, details), mid, styleOf(midLit(tRows > 0)))+vEdge(2, "┬", tRows > 0)+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
 		for i := 0; i < n; i++ {
 			nk := at(p.nicks, i+p.nickTop)
 			label := strings.HasPrefix(nk, nickLabel) // a group label: dim, not a nick
@@ -342,8 +359,8 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 				nc = fit(current, " "+p.nicks[min(i+p.nickTop, len(p.nicks)-1)], nickW)
 			}
 			if sep == 1 && i == tRows { // the line between the threads box and the chat box
-				rows = append(rows, edge(0, "│")+cc+edge(1, "├")+line(1).Render(frameRule(details, mid))+
-					edge(2, "┤")+nc+edge(3, "│"))
+				rows = append(rows, edge(0, "│")+cc+vEdge(1, "├", false)+styleOf(midLit(false)).Render(frameRule(details, mid))+
+					vEdge(2, "┤", false)+nc+edge(3, "│"))
 				continue
 			}
 			midCell := ""
@@ -352,11 +369,11 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			} else {
 				midCell = lineRow(lines, of, shown, hit, i-tRows-sep, mid, p.lead(of, shown, i-tRows-sep), code, q)
 			}
-			rows = append(rows, edge(0, "│")+cc+edge(1, "│")+midCell+
-				edge(2, "│")+nc+edge(3, "│"))
+			rows = append(rows, edge(0, "│")+cc+vEdge(1, "│", i < tRows)+midCell+
+				vEdge(2, "│", i < tRows)+nc+edge(3, "│"))
 		}
-		rows = append(rows, edge(0, "└")+line(0).Render(strings.Repeat("─", chanW))+edge(1, "┴")+line(1).Render(strings.Repeat("─", mid))+
-			edge(2, "┴")+line(2).Render(strings.Repeat("─", nickW))+edge(3, "┘"))
+		rows = append(rows, edge(0, "└")+line(0).Render(strings.Repeat("─", chanW))+vEdge(1, "┴", false)+styleOf(midLit(false)).Render(strings.Repeat("─", mid))+
+			vEdge(2, "┴", false)+line(2).Render(strings.Repeat("─", nickW))+edge(3, "┘"))
 	}
 
 	left, lst := " ", cell
@@ -701,6 +718,7 @@ type sidePanes struct {
 	unread           []int          // per head: live replies not yet read (same order as heads)
 	mainUnread       int            // main-thread lines not on screen (the main thread row)
 	mainLast         string         // the main thread's newest line, "nick: text"
+	mainLastAt       time.Time      // time of the main thread's newest line
 	readAt           time.Time      // own lines at or before it are read by someone
 	user             string         // the local nick
 	threadTop        int            // first shown row of the threads box (its main thread is the last row)

@@ -616,3 +616,20 @@ func TestChanGroupsSpaces(t *testing.T) {
 		t.Fatalf("rows %q", rows)
 	}
 }
+
+// TestColonTabCompletes: tab completes the command word at the : prompt, then channels after it.
+func TestColonTabCompletes(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, ":")
+	a = typeText(t, a, "jo")
+	a, _ = press(t, a, "tab")
+	if a.in.Value() != "join" {
+		t.Fatalf("command %q", a.in.Value())
+	}
+	a = typeText(t, a, " #")
+	a, _ = press(t, a, "tab")
+	if !strings.HasPrefix(a.in.Value(), "join #") {
+		t.Fatalf("channel %q", a.in.Value())
+	}
+}

@@ -31,6 +31,10 @@ func candidates(line string, chans, nicks []string) []string {
 		for _, w := range model.CmdWords {
 			pool = append(pool, "/"+w)
 		}
+	case head == "" && strings.HasPrefix(word, ":"):
+		for _, w := range model.CmdWords {
+			pool = append(pool, ":"+w)
+		}
 	case strings.HasPrefix(word, "&") || strings.HasPrefix(word, "#"):
 		pool = chans
 	case strings.HasPrefix(word, "@"):

@@ -740,25 +740,6 @@ func TestRecentPicker(t *testing.T) {
 	}
 }
 
-// TestPickGroups: the ctrl+o matches group into threads, channels, then people, each with its heading.
-func TestPickGroups(t *testing.T) {
-	var log []sent
-	a := newApp(t, &log, nil)
-	next, _ := a.Update(ThreadsMsg{Ch: "#a", Heads: []model.Thread{{Root: "$r", Nick: "bob", Text: "hi"}}})
-	a = next.(App)
-	a = a.openPick(pickChans)
-	ms := a.pickMatches()
-	first := map[string]int{}
-	for i, m := range ms {
-		if _, ok := first[m.group]; !ok {
-			first[m.group] = i
-		}
-	}
-	if ms[0].group != "threads" || first["channels"] >= first["people"] || first["people"] == 0 && first["channels"] == 0 {
-		t.Fatalf("groups %v", first)
-	}
-}
-
 // TestJumpLine: f labels the visible lines; a label key selects its line; esc cancels.
 func TestJumpLine(t *testing.T) {
 	var log []sent
@@ -820,5 +801,42 @@ func TestLineVerbs(t *testing.T) {
 	a, cmd = press(t, a, "n")
 	if cmd != nil || a.confirmDel {
 		t.Fatalf("n should cancel: cmd %v confirm %v", cmd, a.confirmDel)
+	}
+}
+
+// TestOpenPickers: space o t lists only thread labels, space o u lists only @nicks, and ctrl+o lists no threads.
+func TestOpenPickers(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1}}}
+	a, _ = press(t, a, "ctrl+o")
+	for _, n := range a.pickSource() {
+		if strings.HasPrefix(n, "thread: ") {
+			t.Fatalf("ctrl+o lists a thread: %q", n)
+		}
+	}
+	a, _ = press(t, a, "esc")
+	a, _ = press(t, a, "space")
+	a, _ = press(t, a, "o")
+	a, _ = press(t, a, "t")
+	if !a.pick || a.pickWhat != pickThreads {
+		t.Fatalf("open thread: pick %v what %v", a.pick, a.pickWhat)
+	}
+	for _, n := range a.pickSource() {
+		if !strings.HasPrefix(n, "thread: ") {
+			t.Fatalf("thread picker lists %q", n)
+		}
+	}
+	a, _ = press(t, a, "esc")
+	a, _ = press(t, a, "space")
+	a, _ = press(t, a, "o")
+	a, _ = press(t, a, "u")
+	if !a.pick || a.pickWhat != pickUsers {
+		t.Fatalf("open user: pick %v what %v", a.pick, a.pickWhat)
+	}
+	for _, n := range a.pickSource() {
+		if !strings.HasPrefix(n, "@") {
+			t.Fatalf("user picker lists %q", n)
+		}
 	}
 }

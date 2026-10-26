@@ -499,7 +499,7 @@ func TestPickerNicks(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(AgentsMsg{Ch: "#a", Agents: []model.Agent{{Nick: "driver-1"}}})
-	a, _ = press(t, next.(App), "ctrl+o")
+	a, _ = press(t, next.(App), "space", "o", "u")
 	a = typeText(t, a, "@dri")
 	a, _ = press(t, a, "enter")
 	if a.pick || a.mode != Insert || a.in.Value() != "@driver-1 " || cur(a) != "#a" {
@@ -601,7 +601,7 @@ func TestSameAgentNameInTwoSessions(t *testing.T) {
 	if got := candidates("@driver", a.chanNames(), a.nickPool()); strings.Join(got, ",") != "@driver-1,@driver-1@a,@driver-1@b" {
 		t.Fatalf("completion %q", got) // own plain first; other sessions only qualified
 	}
-	a, _ = press(t, a, "ctrl+o")
+	a, _ = press(t, a, "space", "o", "u")
 	var at []string
 	for _, s := range a.pickSource() {
 		if strings.HasPrefix(s, "@driver") {

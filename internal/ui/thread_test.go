@@ -50,10 +50,10 @@ func TestThreadsInPickerAndPane(t *testing.T) {
 	a := newApp(t, &log, nil)
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 2}}}
 	label := threadLabel(a.threads["#a"][0])
+	a = a.openPick(pickThreads)
 	if !slices.Contains(a.pickSource(), label) {
 		t.Fatalf("picker source has no thread: %v", a.pickSource())
 	}
-	a = a.openPick(pickChans)
 	a.pq.SetValue("start")
 	next, _ := a.pickKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 	a = next.(App)
@@ -87,22 +87,6 @@ func TestThreadUnreadCount(t *testing.T) {
 	a = a.selectThread("$a1")
 	if s := ansi.Strip(a.screen()); regexp.MustCompile(`2 .*start \(4\)`).MatchString(s) {
 		t.Fatalf("selected thread still shows unread:\n%s", s)
-	}
-}
-
-// TestCtrlOKeepsChannelsAndNicks: the Ctrl+O list still has channels and @nicks next to threads.
-func TestCtrlOKeepsChannelsAndNicks(t *testing.T) {
-	var log []sent
-	a := newApp(t, &log, nil)
-	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1, Live: 1}}}
-	src := a.pickSource()
-	for _, want := range []string{"#a", threadLabel(a.threads["#a"][0])} {
-		if !slices.Contains(src, want) {
-			t.Fatalf("ctrl+o source lacks %q: %v", want, src)
-		}
-	}
-	if !slices.ContainsFunc(src, func(s string) bool { return strings.HasPrefix(s, "@") }) {
-		t.Fatalf("ctrl+o source lacks @nicks: %v", src)
 	}
 }
 
@@ -249,5 +233,23 @@ func TestThreadsFocusLightsBoxOnly(t *testing.T) {
 	}
 	if strings.Contains(rows[6], lit) || !strings.Contains(rows[6], unlit) {
 		t.Fatalf("chat row lit: %q", rows[6])
+	}
+}
+
+// TestCtrlOKeepsChannelsAndNicks: ctrl+o is open chat (channels only); threads and nicks have their own pickers.
+func TestCtrlOKeepsChannelsAndNicks(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1, Live: 1}}}
+	if src := a.pickSource(); !slices.Contains(src, "#a") || slices.ContainsFunc(src, func(s string) bool { return strings.HasPrefix(s, "@") || strings.HasPrefix(s, "thread: ") }) {
+		t.Fatalf("open chat source: %v", src)
+	}
+	a = a.openPick(pickThreads)
+	if !slices.Contains(a.pickSource(), threadLabel(a.threads["#a"][0])) {
+		t.Fatalf("open thread source lacks the thread: %v", a.pickSource())
+	}
+	a = a.openPick(pickUsers)
+	if !slices.ContainsFunc(a.pickSource(), func(s string) bool { return strings.HasPrefix(s, "@") }) {
+		t.Fatalf("open user source lacks @nicks: %v", a.pickSource())
 	}
 }

@@ -528,6 +528,14 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.menu = strings.TrimPrefix(it.do, "menu:")
 			case it.do == "react":
 				a.reactRow = true
+			case strings.HasPrefix(it.do, "pick:"):
+				switch strings.TrimPrefix(it.do, "pick:") {
+				case "chat":
+					return a.openPick(pickChans), nil
+				case "thread":
+					return a.openPick(pickThreads), nil
+				}
+				return a.openPick(pickUsers), nil
 			case it.do == "thread":
 				a = a.nextThread()
 			case strings.HasSuffix(it.do, " "):
@@ -978,8 +986,8 @@ func (a App) screen() string {
 	case a.pick && a.pickWhat == pickGrep:
 		return overlayCentered(screen, a.w, a.h, grepBox(a.w, a.pq.Value()))
 	case a.pick:
-		what := [...]string{pickChans: "channel / @nick", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent"}[a.pickWhat]
-		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), a.pickMatches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
+		what := [...]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent"}[a.pickWhat]
+		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), pickList(a.pickSource(), a.pq.Value()), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
 	}
 	return screen
 }
@@ -1161,6 +1169,8 @@ const (
 	pickFileBlock                 // ctrl+f: the session's files; enter inserts the file as a fenced block
 	pickGrep                      // ctrl+g: filter the shown lines to fuzzy matches, live
 	pickRecent                    // m: chats most recent first, then this channel's threads
+	pickThreads                   // open thread: this channel's threads
+	pickUsers                     // open user: nicks of this channel and agents elsewhere
 )
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
@@ -1195,9 +1205,11 @@ func (a App) pickSource() []string {
 		}
 	case pickChans:
 		out = a.chanNames()
-		for _, h := range a.threads[a.m.Current().Name] { // threads of this channel
+	case pickThreads:
+		for _, h := range a.threads[a.m.Current().Name] {
 			out = append(out, threadLabel(h))
 		}
+	case pickUsers:
 		cur := a.m.Current()
 		nicks := chanNicks(cur, a.user)[1:] // this channel: plain nicks
 		for _, c := range a.m.All() {       // other sessions: agents only as agent@session, never plain
@@ -1251,7 +1263,7 @@ func (a App) pickSource() []string {
 
 // pickKey runs one key in the open picker: enter goes to the selected channel or line.
 func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	ms := a.pickMatches()
+	ms := pickList(a.pickSource(), a.pq.Value())
 	switch msg.String() {
 	case "esc":
 		if a.pickWhat == pickGrep { // esc clears the grep filter
@@ -1339,7 +1351,7 @@ func (a App) pickHit() App {
 	if a.pickWhat != pickLines {
 		return a
 	}
-	if ms := a.pickMatches(); a.psel < len(ms) {
+	if ms := pickList(a.pickSource(), a.pq.Value()); a.psel < len(ms) {
 		a.hit = ms[a.psel].idx
 		return a.showHit()
 	}
@@ -2252,38 +2264,11 @@ type menuItem struct{ key, label, do string }
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"r", "react", "react"}, {"t", "thread", "thread"}, {"m", "room…", "menu:room"}, {"j", "join", ":join "},
-		{"u", "upload", ":upload "}, {"o", "open", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"},
+		{"u", "upload", ":upload "}, {"o", "open…", "menu:open"}, {"g", "open media", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"},
 		{"s", "sponsor", ":sponsor"}, {"d", "docs", ":docs"}},
+	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
 		{"i", "invite", ":invite "}, {"f", "favourite", ":tag fav"}, {"d", "low priority", ":tag low"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
-}
-
-// pickMatches is what the picker lists for the query; the ctrl+o picker groups its matches.
-func (a App) pickMatches() []pickMatch {
-	ms := pickList(a.pickSource(), a.pq.Value())
-	if a.pickWhat == pickChans {
-		ms = a.pickGroups(ms)
-	}
-	return ms
-}
-
-// pickGroups orders the ctrl+o matches into threads, channels, then people, best match first in each,
-// and names each group for the box.
-func (a App) pickGroups(ms []pickMatch) []pickMatch {
-	rank := func(m pickMatch) (int, string) {
-		switch {
-		case strings.HasPrefix(m.name, "thread: "):
-			return 0, "threads"
-		case func() bool { _, ok := a.chanByName(m.name); return ok }():
-			return 1, "channels"
-		}
-		return 2, "people"
-	}
-	for i := range ms {
-		_, ms[i].group = rank(ms[i])
-	}
-	slices.SortStableFunc(ms, func(x, y pickMatch) int { rx, _ := rank(x); ry, _ := rank(y); return rx - ry })
-	return ms
 }
 
 // jumpKeys are the f labels, home row first; jumpTargets are the shown lines they name, top to bottom.

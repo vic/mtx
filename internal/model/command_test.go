@@ -312,3 +312,21 @@ func TestRoomSettingsParse(t *testing.T) {
 		t.Error("/alias without an alias parsed")
 	}
 }
+
+func TestCreateExploreParse(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		name CmdName
+		args []string
+	}{
+		{"/create &den public", CmdCreate, []string{"&den", "public"}},
+		{"/create &den", CmdCreate, []string{"&den"}},
+		{"/explore", CmdExplore, nil},
+		{"/explore cats", CmdExplore, []string{"cats"}},
+	} {
+		c, err := ParseCmd(tc.line)
+		if err != nil || c.Name() != tc.name || !slices.Equal(c.Args(), tc.args) {
+			t.Errorf("%s: got %q %q %v", tc.line, c.Name(), c.Args(), err)
+		}
+	}
+}

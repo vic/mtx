@@ -1141,3 +1141,19 @@ func TestEditHistory(t *testing.T) {
 		t.Fatalf("history %q", got)
 	}
 }
+
+// TestExplorePicker: the explore list opens as a picker; enter joins the picked room.
+func TestExplorePicker(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(ExploreMsg{Entries: []string{"#a:s A (3)"}, Targets: []string{"#a:s"}})
+	a = next.(App)
+	if !a.pick || a.pickWhat != pickExplore {
+		t.Fatalf("picker open %v kind %v", a.pick, a.pickWhat)
+	}
+	_, cmd := press(t, a, "enter")
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdJoin || cm.Cmd.Args()[0] != "#a:s" {
+		t.Fatalf("join: %#v", cmd())
+	}
+}

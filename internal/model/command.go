@@ -12,6 +12,7 @@ type CmdName string
 const (
 	CmdJoin       CmdName = "join"
 	CmdCreate     CmdName = "create"
+	CmdExplore    CmdName = "explore"
 	CmdPart       CmdName = "part"
 	CmdClose      CmdName = "close"
 	CmdInvite     CmdName = "invite"
@@ -57,7 +58,7 @@ const (
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "joinrule", "history", "alias", "roomavatar", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "joinrule", "history", "alias", "roomavatar", "explore", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -72,7 +73,9 @@ func (c Cmd) Args() []string { return c.args }
 // the line verbatim. ok is false for an unknown name; n < 0 is free-form.
 func arity(n CmdName) (count int, raw, ok bool) {
 	switch n {
-	case CmdJoin, CmdCreate, CmdKick:
+	case CmdCreate, CmdExplore:
+		return -1, false, true
+	case CmdJoin, CmdKick:
 		return 1, false, true
 	case CmdInvite:
 		return 2, false, true
@@ -178,7 +181,8 @@ func ParseCmd(line string) (Cmd, error) {
 // usage is shown when a command gets the wrong arguments (vic 2026-10-23).
 var usage = map[CmdName]string{
 	CmdJoin:       ":join &room",
-	CmdCreate:     ":create &room",
+	CmdCreate:     ":create &room [public]",
+	CmdExplore:    ":explore [term]",
 	CmdPart:       ":part [&room]",
 	CmdClose:      ":close [&room] (or /rm)",
 	CmdInvite:     ":invite <nick> &room",

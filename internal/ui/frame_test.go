@@ -742,8 +742,12 @@ func TestHelpScrolls(t *testing.T) {
 	if a = next.(App); a.helpOff != 0 { // wheel up 3, clamped at 0
 		t.Fatalf("wheel: off %d", a.helpOff)
 	}
-	for i := 0; i < 99; i++ {
+	for i := 0; i < 1000; i++ { // press until the help stops scrolling, so new help rows do not change the count
+		before := a.helpOff
 		a, _ = press(t, a, "j")
+		if a.helpOff == before {
+			break
+		}
 	}
 	checkFrame(t, a, 100, 12)
 	if a.helpOff != helpRows()-12 { // NEG: stops at the bottom

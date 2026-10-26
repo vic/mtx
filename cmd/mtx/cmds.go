@@ -68,7 +68,12 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 	args := cm.Args()
 	switch cm.Name() {
 	case model.CmdCreate:
-		return c.create(args[0])
+		if len(args) == 0 {
+			return errors.New("usage: /create &room [public]")
+		}
+		return c.createRoom(args[0], len(args) > 1 && args[1] == "public")
+	case model.CmdExplore:
+		return c.explore(strings.Join(args, " "))
 	case model.CmdJoin:
 		return c.join(args[0])
 	case model.CmdPart:
@@ -440,13 +445,16 @@ func ptr[T any](v T) *T { return &v }
 
 // create: /create &name makes an encrypted private room with alias #name:<server>, invites nobody,
 // and focuses it.
-func (c *cmds) create(s string) error {
+func (c *cmds) create(s string) error { return c.createRoom(s, false) }
+
+// createRoom makes the room s: private and encrypted, or public and listed in the directory.
+func (c *cmds) createRoom(s string, public bool) error {
 	if s == "" {
 		return errors.New("usage: /create room")
 	}
 	ctx, cancel := c.ctx()
 	defer cancel()
-	resp, err := c.r.mx.CreateRoom(ctx, &mautrix.ReqCreateRoom{
+	req := &mautrix.ReqCreateRoom{
 		RoomAliasName: s,
 		Preset:        "private_chat",
 		InitialState: []*event.Event{{
@@ -454,7 +462,11 @@ func (c *cmds) create(s string) error {
 			StateKey: ptr(""),
 			Content:  event.Content{Parsed: &event.EncryptionEventContent{Algorithm: id.AlgorithmMegolmV1}},
 		}},
-	})
+	}
+	if public { // listed in the directory, so no encryption
+		req = &mautrix.ReqCreateRoom{RoomAliasName: s, Preset: "public_chat", Visibility: "public"}
+	}
+	resp, err := c.r.mx.CreateRoom(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -679,4 +691,28 @@ func (c *cmds) alias(ch, alias string) error {
 	}
 	_, err = c.r.mx.SendStateEvent(ctx, room, event.StateCanonicalAlias, "", &event.CanonicalAliasEventContent{Alias: id.RoomAlias(alias)})
 	return err
+}
+
+// explore lists the public rooms of our server in the explore picker; term narrows them by alias, name or topic.
+func (c *cmds) explore(term string) error {
+	ctx, cancel := c.ctx()
+	defer cancel()
+	resp, err := c.r.mx.PublicRooms(ctx, &mautrix.ReqPublicRooms{Limit: 50})
+	if err != nil {
+		return err
+	}
+	var entries, targets []string
+	for _, pr := range resp.Chunk {
+		target := string(pr.RoomID)
+		if pr.CanonicalAlias != "" {
+			target = string(pr.CanonicalAlias)
+		}
+		if term != "" && !strings.Contains(strings.ToLower(target+" "+pr.Name+" "+pr.Topic), strings.ToLower(term)) {
+			continue
+		}
+		entries = append(entries, target+"  "+pr.Name+" ("+strconv.Itoa(pr.NumJoinedMembers)+")")
+		targets = append(targets, target)
+	}
+	c.r.emit(ui.ExploreMsg{Entries: entries, Targets: targets})
+	return nil
 }

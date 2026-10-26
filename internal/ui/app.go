@@ -41,6 +41,9 @@ type ReplaceLineMsg struct {
 	Edit   bool // an edit (keep the old text in the line's history), not a decrypt
 }
 
+// ExploreMsg lists public rooms: Entries are the shown text, Targets what :join takes (same order).
+type ExploreMsg struct{ Entries, Targets []string }
+
 // ReadMsg says another member read channel Ch up to the line with event ID; own lines up to it show read.
 type ReadMsg struct{ Ch, ID string }
 
@@ -214,6 +217,8 @@ type App struct {
 	reactRow    bool                                              // +: the quick reaction row is open; the next key picks
 	menu        string                                            // the open leader menu ("" none)
 	threadOpen  func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
+	explore     []string                                          // :explore: the public rooms shown in the picker
+	exploreTo   []string                                          // the :join target of each explore row
 	edits       map[string][]string                               // per event ID: earlier texts, oldest first (EDIT history)
 	pins        map[string][]string                               // per channel: pinned event IDs (PinsMsg)
 	pinsVer     int
@@ -398,6 +403,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a = a.note("line for unknown channel " + msg.Ch)
 		}
+	case ExploreMsg:
+		a.explore, a.exploreTo = msg.Entries, msg.Targets
+		a = a.openPick(pickExplore)
 	case FullyReadMsg:
 		if a.fullyRead == nil {
 			a.fullyRead = map[string]string{}
@@ -1275,6 +1283,7 @@ const (
 	pickUsers                     // open user: nicks of this channel and agents elsewhere
 	pickPins                      // space o p: the room's pinned messages
 	pickEdits                     // message menu h: the selected message's earlier versions, read only
+	pickExplore                   // :explore: the server's public rooms; enter joins the picked one
 )
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
@@ -1309,6 +1318,8 @@ func (a App) pickSource() []string {
 		}
 	case pickChans:
 		out = a.chanNames()
+	case pickExplore:
+		out = a.explore
 	case pickEdits:
 		l, _ := a.lastWithID(a.hit)
 		out = append(slices.Clone(a.edits[l.ID]), l.Text+"  (now)")
@@ -1379,6 +1390,13 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if a.pickWhat == pickEdits && (msg.String() == "enter" || msg.String() == "esc") { // read only: enter closes it too
 		a.pick = false
 		return a, nil
+	}
+	if a.pickWhat == pickExplore && (msg.String() == "enter" || msg.String() == "esc") {
+		a.pick = false
+		if msg.String() == "esc" || a.psel >= len(ms) {
+			return a, nil
+		}
+		return a.runCmd(":join " + a.exploreTo[ms[a.psel].idx])
 	}
 	if a.forwarding && a.pickWhat == pickChans && (msg.String() == "enter" || msg.String() == "esc") {
 		a.forwarding, a.pick = false, false
@@ -2529,7 +2547,7 @@ var menus = map[string][]menuItem{
 		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
-	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}},
+	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},
 	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"e", "emote (/me)", ":me "}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"b", "ban", ":ban "}, {"B", "unban", ":unban "}, {"o", "op (power)", ":op "}, {"j", "join rule", ":joinrule "}, {"h", "history visibility", ":history "}, {"a", "alias", ":alias "}, {"v", "room avatar", ":roomavatar "}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
 		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},

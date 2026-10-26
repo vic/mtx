@@ -702,6 +702,8 @@ var helpSections = []struct {
 		{":history shared|invited|joined|world", "who can read the history of this room"},
 		{":alias <#alias:server>", "publish the room's alias and make it canonical"},
 		{":roomavatar <image path>", "set the room's avatar image"},
+		{":create &room public", "create a public room listed in the directory (no encryption)"},
+		{":explore [term]", "list the public rooms on this server; enter joins the picked one"},
 		{":read [room]", "mark the room read"},
 		{":unread [room]", "mark the room unread (it stays unread until you read it)"},
 	}},

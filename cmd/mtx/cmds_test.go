@@ -503,3 +503,57 @@ func TestAliasSends(t *testing.T) {
 	require.NoError(t, err)
 	require.ErrorContains(t, cs.do("#r", bad), "usage: :alias")
 }
+
+// TestCreatePublic: /create &room public asks for a public_chat room in the directory, with no encryption.
+func TestCreatePublic(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var body string
+	ts.Router.HandleFunc("POST /_matrix/client/v3/createRoom", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		body = string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{"room_id":"!new:mock.test"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/create &den public")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, body, `"preset":"public_chat"`)
+	require.Contains(t, body, `"visibility":"public"`)
+	require.NotContains(t, body, "m.room.encryption")
+}
+
+// TestExploreEmits: /explore lists the server's public rooms as an ExploreMsg, filtered by the term.
+func TestExploreEmits(t *testing.T) {
+	ts := mockserver.Create(t)
+	ts.Router.HandleFunc("GET /_matrix/client/v3/publicRooms", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"chunk":[{"room_id":"!a:mock.test","canonical_alias":"#cats:mock.test","name":"Cats","num_joined_members":3},{"room_id":"!b:mock.test","name":"Dogs","num_joined_members":1}],"total_room_count_estimate":2}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	var mu sync.Mutex
+	var got []tea.Msg
+	r := newRunner(cli, func(m tea.Msg) {
+		mu.Lock()
+		got = append(got, m)
+		mu.Unlock()
+	})
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/explore")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, got, 1)
+	em, ok := got[0].(ui.ExploreMsg)
+	require.True(t, ok)
+	require.Equal(t, []string{"#cats:mock.test  Cats (3)", "!b:mock.test  Dogs (1)"}, em.Entries)
+	require.Equal(t, []string{"#cats:mock.test", "!b:mock.test"}, em.Targets)
+}

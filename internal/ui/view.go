@@ -642,6 +642,21 @@ var helpSections = []struct {
 		{":whois @user", "show the user's profile"},
 		{":help", "this help (same as ?)"},
 		{":quit", "quit (also ctrl+c)"},
+		{":name <text>", "set the room name"},
+		{":tag fav|low|none", "group this room in the channel list (favourites, low priority)"},
+		{":nick <name>", "set my display name"},
+		{":ignore <user>", "hide a user's messages (:unignore undoes it)"},
+		{":unignore <user>", "stop ignoring a user"},
+		{":me <action>", "send an action line (* you waves)"},
+		{":react <emoji>", "react to the selected line (again removes it)"},
+		{":redact [reason]", "delete my selected message"},
+		{":open", "download and open the selected line's media"},
+		{":upload <path>", "send a local file to this room (encrypted in encrypted rooms)"},
+		{":avatar <image path>", "set my avatar"},
+		{":accept [room]", "join a pending invite"},
+		{":reject [room]", "decline a pending invite"},
+		{":invites", "list pending invites"},
+		{":recover <recovery key>", "verify this device and load old room keys from backup"},
 	}},
 }
 
@@ -859,4 +874,18 @@ func (p sidePanes) lead(of []int, shown []model.Line, k int) string {
 		return readMark
 	}
 	return " "
+}
+
+// cmdDesc is the help description of command word w, from the COMMANDS help section.
+func cmdDesc(w string) string {
+	for _, s := range helpSections {
+		for _, k := range s.keys {
+			for _, f := range strings.Fields(k[0]) {
+				if f == ":"+w {
+					return k[1]
+				}
+			}
+		}
+	}
+	return ""
 }

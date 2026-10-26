@@ -224,3 +224,16 @@ func TestParseAvatar(t *testing.T) {
 		t.Fatalf("args %q", got)
 	}
 }
+
+// TestUsage: a command word's usage line; an alias gives its command's; an unknown word gives "".
+func TestUsage(t *testing.T) {
+	if !strings.HasPrefix(Usage("join"), ":join") {
+		t.Fatalf("join: %q", Usage("join"))
+	}
+	if Usage("rm") != Usage("close") {
+		t.Fatalf("rm %q close %q", Usage("rm"), Usage("close"))
+	}
+	if Usage("nope") != "" {
+		t.Fatalf("nope: %q", Usage("nope"))
+	}
+}

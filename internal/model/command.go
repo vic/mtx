@@ -190,3 +190,11 @@ func Usages(prefix string) []string {
 	}
 	return out
 }
+
+// Usage is the usage line of command word w (an alias gives its command's usage), "" if unknown.
+func Usage(w string) string {
+	if w == "rm" {
+		w = string(CmdClose)
+	}
+	return usage[CmdName(w)]
+}

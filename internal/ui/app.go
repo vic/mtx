@@ -590,7 +590,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	switch act.Kind {
 	case CmdLine:
-		return a.openPrompt(promptCmd), nil
+		return a.openPick(pickCmds), nil
 	case CaptureLine:
 		return a.openPrompt(promptCapture), nil
 	case ShellLine:
@@ -889,8 +889,8 @@ func (a App) screen() string {
 	case a.pick && a.pickWhat == pickGrep:
 		return overlayCentered(screen, a.w, a.h, grepBox(a.w, a.pq.Value()))
 	case a.pick:
-		what := [...]string{pickChans: "channel / @nick", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep"}[a.pickWhat]
-		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), pickList(a.pickSource(), a.pq.Value()), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
+		what := [...]string{pickChans: "channel / @nick", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickCmds: "command"}[a.pickWhat]
+		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), a.pickMatches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
 	}
 	return screen
 }
@@ -1071,6 +1071,7 @@ const (
 	pickFiles                     // ctrl+t: the session's files; enter inserts the path
 	pickFileBlock                 // ctrl+f: the session's files; enter inserts the file as a fenced block
 	pickGrep                      // ctrl+g: filter the shown lines to fuzzy matches, live
+	pickCmds                      // :: the command palette; enter runs or asks for arguments
 )
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
@@ -1136,6 +1137,12 @@ func (a App) pickSource() []string {
 				}
 			}
 		}
+	case pickCmds:
+		for _, w := range model.CmdWords {
+			if u := model.Usage(w); u != "" && w != "rm" {
+				out = append(out, u+"  "+cmdDesc(w))
+			}
+		}
 	case pickSpeakers:
 		out = []string{allSpeakers}
 		cur := a.m.Current()
@@ -1156,7 +1163,7 @@ func (a App) pickSource() []string {
 
 // pickKey runs one key in the open picker: enter goes to the selected channel or line.
 func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	ms := pickList(a.pickSource(), a.pq.Value())
+	ms := a.pickMatches()
 	switch msg.String() {
 	case "esc":
 		if a.pickWhat == pickGrep { // esc clears the grep filter
@@ -1164,6 +1171,25 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		a.pick = false
 	case "enter":
+		if a.pickWhat == pickCmds {
+			a.pick = false
+			q := strings.TrimSpace(a.pq.Value())
+			switch {
+			case strings.HasPrefix(q, "!"): // :!text sends as is
+				return a.sendLiteral(q)
+			case strings.Contains(q, " "): // a whole command was typed
+				return a.runCmd(":" + q)
+			case a.psel < len(ms):
+				word := strings.TrimPrefix(strings.Fields(ms[a.psel].name)[0], ":")
+				if noArgs(word, model.Usage(word)) {
+					return a.runCmd(":" + word)
+				}
+				return a.askArgs(word), nil
+			case q != "":
+				return a.runCmd(":" + q)
+			}
+			return a, nil
+		}
 		if a.psel < len(ms) && a.pickWhat == pickFileBlock {
 			a.pick = false
 			return a, readFileCmd(a.m.Current().Cwd, ms[a.psel].name)
@@ -1225,6 +1251,16 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.marks = append(slices.Clone(a.marks), n)
 			}
 		}
+	case "tab":
+		if a.pickWhat == pickCmds && a.psel < len(ms) {
+			a.pick = false
+			return a.askArgs(strings.TrimPrefix(strings.Fields(ms[a.psel].name)[0], ":")), nil
+		}
+		var cmd tea.Cmd
+		a.pq, cmd = a.pq.Update(msg)
+		a.psel = 0
+		a = a.grepSync()
+		return a.pickHit(), cmd
 	case "up", "ctrl+p":
 		a.psel = max(a.psel-1, 0)
 	case "down", "ctrl+n":
@@ -1244,7 +1280,7 @@ func (a App) pickHit() App {
 	if a.pickWhat != pickLines {
 		return a
 	}
-	if ms := pickList(a.pickSource(), a.pq.Value()); a.psel < len(ms) {
+	if ms := a.pickMatches(); a.psel < len(ms) {
 		a.hit = ms[a.psel].idx
 		return a.showHit()
 	}
@@ -1744,11 +1780,18 @@ func (a App) cmdUsage() string {
 	if len(us) == 0 {
 		return alert.Render("unknown command")
 	}
+	hint := ""
+	if len(us) == 1 { // one command matches: say what it is for
+		if d := cmdDesc(strings.TrimPrefix(strings.Fields(us[0])[0], ":")); d != "" {
+			hint = dimmed.Render("  ·  " + d)
+		}
+	}
 	for i, u := range us {
 		us[i] = shortcut.Render(u)
 	}
-	return dimmed.Render("usage ") + strings.Join(us, dimmed.Render("  ·  "))
+	return dimmed.Render("usage ") + strings.Join(us, dimmed.Render("  ·  ")) + hint
 }
+
 
 // filesMsg is the session's file list for the file finder.
 type filesMsg []string
@@ -2104,4 +2147,35 @@ func (a App) sides() sidePanes {
 	p.unread = a.unreadAll()
 	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)
 	return p
+}
+
+// askArgs opens the : prompt with word typed, for a command that takes arguments.
+func (a App) askArgs(word string) App {
+	a = a.openPrompt(promptCmd)
+	a.in.SetValue(word + " ")
+	a.in.MoveToEnd()
+	return a
+}
+
+// noArgs reports whether command word, with usage u, takes no arguments: its palette entry runs as is.
+func noArgs(word, u string) bool {
+	return strings.TrimSpace(strings.TrimPrefix(u, ":"+word)) == ""
+}
+
+// pickMatches is pickList over the picker's source; in the command palette, commands whose word starts
+// with the query come first (a description must not outrank the command it describes).
+func (a App) pickMatches() []pickMatch {
+	ms := a.pickMatches()
+	if a.pickWhat != pickCmds {
+		return ms
+	}
+	q := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(a.pq.Value()), ":"))
+	starts := func(m pickMatch) int {
+		if f := strings.Fields(m.name); len(f) > 0 && strings.HasPrefix(strings.TrimPrefix(f[0], ":"), q) {
+			return 0
+		}
+		return 1
+	}
+	slices.SortStableFunc(ms, func(x, y pickMatch) int { return starts(x) - starts(y) })
+	return ms
 }

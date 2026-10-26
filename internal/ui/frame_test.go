@@ -560,7 +560,8 @@ func TestPromptOnlyInInsert(t *testing.T) {
 	if l := last(a); !strings.HasPrefix(l, "> ") {
 		t.Fatalf("insert last row %q", l)
 	}
-	a, _ = press(t, a, "esc", ":")
+	a, _ = press(t, a, "esc")
+	a = a.openPrompt(promptCmd) // the : prompt (a : now opens the palette)
 	if l := last(a); !strings.HasPrefix(l, ":") {
 		t.Fatalf(": last row %q", l)
 	}
@@ -696,7 +697,7 @@ func TestChannelPanePreviews(t *testing.T) {
 
 func TestHelpCommand(t *testing.T) {
 	var log []sent
-	a, _ := press(t, newApp(t, &log, nil), ":")
+	a := newApp(t, &log, nil).openPrompt(promptCmd) // the : prompt, the command line
 	a = typeText(t, a, "help")
 	a, cmd := press(t, a, "enter")
 	if !a.help || cmd != nil || !strings.Contains(ansi.Strip(a.screen()), "Matrix client") {
@@ -752,7 +753,7 @@ func TestHelpScrolls(t *testing.T) {
 
 func TestCmdUsageHint(t *testing.T) {
 	var log []sent
-	a, _ := press(t, newApp(t, &log, nil), ":")
+	a := newApp(t, &log, nil).openPrompt(promptCmd) // the : prompt, the command line
 	hint := func() string { _, _, h := a.inputLine(); return ansi.Strip(h) }
 	a = typeText(t, a, "inv")
 	if hint() != "usage :invite <nick> &room  ·  :invites" {
@@ -762,7 +763,7 @@ func TestCmdUsageHint(t *testing.T) {
 	if hint() != "usage :invite <nick> &room  ·  :invites" {
 		t.Fatalf("args %q", hint())
 	}
-	a, _ = press(t, newApp(t, &log, nil), ":")
+	a = newApp(t, &log, nil).openPrompt(promptCmd)
 	a = typeText(t, a, "zz")
 	if hint() != "unknown command" {
 		t.Fatalf("zz %q", hint())
@@ -873,7 +874,7 @@ func TestFileFinderInsertsPath(t *testing.T) {
 func TestFileFinderFromPrompt(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a, _ = press(t, a, ":")
+	a = a.openPrompt(promptCmd)
 	a, _ = a.openFilePick(pickFiles)
 	a.files = []string{"README.md"}
 	a = typeText(t, a, "read")

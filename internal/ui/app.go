@@ -530,6 +530,14 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.menu = strings.TrimPrefix(it.do, "menu:")
 			case it.do == "react":
 				a.reactRow = true
+			case strings.HasPrefix(it.do, "key:"):
+				var cmd tea.Cmd
+				for _, r := range strings.TrimPrefix(it.do, "key:") {
+					var m tea.Model
+					m, cmd = a.key(tea.KeyPressMsg{Code: r, Text: string(r)})
+					a = m.(App)
+				}
+				return a, cmd
 			case it.do == "permalink":
 				return a.permalink()
 			case strings.HasPrefix(it.do, "pick:"):
@@ -693,6 +701,11 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.toast("delete my selected message? y to confirm", true), nil
 	case OpenLine:
 		return a.runCmd(":open")
+	case MsgMenu:
+		if a.hit >= 0 {
+			a.menu = "message"
+		}
+		return a, nil
 	case Permalink:
 		return a.permalink()
 	case Repeat:
@@ -2277,6 +2290,8 @@ var menus = map[string][]menuItem{
 		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}},
+	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 }
 

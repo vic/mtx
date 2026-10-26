@@ -898,3 +898,24 @@ func TestEveryCommandInMenus(t *testing.T) {
 		}
 	}
 }
+
+// TestMsgMenu: enter on a selected line opens the message menu; its keys replay the line verbs.
+func TestMsgMenu(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "me", Text: "mine", ID: "$m"}})
+	a = next.(App)
+	a, _ = press(t, a, "enter")
+	if a.menu != "" {
+		t.Fatalf("enter opened a menu with no selection: %q", a.menu)
+	}
+	a.hit = 0
+	a, _ = press(t, a, "enter")
+	if a.menu != "message" {
+		t.Fatalf("message menu %q", a.menu)
+	}
+	a, _ = press(t, a, "d")
+	if !a.confirmDel {
+		t.Fatal("d in the message menu did not ask to delete")
+	}
+}

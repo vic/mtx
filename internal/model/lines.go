@@ -224,3 +224,18 @@ func (m Model) SetReacts(ch, id, reacts string) (Model, error) {
 	}
 	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
 }
+
+// HasLine reports whether channel ch holds a line with event ID id.
+func (m Model) HasLine(ch, id string) bool {
+	for _, c := range m.chans {
+		if c.Name != ch {
+			continue
+		}
+		for i := range c.Lines.Len() {
+			if c.Lines.At(i).ID == id {
+				return true
+			}
+		}
+	}
+	return false
+}

@@ -255,3 +255,13 @@ func TestSetReacts(t *testing.T) {
 		t.Fatalf("reacts %q", got)
 	}
 }
+
+func TestHasLine(t *testing.T) {
+	m, err := twoChans(t).AddLine("#a", Line{Text: "x", ID: "$1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.HasLine("#a", "$1") || m.HasLine("#b", "$1") || m.HasLine("#a", "$2") {
+		t.Fatal("HasLine wrong")
+	}
+}

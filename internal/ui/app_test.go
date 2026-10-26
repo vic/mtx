@@ -1319,3 +1319,23 @@ func TestSeenBy(t *testing.T) {
 		t.Fatalf("seen by %q", got)
 	}
 }
+
+// TestReactsBeforeLine: a reaction summary that arrives before its message is kept and applied when the line loads.
+func TestReactsBeforeLine(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(ReactsMsg{Ch: "#a", ID: "$9", Reacts: "👍1"})
+	a = next.(App)
+	next, _ = a.Update(HistoryLinesMsg{Ch: "#a", L: []model.Line{{Nick: "bob", Text: "hi", ID: "$9", At: time.Date(2026, 10, 22, 8, 0, 0, 0, time.UTC)}}})
+	a = next.(App)
+	c, _ := a.chanByName("#a")
+	for i := range c.Lines.Len() {
+		if l := c.Lines.At(i); l.ID == "$9" {
+			if l.Reacts != "👍1" {
+				t.Fatalf("reacts %q", l.Reacts)
+			}
+			return
+		}
+	}
+	t.Fatal("line $9 not loaded")
+}

@@ -495,7 +495,7 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case KeyRun:
 		if a.mode == Normal && a.focus == focusChat && a.prompt == 0 && !a.pick && !a.help && a.pending == "" {
 			if act, _, _ := Key(Normal, "", msg.M.String()); act.Kind == Scroll { // j/k: one clamp for the whole run
-				return a.scroll(Action{Scroll, act.N * msg.N}), nil
+				return a.scroll(Action{Scroll, act.N * msg.N, ""}), nil
 			}
 		}
 		var cmds []tea.Cmd
@@ -749,6 +749,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.toast("delete my selected message? y to confirm", true), nil
 	case OpenLine:
 		return a.runCmd(":open")
+	case Bracket:
+		a = a.bracket(act.N > 0, act.Key)
 	case JumpReply:
 		ls := a.lines(a.m.Current())
 		if a.hit < 0 || a.hit >= len(ls) || ls[a.hit].ReplyTo == "" {
@@ -1487,6 +1489,89 @@ func (a App) forward(to string) (App, tea.Cmd) {
 	text := "↪ " + ls[i].Nick + ": " + ls[i].Text
 	send := a.send
 	return a.toast("forwarded to "+to, false), func() tea.Msg { return SendResultMsg{Ch: to, Text: text, Err: send(to, text)} }
+}
+
+// bracket moves the cursor to the next (fwd) or previous line matching key: ] speaker change, m mine,
+// @ mentions me, l link or media, p pinned; t opens the next or previous thread; c the next channel with unread.
+func (a App) bracket(fwd bool, key string) App {
+	switch key {
+	case "t":
+		return a.stepThread(fwd)
+	case "c":
+		return a.nextUnreadChan(fwd)
+	case "]", "[":
+		return a.turn(fwd)
+	}
+	ls := a.lines(a.m.Current())
+	pins := map[string]bool{}
+	for _, id := range a.pins[a.m.Current().Name] {
+		pins[id] = true
+	}
+	match := map[string]func(model.Line) bool{
+		"m": func(l model.Line) bool { return l.Nick == a.user },
+		"@": func(l model.Line) bool { return mentionsUser(l.Text, a.user) },
+		"l": func(l model.Line) bool { return firstURL(l.Text) != "" || strings.HasPrefix(l.Text, "[") },
+		"p": func(l model.Line) bool { return pins[l.ID] },
+	}[key]
+	if match == nil {
+		return a
+	}
+	step, i := 1, a.hit
+	if !fwd {
+		step = -1
+	}
+	if i < 0 || i >= len(ls) {
+		i = len(ls)
+		if fwd {
+			i = -1
+		}
+	}
+	for j := i + step; j >= 0 && j < len(ls); j += step {
+		if match(ls[j]) {
+			a.hit = j
+			return a.showHit()
+		}
+	}
+	return a.toast("no more", false)
+}
+
+// stepThread opens the next (fwd) or previous thread head; past the last or first, the main chat.
+func (a App) stepThread(fwd bool) App {
+	heads := a.threads[a.m.Current().Name]
+	idx := -1
+	for i, h := range heads {
+		if h.Root == a.thread {
+			idx = i
+		}
+	}
+	next := idx - 1
+	if fwd {
+		next = idx + 1
+	}
+	if next < 0 || next >= len(heads) {
+		return a.selectThread("")
+	}
+	return a.selectThread(heads[next].Root)
+}
+
+// nextUnreadChan focuses the next (fwd) or previous channel with unread messages, wrapping around.
+func (a App) nextUnreadChan(fwd bool) App {
+	names := a.chanNames()
+	if len(names) == 0 {
+		return a
+	}
+	idx := slices.Index(names, a.m.Current().Name)
+	step := -1
+	if fwd {
+		step = 1
+	}
+	for k := 1; k <= len(names); k++ {
+		j := ((idx+step*k)%len(names) + len(names)) % len(names)
+		if c, ok := a.chanByName(names[j]); ok && c.Unread > 0 {
+			return a.focusName(names[j])
+		}
+	}
+	return a.toast("no unread chats", false)
 }
 
 // jumpUnread selects the first shown line after my read marker and scrolls to it.
@@ -2300,7 +2385,7 @@ func (a App) wheel(m tea.MouseWheelMsg, n int) App {
 		a.tscroll += step
 		return a
 	}
-	return a.scroll(Action{Scroll, step})
+	return a.scroll(Action{Scroll, step, ""})
 }
 
 // linesCache keeps the shown lines of the current channel between frames. Scrolling and typing

@@ -1086,3 +1086,37 @@ func TestForward(t *testing.T) {
 		t.Fatalf("toasts %+v sent %+v", a.toasts, log)
 	}
 }
+
+// TestBrackets: ]m and [m step through my messages; ]p steps to a pinned line.
+func TestBrackets(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	for _, l := range []model.Line{{Nick: "me", Text: "one", ID: "$m1"}, {Nick: "bob", Text: "two", ID: "$b"}, {Nick: "me", Text: "three", ID: "$m2"}} {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	a, _ = press(t, a, "]", "m")
+	if a.hit != 0 {
+		t.Fatalf("first ]m hit %d want 0", a.hit)
+	}
+	a, _ = press(t, a, "]", "m")
+	if a.hit != 2 {
+		t.Fatalf("second ]m hit %d want 2", a.hit)
+	}
+	a, _ = press(t, a, "[", "m")
+	if a.hit != 0 {
+		t.Fatalf("[m hit %d want 0", a.hit)
+	}
+
+	b := newApp(t, &log, nil)
+	for _, l := range []model.Line{{Nick: "me", Text: "one", ID: "$m1"}, {Nick: "bob", Text: "two", ID: "$b"}} {
+		next, _ := b.Update(LineMsg{Ch: "#a", L: l})
+		b = next.(App)
+	}
+	next, _ := b.Update(PinsMsg{Ch: "#a", IDs: []string{"$b"}})
+	b = next.(App)
+	b, _ = press(t, b, "]", "p")
+	if b.hit != 1 {
+		t.Fatalf("]p hit %d want 1", b.hit)
+	}
+}

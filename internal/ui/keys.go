@@ -71,6 +71,7 @@ const (
 	PickThread
 	PickPins
 	JumpReply
+	Bracket
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -81,6 +82,15 @@ const maxCountDigits = 4
 type Action struct {
 	Kind ActKind
 	N    int
+	Key  string // the bracket motion's target key (]m -> "m")
+}
+
+// bracketDir is the direction of a pending bracket: ] goes to newer (1), [ to older (-1).
+func bracketDir(p string) int {
+	if p == "]" {
+		return 1
+	}
+	return -1
 }
 
 // Key maps key k (bubbletea KeyMsg.String() form) in mode m with the pending
@@ -150,13 +160,13 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		case "O":
 			return Action{Kind: ReplyThreadQuoted}, Insert, ""
 		case "j":
-			return Action{Scroll, 1}, Normal, ""
+			return Action{Scroll, 1, ""}, Normal, ""
 		case "k":
-			return Action{Scroll, -1}, Normal, ""
+			return Action{Scroll, -1, ""}, Normal, ""
 		case "ctrl+d":
-			return Action{HalfPage, 1}, Normal, ""
+			return Action{HalfPage, 1, ""}, Normal, ""
 		case "ctrl+u":
-			return Action{HalfPage, -1}, Normal, ""
+			return Action{HalfPage, -1, ""}, Normal, ""
 		case "G":
 			return Action{Kind: Bottom}, Normal, ""
 		case "ctrl+o":
@@ -193,6 +203,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: ThreadNext}, Normal, ""
 		case "f":
 			return Action{Kind: JumpLine}, Normal, ""
+		case "[", "]":
+			return Action{}, Normal, k
 		case "F":
 			return Action{Kind: JumpOpen}, Normal, ""
 		case "m":
@@ -212,6 +224,9 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		case "g":
 			return Action{}, Normal, "g"
 		}
+	}
+	if pending == "[" || pending == "]" {
+		return Action{Kind: Bracket, N: bracketDir(pending), Key: k}, Normal, ""
 	}
 	digits, g := strings.CutSuffix(pending, "g")
 	switch {
@@ -238,7 +253,7 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		return Action{Kind: JumpReply}, Normal, ""
 	case g && digits != "" && k == "t":
 		if n, err := strconv.Atoi(digits); err == nil {
-			return Action{GotoChan, n}, Normal, ""
+			return Action{GotoChan, n, ""}, Normal, ""
 		}
 	}
 	return Action{}, Normal, ""

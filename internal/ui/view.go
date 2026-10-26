@@ -627,6 +627,7 @@ var helpSections = []struct {
 		{"!", "run a shell command, insert its output as a fenced block"},
 		{"M", "mentions only (direct lines) / all lines"},
 		{"m", "recent chats and threads (fuzzy): type, enter"},
+		{"f", "jump: a letter on each visible line; type it to select that line"},
 		{"s", "show / hide times (15:04)"},
 	}},
 	{"INSERT", [][2]string{
@@ -743,6 +744,7 @@ type sidePanes struct {
 	mainLastAt       time.Time      // time of the main thread's newest line
 	readAt           time.Time      // own lines at or before it are read by someone
 	user             string         // the local nick
+	jump             bool           // f: show line labels in the lead column
 	threadTop        int            // first shown row of the threads box (its main thread is the last row)
 	chanTop, nickTop int            // first shown row of the channel and nick panes
 }
@@ -873,6 +875,9 @@ var readMark = dimmed.Render("✓")
 // lead is the one-column lead of scrollback row k: readMark on the first row of an own line that was
 // read, else a space.
 func (p sidePanes) lead(of []int, shown []model.Line, k int) string {
+	if p.jump && k >= 0 && k < len(of) && (k == 0 || of[k] != of[k-1]) {
+		return jumpLabel(of, k)
+	}
 	if k < 0 || k >= len(of) || (k > 0 && of[k] == of[k-1]) {
 		return " "
 	}
@@ -895,4 +900,18 @@ func cmdDesc(w string) string {
 		}
 	}
 	return ""
+}
+
+// jumpLabel is the label of row k's line: its position among the lines that start on screen.
+func jumpLabel(of []int, k int) string {
+	n := 0
+	for i := 0; i < k; i++ {
+		if i == 0 || of[i] != of[i-1] {
+			n++
+		}
+	}
+	if n >= len(jumpKeys) {
+		return " "
+	}
+	return alert.Render(string(jumpKeys[n]))
 }

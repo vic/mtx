@@ -60,6 +60,7 @@ const (
 	ReactRow
 	Leader
 	PickRecent
+	JumpLine
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -162,6 +163,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: PickInvite}, Normal, ""
 		case "t":
 			return Action{Kind: ThreadNext}, Normal, ""
+		case "f":
+			return Action{Kind: JumpLine}, Normal, ""
 		case "m":
 			return Action{Kind: PickRecent}, Normal, ""
 		case "M":

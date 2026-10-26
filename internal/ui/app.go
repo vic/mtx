@@ -209,6 +209,7 @@ type App struct {
 	typedAt    time.Time                                             // last typing notice sent
 	reactRow   bool                                                  // +: the quick reaction row is open; the next key picks
 	menu       string                                                // the open leader menu ("" none)
+	jump       bool                                                  // f: line labels are shown; the next key picks a line
 	readAt     map[string]time.Time                                  // per channel: newest line another member has read (ReadMsg)
 	tscroll    int                                                   // wheel offset of the threads box, negative = up; 0 on a channel switch
 	lastThread string                                                // the last thread opened (T toggles between main and this)
@@ -498,6 +499,14 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if k == "ctrl+c" {
 		return a, tea.Quit
 	}
+	if a.jump {
+		a.jump = false
+		ts := a.jumpTargets()
+		if i := strings.Index(jumpKeys, k); len(k) == 1 && i >= 0 && i < len(ts) {
+			a.hit = ts[i]
+		}
+		return a, nil
+	}
 	if a.menu != "" {
 		items := menus[a.menu]
 		a.menu = ""
@@ -655,6 +664,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return a.toast("invite works in a & room: :join &name first", true), nil
 		}
 		return a.openPick(pickInvite), nil
+	case JumpLine:
+		a.jump = true
+		return a, nil
 	case PickRecent:
 		return a.openPick(pickRecent), nil
 	case PickSpeaker:
@@ -2198,6 +2210,7 @@ func (a App) sides() sidePanes {
 	}
 	p.mainLast, p.mainLastAt = a.mainLast()
 	p.readAt, p.user = a.readAt[cur], a.user
+	p.jump = a.jump
 	p.unread = a.unreadAll()
 	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)
 	return p
@@ -2243,4 +2256,19 @@ func (a App) pickGroups(ms []pickMatch) []pickMatch {
 	}
 	slices.SortStableFunc(ms, func(x, y pickMatch) int { rx, _ := rank(x); ry, _ := rank(y); return rx - ry })
 	return ms
+}
+
+// jumpKeys are the f labels, home row first; jumpTargets are the shown lines they name, top to bottom.
+const jumpKeys = "asdfghjklqwertyuiopzxcvbnm"
+
+// jumpTargets are the shown-line indexes of the lines on screen, top to bottom, one per label.
+func (a App) jumpTargets() []int {
+	_, of := tailRows(a.lines(a.m.Current()), a.page(), a.off(), textWidth(a.w, a.h), a.wrap())
+	var out []int
+	for i, o := range of {
+		if (i == 0 || of[i-1] != o) && len(out) < len(jumpKeys) {
+			out = append(out, o)
+		}
+	}
+	return out
 }

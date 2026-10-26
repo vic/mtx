@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -755,5 +756,34 @@ func TestPickGroups(t *testing.T) {
 	}
 	if ms[0].group != "threads" || first["channels"] >= first["people"] || first["people"] == 0 && first["channels"] == 0 {
 		t.Fatalf("groups %v", first)
+	}
+}
+
+// TestJumpLine: f labels the visible lines; a label key selects its line; esc cancels.
+func TestJumpLine(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	for i := range 5 {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "line " + strconv.Itoa(i), ID: "$" + strconv.Itoa(i)}})
+		a = next.(App)
+	}
+	a, _ = press(t, a, "f")
+	if !a.jump {
+		t.Fatal("f did not open the labels")
+	}
+	ts := a.jumpTargets()
+	if len(ts) < 2 {
+		t.Fatalf("targets %v", ts)
+	}
+	a, _ = press(t, a, string(jumpKeys[1]))
+	if a.jump || a.hit != ts[1] {
+		t.Fatalf("hit %d want %d jump %v", a.hit, ts[1], a.jump)
+	}
+	a, _ = press(t, a, "f")
+	hit := a.hit
+	a, _ = press(t, a, "esc")
+	if a.jump || a.hit != hit {
+		t.Fatalf("esc did not cancel: jump %v hit %d", a.jump, a.hit)
 	}
 }

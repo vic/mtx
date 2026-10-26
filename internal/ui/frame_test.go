@@ -1003,7 +1003,7 @@ func TestInputScrollsWithCursor(t *testing.T) {
 	}
 	a.in.SetValue(strings.Join(lines, "\n"))
 	a.in.MoveToBegin()
-	rows := inputRows(withCursor(a.in.Value(), inputPos(a.in)), 40, 30)
+	rows := inputRows(withCursor(a.in.Value(), a.in.Pos()), 40, 30)
 	if !strings.Contains(ansi.Strip(strings.Join(rows, "\n")), "line00") {
 		t.Fatalf("cursor on line 0 not visible: %q", rows)
 	}

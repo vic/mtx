@@ -12,9 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
-	"charm.land/bubbles/v2/textarea"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -177,7 +175,7 @@ type App struct {
 	m             model.Model
 	mode          EditMode
 	pending       string
-	in            textarea.Model        // multi-line input: shift+enter adds a line, enter sends
+	in            input                 // multi-line input: shift+enter adds a line, enter sends
 	hist          map[string][]string   // sent input lines per channel, oldest first (InputsMsg loads them)
 	inputSave     func(ch, text string) // stores a sent input line; must not block; nil = off
 	focusSave     func(ch string)       // stores the focused channel; must not block; nil = off
@@ -261,11 +259,7 @@ type App struct {
 
 // New returns an App over m that sends channel text through send.
 func New(m model.Model, send func(ch, text string) error) App {
-	in := textarea.New()
-	in.Prompt = ""
-	in.ShowLineNumbers = false
-	in.SetWidth(1 << 16) // no soft wrap in the buffer: render wraps it
-	return App{m: m, in: in, send: send, user: "me", now: time.Now, w: defaultW, h: defaultH, hit: -1, histAt: -1, rows: &rowCache{m: map[rowKey][]string{}}, lc: &linesCache{}, sc: &sideCache{}}
+	return App{m: m, send: send, user: "me", now: time.Now, w: defaultW, h: defaultH, hit: -1, histAt: -1, rows: &rowCache{m: map[rowKey][]string{}}, lc: &linesCache{}, sc: &sideCache{}}
 }
 
 // Init starts the 1 s tick: it drops old toasts and keeps the clock current.
@@ -554,9 +548,8 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.w, a.h = msg.Width, msg.Height
 	case tea.PasteMsg: // pasted text is never keys; it goes to an open input only
 		if a.mode == Insert || a.prompt != 0 {
-			var cmd tea.Cmd
-			a.in, cmd = a.in.Update(msg)
-			return a, cmd
+			a.in.InsertString(msg.Content)
+			return a, nil
 		}
 	case tea.MouseClickMsg:
 		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.onSponsor(msg.X, msg.Y) {
@@ -685,7 +678,6 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.mode = Insert
 				a.in.SetValue(a.in.Value() + strings.TrimPrefix(it.do, "emoji:"))
 				a.in.MoveToEnd()
-				a.in.Focus()
 			case strings.HasSuffix(it.do, " "):
 				a = a.openPrompt(promptCmd)
 				a.in.SetValue(strings.TrimPrefix(it.do, ":"))
@@ -742,10 +734,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case act.Kind == None && mode == Normal:
 			a.mode = Normal
 			a.quote, a.edit, a.quoteBody = nil, nil, false // esc drops the reply or edit; the typed text stays
-			a.in.Blur()
 		case act.Kind == None:
-			var cmd tea.Cmd
-			a.in, cmd = a.in.Update(msg)
+			a.in.Key(k, msg.Text)
 			if a.typingFn != nil && a.in.Value() != "" && a.now().Sub(a.typedAt) >= typingEvery {
 				a.typedAt = a.now()
 				a.typingFn(a.m.Current().Name)
@@ -753,14 +743,16 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if a.in.Value() == "" { // deleting back to the start ends the reply
 				a.quote = nil
 			}
-			return a, cmd
+			return a, nil
 		case act.Kind == Scroll:
 			return a.scroll(act), nil
 		case act.Kind == LineUp || act.Kind == LineDown:
-			if a.in.LineCount() > 1 && a.mode == Insert { // multi-line input: up and down move inside it
-				var cmd tea.Cmd
-				a.in, cmd = a.in.Update(msg)
-				return a, cmd
+			dir := "up" // multi-line input: up and down move inside it, until the first or last line
+			if act.Kind == LineDown {
+				dir = "down"
+			}
+			if a.mode == Insert && a.in.Key(dir, "") {
+				return a, nil
 			}
 			return a.lineStep(act.Kind == LineDown), nil
 		case act.Kind == PickChan:
@@ -797,7 +789,6 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	a.pending = pending
 	if mode == Insert {
 		a.mode = Insert
-		a.in.Focus()
 		a = a.prepare(act.Kind)
 	}
 	switch act.Kind {
@@ -910,7 +901,6 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (a App) openPrompt(p rune) App {
 	a.prompt = p
 	a.in.Reset()
-	a.in.Focus()
 	return a
 }
 
@@ -918,7 +908,6 @@ func (a App) closePrompt() (App, string) {
 	v := a.in.Value()
 	a.prompt = 0
 	a.in.Reset()
-	a.in.Blur()
 	return a, v
 }
 
@@ -951,9 +940,8 @@ func (a App) promptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return a.runCmd(":" + v)
 	default:
-		var cmd tea.Cmd
-		a.in, cmd = a.in.Update(msg)
-		return a, cmd
+		a.in.Key(msg.String(), msg.Text)
+		return a, nil
 	}
 	return a, nil
 }
@@ -1012,7 +1000,6 @@ func (a App) sendLine() (tea.Model, tea.Cmd) {
 	a.histAt = -1
 	a.in.Reset()
 	a.mode = Normal // RET sends and leaves INSERT
-	a.in.Blur()
 	ch := a.m.Current().Name
 	switch {
 	case text == "" || ch == "":
@@ -1127,26 +1114,26 @@ func (a App) inputLine() (label, input, hint string) {
 	switch {
 	case a.prompt == promptCmd:
 		if u := a.cmdUsage(); u != "" {
-			return "NORMAL", ": " + withCursor(a.in.Value(), inputPos(a.in)), u
+			return "NORMAL", ": " + withCursor(a.in.Value(), a.in.Pos()), u
 		}
-		return "NORMAL", ": " + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "run", "C-t", "files", "C-f", "file block", "esc", "cancel")
+		return "NORMAL", ": " + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "run", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.prompt == promptCapture:
-		return "NORMAL", "! " + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "run, insert output", "C-t", "files", "C-f", "file block", "esc", "cancel")
+		return "NORMAL", "! " + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "run, insert output", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.prompt == promptShell:
-		return "NORMAL", "$ " + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "run locally", "C-t", "files", "C-f", "file block", "esc", "cancel")
+		return "NORMAL", "$ " + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "run locally", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.mode == Insert:
 		prompt := "> "
 		if a.quote != nil { // RE: while replying; the quote is dropped once the input is empty
 			prompt = "RE: "
 		}
 		if a.edit != nil { // C: the input is the edited text; enter saves it
-			return "EDIT", prompt + withCursor(a.in.Value(), inputPos(a.in)), keyHint("enter", "save edit", "esc", "cancel")
+			return "EDIT", prompt + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "save edit", "esc", "cancel")
 		}
 		hint := keyHint("enter", "send", "@", "mention", "tab", "complete", "↑↓", "line", "C-t", "files", "C-f", "file block", "C-o", "pick", "esc", "normal")
 		if a.quote != nil { // the replied-to line is shown here, not in the input
 			hint = keyHint("re", "<"+a.quote.Nick+"> "+a.quote.Text) + "   " + hint
 		}
-		return "INSERT", prompt + withCursor(a.in.Value(), inputPos(a.in)), hint
+		return "INSERT", prompt + withCursor(a.in.Value(), a.in.Pos()), hint
 	case a.focus == focusChans:
 		return "CHANNELS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "join", "tab", "nicks", "esc", "chat")
 	case a.focus == focusThreads:
@@ -1532,7 +1519,6 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			a.in.SetValue(a.in.Value() + ms[a.psel].name + " ")
 			a.in.MoveToEnd()
-			a.in.Focus()
 		} else if a.psel < len(ms) && a.pickWhat == pickInvite {
 			a.pick = false
 			return a.runCmd("/invite " + ms[a.psel].name + " " + a.m.Current().Name)
@@ -1559,7 +1545,6 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.mode = Insert
 				a.in.SetValue(a.in.Value() + "@" + nick + " ")
 				a.in.MoveToEnd()
-				a.in.Focus()
 			} else {
 				a = a.focusName(ms[a.psel].name)
 			}
@@ -2240,7 +2225,6 @@ func (a App) mention(nick string) App {
 	a.mode = Insert
 	a.in.SetValue(a.in.Value() + "@" + nick + " ")
 	a.in.MoveToEnd()
-	a.in.Focus()
 	return a
 }
 
@@ -2390,18 +2374,7 @@ func (a App) insertBlock(cmd, text string) App {
 	a.mode = Insert
 	a = a.insertFence("sh", "$ "+cmd+"\n"+strings.TrimRight(text, "\n"))
 	a.in.MoveToEnd()
-	a.in.Focus()
 	return a
-}
-
-// inputPos is the cursor's rune offset in the input text, counting newlines.
-func inputPos(in textarea.Model) int {
-	lines := strings.Split(in.Value(), "\n")
-	pos := 0
-	for i := 0; i < in.Line() && i < len(lines); i++ {
-		pos += utf8.RuneCountInString(lines[i]) + 1
-	}
-	return pos + in.Column()
 }
 
 // histMax is how many sent input lines ctrl+p and ctrl+n step through.
@@ -2455,7 +2428,6 @@ func (a App) insertFence(info, text string) App {
 	a.mode = Insert
 	a.in.SetValue(a.in.Value() + "```" + info + "\n" + text + "\n```\n")
 	a.in.MoveToEnd()
-	a.in.Focus()
 	return a
 }
 
@@ -2468,19 +2440,6 @@ func (a App) highlight() string {
 		return a.grep
 	}
 	return a.query
-}
-
-// Fresh returns a with its input in a new buffer: the text and cursor are the same, but
-// Update on the copy cannot change the original input (textarea shares its lines).
-func (a App) Fresh() App {
-	row, col := a.in.Line(), a.in.Column()
-	a.in.SetValue(a.in.Value())
-	a.in.MoveToBegin()
-	for i := 0; i < row; i++ {
-		a.in.CursorDown()
-	}
-	a.in.SetCursorColumn(col)
-	return a
 }
 
 // roomMark is the status of a room member: busy (a session with a PID), typing, or idle.

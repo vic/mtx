@@ -22,9 +22,7 @@ func (in *input) Reset() { in.r, in.pos = nil, 0 }
 
 // InsertString inserts s at the cursor; the cursor goes after it.
 func (in *input) InsertString(s string) {
-	add := []rune(s)
-	in.r = append(in.r[:in.pos], append(add, in.r[in.pos:]...)...)
-	in.pos += len(add)
+	in.splice(in.pos, in.pos, []rune(s))
 }
 
 // Pos is the cursor's rune offset.
@@ -81,11 +79,19 @@ func (in *input) lineEnd(p int) int {
 	return len(in.r)
 }
 
-// delete removes the runes in [from, to) and puts the cursor at from.
-func (in *input) delete(from, to int) {
-	in.r = append(in.r[:from], in.r[to:]...)
-	in.pos = from
+// splice replaces the runes in [from, to) with ins and puts the cursor after ins. It builds a new slice:
+// copies of an input share their text until they change it, so storage is never written in place.
+func (in *input) splice(from, to int, ins []rune) {
+	r := make([]rune, 0, len(in.r)-(to-from)+len(ins))
+	r = append(r, in.r[:from]...)
+	r = append(r, ins...)
+	r = append(r, in.r[to:]...)
+	in.r = r
+	in.pos = from + len(ins)
 }
+
+// delete removes the runes in [from, to) and puts the cursor at from.
+func (in *input) delete(from, to int) { in.splice(from, to, nil) }
 
 // wordLeft is the index where the word before p starts: spaces (not newlines) then non-spaces.
 func (in *input) wordLeft(p int) int {

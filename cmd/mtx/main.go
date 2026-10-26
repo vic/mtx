@@ -112,7 +112,13 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 					logf("focus: %v", err)
 				}
 			}()
-		}).WithTyping(r.typing).WithThreadOpen(r.openThread(c.LoadThread)).WithPicker()
+		}).WithThemeSave(func(id string) {
+		go func() {
+			if err := c.SetKV(ctx, "theme", id); err != nil {
+				logf("theme: %v", err)
+			}
+		}()
+	}).WithTyping(r.typing).WithThreadOpen(r.openThread(c.LoadThread)).WithPicker()
 	p = tea.NewProgram(app, tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
 		switch msg.(type) {
 		case tea.MouseWheelMsg, tea.KeyPressMsg: // in order, summed per batch: one render
@@ -134,6 +140,9 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 		}
 		if f, err := c.KV(ctx, "focus"); err == nil && f != "" {
 			r.emit(ui.FocusMsg(f)) // the channel that had focus when mtx last quit
+		}
+		if t, err := c.KV(ctx, "theme"); err == nil && t != "" {
+			r.emit(ui.ThemeMsg(t)) // the theme the user chose last time
 		}
 		go func() { // the room list loads beside sync: cached rooms already show
 			r.refreshMu.Lock()

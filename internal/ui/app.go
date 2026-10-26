@@ -20,6 +20,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"mtx/internal/model"
+	"mtx/internal/theme"
 )
 
 // SessionsMsg replaces the live session list.
@@ -180,6 +181,10 @@ type App struct {
 	hist          map[string][]string   // sent input lines per channel, oldest first (InputsMsg loads them)
 	inputSave     func(ch, text string) // stores a sent input line; must not block; nil = off
 	focusSave     func(ch string)       // stores the focused channel; must not block; nil = off
+	themeIDs      []string              // the theme picker's scheme IDs ("" = terminal default), parallel to its rows
+	themeBefore   string                // the theme active when the theme picker opened
+	themeNow      string                // the theme in use ("" = terminal default)
+	themeSave     func(id string)       // stores the chosen theme; must not block; nil = off
 	histAt        int                   // index into hist while browsing; -1 = not browsing
 	histDraft     string                // the unsent input held while browsing
 	send          func(ch, text string) error
@@ -431,6 +436,8 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a = a.note("line for unknown channel " + msg.Ch)
 		}
 		a = a.applyPending(msg.Ch)
+	case ThemeMsg:
+		a = a.applyTheme(string(msg))
 	case ExploreMsg:
 		a.explore, a.exploreTo = msg.Entries, msg.Targets
 		a = a.openPick(pickExplore)
@@ -701,6 +708,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.paneKey(msg)
 	}
 	if a.pick {
+		if a.pickWhat == pickThemes {
+			return a.themeKey(msg)
+		}
 		return a.pickKey(msg)
 	}
 	if a.help {
@@ -1085,6 +1095,9 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 	if c.Name() == model.CmdForward { // the target is the selected line
 		return a.forward(c.Args()[0])
 	}
+	if c.Name() == model.CmdTheme {
+		return a.themeCmd(c.Args()), nil
+	}
 	if c.Name() == model.CmdGoto {
 		return a.gotoDate(c.Args()[0]), nil
 	}
@@ -1347,10 +1360,11 @@ const (
 	pickExplore                   // :explore: the server's public rooms; enter joins the picked one
 	pickFound                     // :search: the server's matches in this room; enter selects the message if loaded
 	pickInfo                      // a read-only list (ListMsg, e.g. :devices): enter and esc close it
+	pickThemes                    // space T, :theme: the color schemes with live preview; enter keeps, esc restores
 )
 
 // pickLast is the last pickKind; tests walk 0..pickLast so a new kind is rendered by the tests too.
-const pickLast = pickInfo
+const pickLast = pickThemes
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
 const allSpeakers = "(all)"
@@ -1388,6 +1402,10 @@ func (a App) pickSource() []string {
 		out = a.explore
 	case pickFound:
 		out = a.found
+	case pickThemes:
+		for _, id := range a.themeIDs {
+			out = append(out, themeLabel(id))
+		}
 	case pickInfo:
 		out = a.list
 	case pickEdits:
@@ -2708,7 +2726,7 @@ func emojiMenu() []menuItem {
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
-		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
+		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"T", "theme", ":theme"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},
@@ -2789,4 +2807,69 @@ func pinSet(ids []string) map[string]bool {
 		out[id] = true
 	}
 	return out
+}
+
+// WithThemeSave sets the hook that stores the chosen theme (must not block).
+func (a App) WithThemeSave(f func(id string)) App {
+	a.themeSave = f
+	return a
+}
+
+// ThemeMsg is the saved theme to apply at start ("" is the terminal default).
+type ThemeMsg string
+
+// themeCmd runs :theme: with a scheme ID it applies and saves that theme; bare, it opens the theme picker.
+func (a App) themeCmd(args []string) App {
+	if len(args) > 0 {
+		if _, ok := theme.ByID(args[0]); !ok {
+			return a.toast("theme: no scheme "+args[0], true)
+		}
+		a = a.applyTheme(args[0])
+		if a.themeSave != nil {
+			a.themeSave(args[0])
+		}
+		return a.toast("theme: "+args[0], false)
+	}
+	a.themeIDs = []string{""}
+	all, _ := theme.All()
+	for _, s := range all {
+		a.themeIDs = append(a.themeIDs, s.ID)
+	}
+	a.themeBefore = a.themeNow
+	return a.openPick(pickThemes)
+}
+
+// themeLabel is a theme picker row: the scheme's name, system and variant.
+func themeLabel(id string) string {
+	if id == "" {
+		return "terminal (default)"
+	}
+	s, _ := theme.ByID(id)
+	return s.Name + "  (" + s.System + ", " + s.Variant + ")"
+}
+
+// themeKey handles a key in the theme picker: enter keeps the theme and saves it, esc restores the one
+// active when the picker opened, and any other key previews the selected row's theme.
+func (a App) themeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		a.pick = false
+		if a.themeSave != nil {
+			a.themeSave(a.themeNow)
+		}
+		return a.toast("theme: "+themeLabel(a.themeNow), false), nil
+	case "esc":
+		a.pick = false
+		return a.applyTheme(a.themeBefore), nil
+	}
+	m, cmd := a.pickKey(msg)
+	b := m.(App)
+	if !b.pick {
+		return b, cmd
+	}
+	ms := pickList(b.pickSource(), b.pq.Value())
+	if b.psel < len(ms) {
+		b = b.applyTheme(b.themeIDs[ms[b.psel].idx])
+	}
+	return b, cmd
 }

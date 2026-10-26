@@ -351,3 +351,13 @@ func TestGotoParse(t *testing.T) {
 		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+func TestThemeParse(t *testing.T) {
+	c, err := ParseCmd("/theme base16/gruvbox-dark-hard")
+	if err != nil || c.Name() != CmdTheme || !slices.Equal(c.Args(), []string{"base16/gruvbox-dark-hard"}) {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+	if c, err := ParseCmd("/theme"); err != nil || c.Name() != CmdTheme || len(c.Args()) != 0 {
+		t.Fatalf("bare: %q %q %v", c.Name(), c.Args(), err)
+	}
+}

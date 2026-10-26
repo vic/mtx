@@ -16,6 +16,7 @@ const (
 	CmdSearch     CmdName = "search"
 	CmdDevices    CmdName = "devices"
 	CmdGoto       CmdName = "goto"
+	CmdTheme      CmdName = "theme"
 	CmdPart       CmdName = "part"
 	CmdClose      CmdName = "close"
 	CmdInvite     CmdName = "invite"
@@ -61,7 +62,7 @@ const (
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "joinrule", "history", "alias", "roomavatar", "explore", "search", "devices", "goto", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "read", "unread", "forward", "ban", "unban", "op", "joinrule", "history", "alias", "roomavatar", "explore", "search", "devices", "goto", "theme", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -77,6 +78,8 @@ func (c Cmd) Args() []string { return c.args }
 func arity(n CmdName) (count int, raw, ok bool) {
 	switch n {
 	case CmdCreate, CmdExplore:
+		return -1, false, true
+	case CmdTheme:
 		return -1, false, true
 	case CmdGoto:
 		return 1, true, true
@@ -195,6 +198,7 @@ var usage = map[CmdName]string{
 	CmdSearch:     ":search <term>",
 	CmdDevices:    ":devices",
 	CmdGoto:       ":goto <date | date time | HH:MM | yesterday>",
+	CmdTheme:      ":theme [scheme id]",
 	CmdPart:       ":part [&room]",
 	CmdClose:      ":close [&room] (or /rm)",
 	CmdInvite:     ":invite <nick> &room",

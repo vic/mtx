@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
+	"mtx/internal/theme"
 )
 
 // palette is the 16 base16 slots the UI draws with (base16 styling guide): 00 background, 01 lighter
@@ -106,4 +108,16 @@ func clearRenderCaches() {
 	borderGlyphs.mu.Lock()
 	borderGlyphs.m = map[[2]string]string{}
 	borderGlyphs.mu.Unlock()
+}
+
+// applyTheme makes the theme with ID id (a scheme of internal/theme; "" is the terminal default) the
+// one in use, and remembers it as themeNow.
+func (a App) applyTheme(id string) App {
+	if id == "" {
+		usePalette(ansiPalette)
+	} else if s, ok := theme.ByID(id); ok {
+		usePalette(paletteOf(s.Colors))
+	}
+	a.themeNow = id
+	return a
 }

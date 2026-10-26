@@ -1339,3 +1339,36 @@ func TestReactsBeforeLine(t *testing.T) {
 	}
 	t.Fatal("line $9 not loaded")
 }
+
+// TestThemePicker: the theme picker previews each scheme as its row is selected; esc restores the theme
+// it opened with, enter keeps and saves the selected one.
+func TestThemePicker(t *testing.T) {
+	t.Cleanup(func() { usePalette(ansiPalette) })
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.runCmd(":theme")
+	a = next.(App)
+	if !a.pick || a.pickWhat != pickThemes {
+		t.Fatalf("picker open %v kind %v", a.pick, a.pickWhat)
+	}
+	if got := a.pickSource(); len(got) < 2 || got[0] != "terminal (default)" {
+		t.Fatalf("rows %q", got[:min(len(got), 2)])
+	}
+	a, _ = press(t, a, "down")
+	if a.themeNow == "" || a.themeNow != a.themeIDs[1] {
+		t.Fatalf("preview %q want %q", a.themeNow, a.themeIDs[1])
+	}
+	a, _ = press(t, a, "esc")
+	if a.themeNow != "" || a.pick {
+		t.Fatalf("esc: theme %q picker %v", a.themeNow, a.pick)
+	}
+
+	var saved string
+	a = a.WithThemeSave(func(id string) { saved = id })
+	next, _ = a.runCmd(":theme")
+	a = next.(App)
+	a, _ = press(t, a, "down", "enter")
+	if saved != a.themeIDs[1] || a.themeNow != saved {
+		t.Fatalf("saved %q now %q", saved, a.themeNow)
+	}
+}

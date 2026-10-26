@@ -520,24 +520,6 @@ func TestAppPasteIsText(t *testing.T) {
 	}
 }
 
-// TestColonBangSendsLiteral: :!text sends the text to the session as is; it is neither a command nor wrapped.
-func TestColonBangSendsLiteral(t *testing.T) {
-	var log []sent
-	a := newApp(t, &log, nil)
-	var lit []sent
-	a = a.WithLiteral(func(ch, text string) error { lit = append(lit, sent{ch, text}); return nil })
-	a, _ = press(t, a, ":")
-	a = typeText(t, a, "!hello")
-	a, cmd := press(t, a, "enter")
-	a = finish(t, a, cmd)
-	if len(lit) != 1 || lit[0] != (sent{"#a", "!hello"}) || len(log) != 0 { // literal, not a command, not a wrapped send
-		t.Fatalf("literal %v sends %v", lit, log)
-	}
-	if len(curLines(a)) != 0 { // no local echo: the transcript shows it
-		t.Fatalf("echo %+v", curLines(a))
-	}
-}
-
 // notes is the toasts as lines: notes and errors show as toasts, not in the scrollback.
 func notes(a App) []model.Line {
 	var out []model.Line

@@ -623,7 +623,7 @@ var helpSections = []struct {
 		{"O", "reply in the last thread used, quoted in the text"},
 		{"T", "start a thread on the selected message, else the newest"},
 		{"t", "toggle main thread / last thread"},
-		{":", "run a command (:join, :react, :help...); :!text sends text as is"},
+		{":", "run a command (:join, :react, :help...)"},
 		{"$", "run a shell command locally (suspends mtx; Enter returns)"},
 		{"!", "run a shell command, insert its output as a fenced block"},
 		{"M", "mentions only (direct lines) / all lines"},

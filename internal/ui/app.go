@@ -83,9 +83,6 @@ type TagsMsg map[string]string
 // IDsMsg maps channel names to Matrix room IDs.
 type IDsMsg map[string]string
 
-// LiteralResultMsg reports a finished : send; Err is nil on success.
-type LiteralResultMsg struct{ Err error }
-
 // ToastMsg shows Text as a notification card; Err makes it red.
 type ToastMsg struct {
 	Text string
@@ -171,7 +168,6 @@ type App struct {
 	histDraft   string                // the unsent input held while browsing
 	send        func(ch, text string) error
 	cmdf        func(ch string, c model.Cmd) tea.Cmd // runs a parsed command; ch is the focused channel
-	literal     func(ch, text string) error          // the : prompt: text as is to the session socket
 	user        string                               // nick of the local echo line
 	quote       *model.Line                          // a clicked line being replied to; sent above the next line, not in the input
 	info        map[int]model.SessionInfo
@@ -433,10 +429,6 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case filesMsg:
 		a.files = msg
-	case LiteralResultMsg:
-		if msg.Err != nil {
-			a = a.note("literal send failed: " + msg.Err.Error())
-		}
 	case shellOutMsg:
 		a = a.insertBlock(msg.Cmd, string(msg.Out))
 		if msg.Err != nil {
@@ -799,9 +791,6 @@ func (a App) promptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if kind == promptShell {
 			return a.runShell(v)
 		}
-		if strings.HasPrefix(v, "!") { // :!text goes to the session as is
-			return a.sendLiteral(v)
-		}
 		if strings.TrimSpace(v) == "" {
 			return a, nil
 		}
@@ -1129,12 +1118,6 @@ func (a App) addLine(ch string, l model.Line) (App, error) {
 
 // WithCmd sets the handler for parsed commands (other than /quit). It runs on the
 // bubbletea loop, so it must return fast; slow work belongs in the returned tea.Cmd.
-// WithLiteral sets the sender of : lines (text as is, no wrapper).
-func (a App) WithLiteral(f func(ch, text string) error) App {
-	a.literal = f
-	return a
-}
-
 func (a App) WithCmd(f func(ch string, c model.Cmd) tea.Cmd) App {
 	a.cmdf = f
 	return a
@@ -1181,20 +1164,6 @@ func onOff(b bool) string {
 		return "on"
 	}
 	return "off"
-}
-
-// sendLiteral sends a : line as is. The session logs it, so the transcript shows it;
-// there is no local echo. Failures become a note (SendResultMsg).
-func (a App) sendLiteral(text string) (tea.Model, tea.Cmd) {
-	ch := a.m.Current().Name
-	if strings.TrimSpace(text) == "" || ch == "" {
-		return a, nil
-	}
-	if a.literal == nil {
-		return a.note("no literal sender installed"), nil
-	}
-	lit := a.literal // blocking I/O runs in the Cmd, never in Update
-	return a, func() tea.Msg { return LiteralResultMsg{Err: lit(ch, text)} }
 }
 
 // wrap is the row wrapper the s toggle selects.
@@ -1777,14 +1746,10 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// openTarget opens path in $EDITOR, suspending the app while it runs. cmd goes to
-// the : prompt as !cmd, so Enter sends the command to the agent as is.
+// openTarget opens path in $EDITOR, suspending the app while it runs. A code span (cmd) is copied.
 func (a App) openTarget(path, cmd string) (App, tea.Cmd) {
 	if cmd != "" {
-		a = a.openPrompt(promptCmd)
-		a.in.SetValue("!" + cmd)
-		a.in.MoveToEnd()
-		return a, nil
+		return a.toast("copied "+cmd, false), tea.SetClipboard(cmd)
 	}
 	if rest, ok := strings.CutPrefix(path, "~/"); ok {
 		home, _ := os.UserHomeDir()

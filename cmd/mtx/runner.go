@@ -593,14 +593,6 @@ func (r *runner) send(ch, text string) error {
 	})
 }
 
-// sendLiteral sends a : line as is. Our own lines come back in sync and are shown from there.
-func (r *runner) sendLiteral(ch, text string) error {
-	if err := r.send(ch, text); err != nil {
-		return err
-	}
-	return nil
-}
-
 // toastInvite records a pending invite and tells the user how to answer it. The room is named by its
 // alias when it has one.
 func (r *runner) toastInvite(in matrix.Invite) {

@@ -1932,10 +1932,8 @@ func TestHelpExact(t *testing.T) {
 		t.Fatal("setup: no rows for s")
 	}
 	a.pq.SetValue("eens") // "seen" has "een" but not "eens"
-	for _, m := range a.matches() {
-		if strings.Contains(strings.ToLower(m.name), "eens") {
-			t.Fatalf("eens matched %q", m.name)
-		}
+	if n := len(a.matches()); n != 0 {
+		t.Fatalf("eens matched %d rows", n)
 	}
 	a.pq.SetValue("seen")
 	found := false

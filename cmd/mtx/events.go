@@ -94,7 +94,7 @@ func (r *runner) onReceipt(room id.RoomID, ev id.EventID, user id.UserID) {
 		return
 	}
 	if name, ok := r.nameOf(room); ok {
-		r.emit(ui.ReadMsg{Ch: name, ID: ev.String()})
+		r.emit(ui.ReadMsg{Ch: name, ID: ev.String(), Nick: localpart(user.String())})
 	}
 }
 

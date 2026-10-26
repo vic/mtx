@@ -493,6 +493,9 @@ func wrapLine(l model.Line, width int) []string {
 	if l.Reacts != "" {
 		text += "  [" + l.Reacts + "]"
 	}
+	if l.Seen != "" {
+		text += "  · seen " + l.Seen
+	}
 	for i, r := range strings.Split(lipgloss.NewStyle().Width(bw).Render(text), "\n") {
 		r = strings.TrimRight(r, " ")
 		if i == 0 {

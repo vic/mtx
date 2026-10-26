@@ -26,6 +26,7 @@ type Line struct {
 	ID         string // producer's event ID (a reply target); not shown
 	ReplyTo    string // event ID this message replies to; "" none
 	Thread     string // thread root event ID of this message; "" = main chat
+	Seen       string // readers whose latest read is this message, "ana, bob"; "" none
 	Reacts     string // reaction summary shown after the text ("👍2 ❤️1"); "" none
 }
 

@@ -201,6 +201,18 @@ func (m Model) RemoveLine(ch, id string) (Model, error) {
 }
 
 // SetReacts sets the reaction summary of the line with the given ID in channel ch. No such line is a no-op.
+func (m Model) SetSeen(ch, id, seen string) (Model, error) {
+	for i, c := range m.chans {
+		if c.Name != ch {
+			continue
+		}
+		c.Lines = c.Lines.clone()
+		c.Lines.Replace(func(l Line) bool { return l.ID == id }, func(l Line) Line { l.Seen = clean(seen); return l })
+		return m.withChan(i, c), nil
+	}
+	return m, fmt.Errorf("%w: %s", ErrUnknownChannel, ch)
+}
+
 func (m Model) SetReacts(ch, id, reacts string) (Model, error) {
 	for i, c := range m.chans {
 		if c.Name != ch {

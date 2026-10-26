@@ -1276,3 +1276,46 @@ func TestGotoDate(t *testing.T) {
 		t.Errorf("nonsense: no error toast")
 	}
 }
+
+// TestSeenBy: each reader's latest read sits at their message; the message shows them, and seen by lists them.
+func TestSeenBy(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	for i := 1; i <= 3; i++ {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "line", ID: "$" + strconv.Itoa(i)}})
+		a = next.(App)
+	}
+	seen := func(id string) string {
+		c, _ := a.chanByName("#a")
+		for i := range c.Lines.Len() {
+			if l := c.Lines.At(i); l.ID == id {
+				return l.Seen
+			}
+		}
+		t.Fatalf("no line %s", id)
+		return ""
+	}
+	next, _ := a.Update(ReadMsg{Ch: "#a", ID: "$2", Nick: "ana"})
+	a = next.(App)
+	if seen("$2") != "ana" {
+		t.Fatalf("$2 seen %q", seen("$2"))
+	}
+	next, _ = a.Update(ReadMsg{Ch: "#a", ID: "$3", Nick: "ana"})
+	a = next.(App)
+	if seen("$2") != "" || seen("$3") != "ana" {
+		t.Fatalf("after ana moves: $2 %q $3 %q", seen("$2"), seen("$3"))
+	}
+	next, _ = a.Update(ReadMsg{Ch: "#a", ID: "$3", Nick: "bob"})
+	a = next.(App)
+	if seen("$3") != "ana, bob" {
+		t.Fatalf("$3 seen %q", seen("$3"))
+	}
+	a.hit = 0
+	a, _ = press(t, a, "enter", "s")
+	if a.pickWhat != pickInfo {
+		t.Fatalf("picker %v", a.pickWhat)
+	}
+	if got := a.pickSource(); len(got) != 2 || got[0] != "ana" || got[1] != "bob" {
+		t.Fatalf("seen by %q", got)
+	}
+}

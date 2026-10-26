@@ -54,7 +54,7 @@ type ListMsg struct {
 type SearchMsg struct{ Entries, IDs []string }
 
 // ReadMsg says another member read channel Ch up to the line with event ID; own lines up to it show read.
-type ReadMsg struct{ Ch, ID string }
+type ReadMsg struct{ Ch, ID, Nick string } // Nick: who read (their read receipt sits at ID)
 
 // FullyReadMsg is the event my read marker points at in channel Ch (room account data m.fully_read).
 type FullyReadMsg struct{ Ch, ID string }
@@ -241,6 +241,7 @@ type App struct {
 	jump        bool                                                  // f: line labels are shown; the next key picks a line
 	confirmDel  bool                                                  // d: waiting for y to delete the selected message
 	lastLineCmd string                                                // the last :react command run on a line, for .
+	readBy      map[string]map[string]string                          // channel -> reader nick -> event ID they last read (ReadMsg)
 	readAt      map[string]time.Time                                  // per channel: newest line another member has read (ReadMsg)
 	fullyRead   map[string]string                                     // per channel: the event my fully-read marker points at (FullyReadMsg)
 	tscroll     int                                                   // wheel offset of the threads box, negative = up; 0 on a channel switch
@@ -447,6 +448,20 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.readAt[msg.Ch] = l.At
 			}
 		}
+		if msg.Nick != "" {
+			if a.readBy == nil {
+				a.readBy = map[string]map[string]string{}
+			}
+			if a.readBy[msg.Ch] == nil {
+				a.readBy[msg.Ch] = map[string]string{}
+			}
+			old, had := a.readBy[msg.Ch][msg.Nick]
+			a.readBy[msg.Ch][msg.Nick] = msg.ID
+			if had && old != msg.ID {
+				a = a.setSeen(msg.Ch, old)
+			}
+			a = a.setSeen(msg.Ch, msg.ID)
+		}
 	case TagsMsg:
 		if a.tags == nil {
 			a.tags = map[string]string{}
@@ -638,6 +653,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return a.openPick(pickUsers), nil
 			case it.do == "thread":
 				a = a.nextThread()
+			case it.do == "seenby":
+				a = a.seenBy()
 			case it.do == "forward":
 				a = a.openPick(pickChans)
 				a.forwarding = true
@@ -1675,6 +1692,44 @@ func (a App) nextUnreadChan(fwd bool) App {
 	return a.toast("no unread chats", false)
 }
 
+// setSeen sets the seen-by summary of the line with event ID id in channel ch: the readers whose latest read it is.
+func (a App) setSeen(ch, id string) App {
+	var nicks []string
+	for n, rid := range a.readBy[ch] {
+		if rid == id {
+			nicks = append(nicks, n)
+		}
+	}
+	slices.Sort(nicks)
+	if m, err := a.m.SetSeen(ch, id, strings.Join(nicks, ", ")); err == nil {
+		a.m = m
+	}
+	return a
+}
+
+// seenBy lists the readers whose read reaches the selected message or past it: the message menu's seen by.
+func (a App) seenBy() App {
+	cur := a.m.Current().Name
+	ls := a.lines(a.m.Current())
+	if a.hit < 0 || a.hit >= len(ls) {
+		return a.toast("seen by: select a message first", true)
+	}
+	var nicks []string
+	for n, rid := range a.readBy[cur] {
+		for j, l := range ls {
+			if l.ID == rid && j >= a.hit {
+				nicks = append(nicks, n)
+			}
+		}
+	}
+	slices.Sort(nicks)
+	if len(nicks) == 0 {
+		nicks = []string{"nobody yet"}
+	}
+	a.listTitle, a.list = "seen by", nicks
+	return a.openPick(pickInfo)
+}
+
 // gotoDate selects the first shown line at or after when (a date, a date and time, a time today, or "yesterday").
 func (a App) gotoDate(s string) App {
 	now := a.now()
@@ -2448,10 +2503,10 @@ func (a App) wrap() wrapFunc {
 
 // rowKey is what a wrapped row depends on.
 type rowKey struct {
-	at                             int64
-	nick, text, id, thread, reacts string
-	dim, stamped                   bool
-	width                          int
+	at                                   int64
+	nick, text, id, thread, reacts, seen string
+	dim, stamped                         bool
+	width                                int
 }
 
 // rowCache holds wrapped rows; it is shared by copies of App, so it lives behind a pointer.
@@ -2465,7 +2520,7 @@ const rowCacheMax = 50000 // rows; the cache is cleared when it is full
 func (c *rowCache) memo(base wrapFunc, stamped bool) wrapFunc {
 	return func(l model.Line, width int) []string {
 		k := rowKey{at: l.At.UnixNano(), nick: l.Nick, text: l.Text, id: l.ID, thread: l.Thread,
-			dim: l.Dim, stamped: stamped, width: width, reacts: l.Reacts}
+			dim: l.Dim, stamped: stamped, width: width, reacts: l.Reacts, seen: l.Seen}
 		c.mu.Lock()
 		rs, ok := c.m[k]
 		c.mu.Unlock()
@@ -2643,7 +2698,7 @@ var menus = map[string][]menuItem{
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}, {"d", "devices", ":devices"}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"s", "seen by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
 	"emoji":   emojiMenu(),

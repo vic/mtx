@@ -308,3 +308,14 @@ func TestHelpAligned(t *testing.T) {
 		t.Fatal("no help rows found")
 	}
 }
+
+// TestHelpKeyColumnNarrow: no help key is wider than 24 cells, so the descriptions stay on screen.
+func TestHelpKeyColumnNarrow(t *testing.T) {
+	for _, s := range helpSections {
+		for _, k := range s.keys {
+			if w := lipgloss.Width(k[0]); w > 24 {
+				t.Fatalf("key %q is %d cells wide", k[0], w)
+			}
+		}
+	}
+}

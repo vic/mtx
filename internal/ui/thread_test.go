@@ -51,7 +51,7 @@ func TestThreadsInPickerAndPane(t *testing.T) {
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 2}}}
 	label := threadLabel(a.threads["#a"][0])
 	a = a.openPick(pickThreads)
-	if !slices.Contains(a.pickSource(), label) {
+	if !slices.ContainsFunc(a.pickSource(), func(s string) bool { return strings.HasSuffix(s, label) }) {
 		t.Fatalf("picker source has no thread: %v", a.pickSource())
 	}
 	a.pq.SetValue("start")
@@ -245,7 +245,7 @@ func TestCtrlOKeepsChannelsAndNicks(t *testing.T) {
 		t.Fatalf("open chat source: %v", src)
 	}
 	a = a.openPick(pickThreads)
-	if !slices.Contains(a.pickSource(), threadLabel(a.threads["#a"][0])) {
+	if !slices.ContainsFunc(a.pickSource(), func(s string) bool { return strings.HasSuffix(s, threadLabel(a.threads["#a"][0])) }) {
 		t.Fatalf("open thread source lacks the thread: %v", a.pickSource())
 	}
 	a = a.openPick(pickUsers)

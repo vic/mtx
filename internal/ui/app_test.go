@@ -925,7 +925,7 @@ func TestOpenPickers(t *testing.T) {
 		t.Fatalf("open thread: pick %v what %v", a.pick, a.pickWhat)
 	}
 	for _, n := range a.pickSource() {
-		if n != threadLabel(a.threads["#a"][0]) {
+		if !strings.HasSuffix(n, threadLabel(a.threads["#a"][0])) { // the row is the summary columns and the label
 			t.Fatalf("thread picker lists %q", n)
 		}
 	}
@@ -1636,7 +1636,7 @@ func TestThreadPickerTimes(t *testing.T) {
 	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1, At: at}}}
 	a = a.openPick(pickThreads)
-	if src := a.pickSource(); len(src) != 1 || !strings.HasPrefix(src[0], "10-21 09:00  bob: start") {
+	if src := a.pickSource(); len(src) != 1 || !strings.HasPrefix(src[0], "10-21 09:00") || !strings.Contains(src[0], "💬") || !strings.Contains(src[0], "bob: start") || strings.Contains(src[0], "\x1b") {
 		t.Fatalf("rows %q", src)
 	}
 	a, _ = press(t, a, "enter")

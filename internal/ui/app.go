@@ -1442,11 +1442,7 @@ func (a App) pickSource() []string {
 		}
 	case pickThreads:
 		for _, h := range a.threads[a.m.Current().Name] {
-			label := threadLabel(h)
-			if !h.At.IsZero() {
-				label = h.At.Format("01-02 15:04") + "  " + label
-			}
-			out = append(out, label)
+			out = append(out, ansi.Strip(threadStamp(h.At, h, a.unreadOf(h)))+threadLabel(h)) // plain text: the picker box matches it rune by rune // time, then the summary columns, as in the threads box
 		}
 	case pickUsers:
 		cur := a.m.Current()

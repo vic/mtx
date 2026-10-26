@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func twoChans(t *testing.T) Model {
@@ -163,5 +164,25 @@ func TestCleanTextKeepsLayout(t *testing.T) {
 	}
 	if clean("x\ny") != "x y" { // nicks stay one line
 		t.Fatal("clean changed")
+	}
+}
+
+// TestAddHistoryLinesMerges: history older than live lines goes before them, and a duplicate ID is dropped.
+func TestAddHistoryLinesMerges(t *testing.T) {
+	m, err := New(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = m.WithRooms([]string{"&r"})
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	m, _ = m.AddLine("&r", Line{At: t0.Add(time.Hour), Text: "live", ID: "$3"})
+	m, _ = m.AddHistoryLines("&r", []Line{{At: t0, Text: "old", ID: "$1"}, {At: t0.Add(time.Minute), Text: "older2", ID: "$2"}, {At: t0.Add(time.Hour), Text: "live", ID: "$3"}})
+	var got []string
+	c := m.Current()
+	for _, l := range c.Lines.All() {
+		got = append(got, l.Text)
+	}
+	if strings.Join(got, ",") != "old,older2,live" {
+		t.Fatalf("got %v", got)
 	}
 }

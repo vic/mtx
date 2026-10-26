@@ -64,8 +64,8 @@ func Status(m Model, mode string, info map[int]SessionInfo, now time.Time) Model
 			}
 		}
 		rate := 0
-		for _, l := range c.Lines.All() {
-			if d := now.Sub(l.At); d >= 0 && d < rateWindow {
+		for i := range c.Lines.Len() { // At, not All: no copy of the ring per frame
+			if d := now.Sub(c.Lines.At(i).At); d >= 0 && d < rateWindow {
 				rate++
 			}
 		}

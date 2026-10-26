@@ -40,6 +40,9 @@ func (r *runner) seen(ch string) error {
 			r.loadHistory(room)
 		}
 	}
+	if room, err := r.roomOf(ch); err == nil && r.mx != nil {
+		r.threadsOnce(room)
+	}
 	room, err := r.roomOf(ch)
 	if err != nil {
 		return err

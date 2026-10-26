@@ -24,16 +24,18 @@ const (
 
 // Client is a logged-in device with E2EE on and its own sync loop.
 type Client struct {
-	cli      *mautrix.Client
-	helper   *cryptohelper.CryptoHelper
-	db       *dbutil.Database
-	user     id.UserID
-	onInvite func(Invite)
-	onTyping func(id.RoomID, []id.UserID)
-	progress func(Progress)
-	mu       sync.Mutex          // one event at a time: see lock
-	loaded   sync.Map            // rooms whose history LoadRoom has started
-	shown    map[id.EventID]bool // events this run has handed to the UI, history or live
+	cli         *mautrix.Client
+	helper      *cryptohelper.CryptoHelper
+	db          *dbutil.Database
+	user        id.UserID
+	onInvite    func(Invite)
+	onTyping    func(id.RoomID, []id.UserID)
+	progress    func(Progress)
+	mu          sync.Mutex          // one event at a time: see lock
+	loaded      sync.Map            // rooms whose history LoadRoom has started
+	shown       map[id.EventID]bool // events this run has handed to the UI, history or live
+	decryptOnce sync.Once
+	decryptSem  chan struct{} // bounds decrypts in flight; see decryptSlot
 }
 
 // New opens the store, checks the device against the server, and starts E2EE. With no
@@ -377,10 +379,22 @@ func (c *Client) handleHistory(ctx context.Context, evt *event.Event, h Handler)
 // ErrPending is the decrypt error a placeholder carries: the event is shown, its text is coming.
 var ErrPending = errors.New("decrypting")
 
+// decryptWorkers is how many decrypts run at once.
+const decryptWorkers = 8
+
+// decryptSlot is the semaphore of decrypts in flight; made on first use so a Client built in tests works too.
+func (c *Client) decryptSlot() chan struct{} {
+	c.decryptOnce.Do(func() { c.decryptSem = make(chan struct{}, decryptWorkers) })
+	return c.decryptSem
+}
+
 // decryptAsync decrypts evt off the UI path and delivers the result (or its failure) to h with the
 // same event ID, so the UI replaces the placeholder. h runs under c.mu, like every delivery.
 func (c *Client) decryptAsync(evt *event.Event, h Handler) {
 	go func() {
+		sem := c.decryptSlot()
+		sem <- struct{}{}
+		defer func() { <-sem }()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		out, decErr := c.helper.Decrypt(ctx, evt)

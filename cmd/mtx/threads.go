@@ -1,8 +1,11 @@
 package main
 
 import (
+	"net/http"
+	"slices"
 	"time"
 
+	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
@@ -111,5 +114,59 @@ func (r *runner) fetchRoot(room id.RoomID, root id.EventID) {
 	r.mu.Unlock()
 	if name, ok := r.nameOf(room); ok {
 		r.emit(ui.ThreadRootMsg{Ch: name, Root: string(root), Nick: nick, Text: text})
+	}
+}
+
+// threadsResp is GET /_matrix/client/v1/rooms/{room}/threads: thread roots, newest activity first.
+type threadsResp struct {
+	Chunk []*event.Event `json:"chunk"`
+}
+
+// fetchThreads loads every thread root of room (up to 100) from the server and merges them into the
+// room's heads, so heads show even when no reply was seen this session. Runs in its own goroutine.
+func (r *runner) fetchThreads(room id.RoomID) {
+	ctx, cancel := callCtx()
+	defer cancel()
+	var resp threadsResp
+	url := r.mx.BuildURLWithQuery(mautrix.ClientURLPath{"v1", "rooms", room, "threads"}, map[string]string{"limit": "100"})
+	if _, err := r.mx.MakeRequest(ctx, http.MethodGet, url, nil, &resp); err != nil {
+		logf("threads %s: %v", room, err)
+		return
+	}
+	r.mu.Lock()
+	heads := r.heads[room]
+	for _, ev := range resp.Chunk {
+		h := model.Thread{Root: ev.ID.String(), Nick: localpart(ev.Sender.String()), Text: "(encrypted)", At: time.UnixMilli(ev.Timestamp)}
+		if ev.Type != event.EventEncrypted && ev.Content.ParseRaw(ev.Type) == nil {
+			if t, _, ok := r.messageText(ev, nil); ok {
+				h.Text = t
+			}
+		}
+		if rel := ev.Unsigned.Relations; rel != nil && rel.Thread != nil {
+			h.Count = rel.Thread.Count
+			if l := rel.Thread.LatestEvent; l != nil {
+				h.At = time.UnixMilli(l.Timestamp)
+			}
+		}
+		if i := slices.IndexFunc(heads, func(x model.Thread) bool { return x.Root == h.Root }); i >= 0 {
+			h.Live = heads[i].Live // live counts belong to this session
+			heads[i] = h
+		} else {
+			heads = append(heads, h)
+		}
+	}
+	slices.SortStableFunc(heads, func(a, b model.Thread) int { return a.At.Compare(b.At) }) // newest last
+	r.heads[room] = heads
+	out := append([]model.Thread(nil), heads...)
+	r.mu.Unlock()
+	if name, ok := r.nameOf(room); ok {
+		r.emit(ui.ThreadsMsg{Ch: name, Heads: out})
+	}
+}
+
+// threadsOnce starts fetchThreads for room the first time the room is shown.
+func (r *runner) threadsOnce(room id.RoomID) {
+	if _, done := r.threadsAsked.LoadOrStore(room, true); !done {
+		go r.fetchThreads(room)
 	}
 }

@@ -116,8 +116,11 @@ func TestToastInviteNamesAliasAndInviter(t *testing.T) {
 
 // TestRoomLabelPrefersRoomName: the channel takes the room name as Element shows it, else the alias.
 func TestRoomLabelPrefersRoomName(t *testing.T) {
-	require.Equal(t, "mi-sala", roomLabel(roomMeta{name: "  Mi   Sala ", alias: "#x:s"}))
-	require.Equal(t, "x", roomLabel(roomMeta{alias: "#x:s"}))
+	require.Equal(t, "mi-sala", roomLabel(roomMeta{name: "  Mi   Sala ", alias: "#x:s"}, ""))
+	require.Equal(t, "x", roomLabel(roomMeta{alias: "#x:s"}, ""))
+	require.Equal(t, "ana", roomLabel(roomMeta{nicks: []string{"me", "ana"}}, "me"))
+	require.Equal(t, "a,b,c", roomLabel(roomMeta{nicks: []string{"a", "me", "b", "c", "d"}}, "me"))
+	require.Equal(t, "", roomLabel(roomMeta{nicks: []string{"me"}}, "me"))
 }
 
 // TestHistoryLinesAreOld: history is batched per room and sent as scrollback, not unread;

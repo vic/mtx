@@ -31,11 +31,15 @@ type runner struct {
 	mx   *mautrix.Client
 	emit func(tea.Msg)
 	// loadHistory starts a room's history when the room is entered; nil in tests
-	loadHistory func(id.RoomID)
-	hist        map[string][]model.Line // history lines waiting for flushHistory, by channel
-	memberBusy  map[id.RoomID]bool      // a nick-list fetch is running for the room
-	memberAgain map[id.RoomID]bool      // the room changed while a fetch ran: fetch once more
-	placeholder map[string]bool         // event IDs shown as decrypting and not yet replaced
+	loadHistory  func(id.RoomID)
+	hist         map[string][]model.Line    // history lines waiting for flushHistory, by channel
+	memberBusy   map[id.RoomID]bool         // a nick-list fetch is running for the room
+	memberAgain  map[id.RoomID]bool         // the room changed while a fetch ran: fetch once more
+	placeholder  map[string]bool            // event IDs shown as decrypting and not yet replaced
+	threadsAsked sync.Map                   // rooms whose thread list was fetched
+	cacheLine    func(matrix.CachedLine)    // saves a shown line to the local cache; nil = off
+	cacheRooms   func(map[id.RoomID]string) // saves room labels; nil = off
+	refreshMu    sync.Mutex                 // one room refresh at a time; see roomName
 
 	mu     sync.Mutex
 	last   map[id.RoomID]id.EventID     // newest message per room (read markers)
@@ -211,10 +215,13 @@ func (r *runner) refresh() error {
 			firstErr = cmp.Or(firstErr, m.err)
 			continue
 		}
-		r.register(m.room, roomLabel(m))
+		r.register(m.room, roomLabel(m, localpart(r.mx.UserID.String())))
 		r.emitRooms()
 		name, _ := r.nameOf(m.room)
 		r.emit(ui.MembersMsg{Ch: name, Nicks: m.nicks, Levels: m.levels})
+	}
+	if r.cacheRooms != nil {
+		r.cacheRooms(r.labels())
 	}
 	return firstErr
 }
@@ -243,12 +250,25 @@ func (r *runner) fetchRoom(room id.RoomID) roomMeta {
 	return m
 }
 
-// roomLabel is the channel name: the room name as Element shows it, else the alias.
-func roomLabel(m roomMeta) string {
+// roomLabel is the channel name: the room name as Element shows it, else the alias, else the other
+// members' nicks (a DM is named after the peer), else "" (register then falls back to the room ID).
+func roomLabel(m roomMeta, me string) string {
 	if n := strings.Join(strings.Fields(strings.ToLower(m.name)), "-"); n != "" {
 		return n
 	}
-	return localpart(m.alias)
+	if a := localpart(m.alias); a != "" {
+		return a
+	}
+	var others []string
+	for _, n := range m.nicks {
+		if n != me {
+			others = append(others, n)
+		}
+	}
+	if len(others) > 3 { // a long list is not a name
+		others = others[:3]
+	}
+	return strings.Join(others, ",")
 }
 
 func (r *runner) canonicalAlias(room id.RoomID) string {
@@ -265,14 +285,12 @@ func (r *runner) canonicalAlias(room id.RoomID) string {
 func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) error {
 	old := matrix.IsHistory(ctx) // replayed on the first sync: scrollback, no unread count
 	r.noteLast(evt)
-	name, ok := r.nameOf(evt.RoomID)
+	name, ok, err := r.roomName(evt.RoomID)
+	if err != nil {
+		return err
+	}
 	if !ok {
-		if err := r.refresh(); err != nil {
-			return err
-		}
-		if name, ok = r.nameOf(evt.RoomID); !ok {
-			return nil // a room we are not in (left or not joined yet)
-		}
+		return nil // a room we are not in (left or not joined yet)
 	}
 	if evt.Type == event.StateMember {
 		if text, ok := membershipText(evt); ok {
@@ -330,10 +348,32 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 		r.emit(ui.LineMsg{Ch: name, L: line})
 	}
 	if decErr != matrix.ErrPending {
+		if r.cacheLine != nil {
+			r.cacheLine(matrix.CachedLine{Room: evt.RoomID, EventID: evt.ID, TS: evt.Timestamp, Nick: line.Nick, Text: line.Text, Dim: line.Dim, Thread: line.Thread})
+		}
 		r.noteText(evt, text)
 		r.noteThread(evt, text, old)
 	}
 	return nil
+}
+
+// roomName is room's channel name, refreshing the room list when the room is unknown. A caller that
+// waited for another refresh checks again before starting its own, so a burst of events from one new
+// room costs one refresh.
+func (r *runner) roomName(room id.RoomID) (string, bool, error) {
+	if name, ok := r.nameOf(room); ok {
+		return name, true, nil
+	}
+	r.refreshMu.Lock()
+	defer r.refreshMu.Unlock()
+	if name, ok := r.nameOf(room); ok {
+		return name, true, nil
+	}
+	if err := r.refresh(); err != nil {
+		return "", false, err
+	}
+	name, ok := r.nameOf(room)
+	return name, ok, nil
 }
 
 // messageText is the scrollback text of a message: body, an edit (new content), or the decrypt

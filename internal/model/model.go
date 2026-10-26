@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"slices"
 	"time"
 )
@@ -83,6 +84,18 @@ func (m Model) Channels() []Channel {
 		out[i].Agents = slices.Clone(out[i].Agents)
 	}
 	return out
+}
+
+// All yields each channel with its index, in list order, with no copy. Read only: callers must not
+// change a yielded channel's Members, Agents or Lines.
+func (m Model) All() iter.Seq2[int, Channel] {
+	return func(yield func(int, Channel) bool) {
+		for i, c := range m.chans {
+			if !yield(i, c) {
+				return
+			}
+		}
+	}
 }
 
 // WithRoomMembers returns a Model whose room ch has the given members (copied).

@@ -212,7 +212,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 	ch := app.m.Current().Name
-	if ch != "" && (ch != before || newLineFor(msg, ch)) {
+	switch {
+	case ch == "":
+	case ch != before: // a switch: wait, so arrowing past channels does not load each one
+		cmd = tea.Batch(cmd, tea.Tick(seenDelay, func(time.Time) tea.Msg { return seenDueMsg(ch) }))
+	case newLineFor(msg, ch), msg == seenDueMsg(ch):
 		cmd = tea.Batch(cmd, seenCmd(app.seen, ch))
 	}
 	return app, cmd
@@ -231,6 +235,12 @@ func seenCmd(seen func(ch string) error, ch string) tea.Cmd {
 		return nil
 	}
 }
+
+// seenDelay is how long a channel must stay current before its read markers and history load.
+const seenDelay = 250 * time.Millisecond
+
+// seenDueMsg fires seenDelay after channel switched to; Update runs the seen hook if it is still current.
+type seenDueMsg string
 
 // update applies msg (Update adds the read-marker hook around it).
 func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -374,6 +384,11 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a.wheel(msg, n), nil
 		}
 	case KeyRun:
+		if a.mode == Normal && a.focus == focusChat && a.prompt == 0 && !a.pick && !a.help && a.pending == "" {
+			if act, _, _ := Key(Normal, "", msg.M.String()); act.Kind == Scroll { // j/k: one clamp for the whole run
+				return a.scroll(Action{Scroll, act.N * msg.N}), nil
+			}
+		}
 		var cmds []tea.Cmd
 		for range msg.N {
 			next, c := a.key(msg.M)
@@ -598,7 +613,7 @@ func (a App) switchChan(act Action) App {
 // focusName makes channel name current.
 func (a App) focusName(name string) App {
 	from := a.m.Current().Name
-	for i, c := range a.m.Channels() {
+	for i, c := range a.m.All() {
 		if c.Name == name && name != from {
 			a.m, _ = a.m.Focus(i)                   // i is in range: it comes from Channels
 			a.hit, a.speakers, a.grep = -1, nil, "" // the speaker and grep filters belong to the channel they were set in
@@ -768,7 +783,7 @@ func (a App) off() int { return a.offs[a.m.Current().Name] }
 // setOff stores ch's offset clamped to [0, lines-page], copy-on-write.
 func (a App) setOff(ch string, off int) App {
 	n := 0
-	for _, c := range a.m.Channels() {
+	for _, c := range a.m.All() {
 		if c.Name == ch {
 			n = rowCount(a.lines(c), textWidth(a.w, a.h), a.wrap())
 		}
@@ -905,7 +920,7 @@ func (a App) sendLiteral(text string) (tea.Model, tea.Cmd) {
 
 func (a App) chanNames() []string {
 	var out []string
-	for _, c := range a.m.Channels() {
+	for _, c := range a.m.All() {
 		out = append(out, c.Name)
 	}
 	return out
@@ -956,7 +971,7 @@ func (a App) pickSource() []string {
 		}
 		cur := a.m.Current()
 		nicks := chanNicks(cur, a.user)[1:] // this channel: plain nicks
-		for _, c := range a.m.Channels() {  // other sessions: agents only as agent@session, never plain
+		for _, c := range a.m.All() {       // other sessions: agents only as agent@session, never plain
 			if c.Kind == model.SessionChan && c.Name != cur.Name {
 				for _, ag := range c.Agents {
 					nicks = append(nicks, ag.Nick+"@"+strings.TrimPrefix(c.Name, "#"))
@@ -976,7 +991,7 @@ func (a App) pickSource() []string {
 		out = a.files
 	case pickInvite: // every session's main agent and its agents as agent@session, minus members
 		cur := a.m.Current()
-		for _, c := range a.m.Channels() {
+		for _, c := range a.m.All() {
 			if c.Kind != model.SessionChan {
 				continue
 			}
@@ -1123,7 +1138,7 @@ func (a App) nickPool() []string {
 	for _, m := range cur.Members {
 		out = append(out, m.Nick)
 	}
-	for _, c := range a.m.Channels() {
+	for _, c := range a.m.All() {
 		if c.Kind == model.SessionChan {
 			s := strings.TrimPrefix(c.Name, "#")
 			out = append(out, s)
@@ -1225,7 +1240,7 @@ func (a App) pidOf(nick string) int {
 	if _, s, ok := strings.Cut(nick, "@"); ok {
 		nick = s
 	}
-	for _, c := range a.m.Channels() {
+	for _, c := range a.m.All() {
 		if c.Kind == model.SessionChan && c.Name == "#"+nick {
 			return c.PID
 		}

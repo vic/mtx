@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -77,6 +78,33 @@ func fit(st lipgloss.Style, s string, n int) string {
 	return st.Width(n).MaxWidth(n).Render(strings.ReplaceAll(s, "\n", " "))
 }
 
+// fitCell is fit(cell, s, n), memoized: side pane cells repeat every frame.
+func fitCell(s string, n int) string {
+	k := fitKey{s, n}
+	fitCells.mu.Lock()
+	defer fitCells.mu.Unlock()
+	if r, ok := fitCells.m[k]; ok {
+		return r
+	}
+	r := fit(cell, s, n)
+	if len(fitCells.m) >= styledMax {
+		fitCells.m = map[fitKey]string{}
+	}
+	fitCells.m[k] = r
+	return r
+}
+
+type fitKey struct {
+	s string
+	n int
+}
+
+// fitCells holds fitCell results across frames.
+var fitCells = struct {
+	mu sync.Mutex
+	m  map[fitKey]string
+}{m: map[fitKey]string{}}
+
 func wide(w, h int) bool { return w >= minWide && h >= minWideH }
 
 // paneRows is how many scrollback rows View shows in a w x h screen with in input rows.
@@ -119,10 +147,51 @@ func seg(name string, n int, line lipgloss.Style) string {
 	return title.Render(t) + line.Render(strings.Repeat("─", n-lipgloss.Width(t)))
 }
 
-// lineRow is scrollback row i in n columns: the search hit reversed, else the
+// lineRow is lineRowUncached, memoized: a styled row depends only on these inputs, so a frame
+// that shows the same rows reuses them.
+func lineRow(rows []string, of []int, shown []model.Line, hit, i, n int, lead string, code []bool, q string) string {
+	if i >= len(rows) {
+		return lineRowUncached(rows, of, shown, hit, i, n, lead, code, q)
+	}
+	l := shown[of[i]]
+	k := styledKey{row: rows[i], nick: l.Nick, dim: l.Dim, kind: l.Kind, hit: of[i] == hit, code: code[i], q: q, n: n, lead: lead}
+	styled.mu.Lock()
+	s, ok := styled.m[k]
+	styled.mu.Unlock()
+	if ok {
+		return s
+	}
+	s = lineRowUncached(rows, of, shown, hit, i, n, lead, code, q)
+	styled.mu.Lock()
+	if len(styled.m) >= styledMax {
+		styled.m = map[styledKey]string{}
+	}
+	styled.m[k] = s
+	styled.mu.Unlock()
+	return s
+}
+
+// styledKey is everything lineRowUncached reads for one row.
+type styledKey struct {
+	row, nick, q, lead string
+	dim, hit, code     bool
+	kind               model.LineKind
+	n                  int
+}
+
+// styledMax bounds the styled row cache; it is cleared when full.
+const styledMax = 20000
+
+// styled holds styled rows across frames (View runs on one goroutine; tests may run in parallel).
+var styled = struct {
+	mu sync.Mutex
+	m  map[styledKey]string
+}{m: map[styledKey]string{}}
+
+// lineRowUncached is scrollback row i in n columns: the search hit reversed, else the
 // nick in its color, dim or tool text gray, chat text with markdown colors.
 // code[i]: the row is inside a ``` block of its line.
-func lineRow(rows []string, of []int, shown []model.Line, hit, i, n int, lead string, code []bool, q string) string {
+func lineRowUncached(rows []string, of []int, shown []model.Line, hit, i, n int, lead string, code []bool, q string) string {
 	if i >= len(rows) {
 		return fit(cell, "", n)
 	}
@@ -190,7 +259,7 @@ func codeRows(rows []string, of []int, shown []model.Line) []bool {
 func View(m model.Model, ml model.Modeline, input string, w, h, off, hit int) string {
 	cur := m.Current()
 	var names []string
-	for _, c := range m.Channels() {
+	for _, c := range m.All() {
 		names = append(names, c.Name)
 	}
 	return render(m, ml, "> "+input, w, h, off, hit, sidePanes{chans: names, nicks: memberNicks(cur)}, cur.Lines.All(), wrapLine, nil, "", "")
@@ -218,7 +287,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		}
 	} else {
 		byName := map[string]model.Channel{}
-		for _, c := range m.Channels() {
+		for _, c := range m.All() {
 			byName[c.Name] = c
 		}
 		var chans []model.Channel
@@ -236,10 +305,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			pane = 2
 		}
 		edge := func(k int, s string) string { // vertical border k, or a corner on it
-			if k == pane || k == pane+1 {
-				return focusBorder.Render(s)
-			}
-			return border.Render(s)
+			return borderGlyph(k == pane || k == pane+1, s)
 		}
 		line := func(k int) lipgloss.Style {
 			if k == pane {
@@ -263,7 +329,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 				}
 				nk = mark + nickStyle(name).Render(name)
 			}
-			cc, nc := chanCell(chans, cur.Name, i), fit(cell, " "+nk, nickW)
+			cc, nc := chanCell(chans, cur.Name, i), fitCell(" "+nk, nickW)
 			if p.focus == focusChans && i == p.sel && i < len(chans) {
 				cc = fit(current, " "+chans[i].Name, chanW)
 			}
@@ -318,7 +384,42 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 	return strings.Join(rows, "\n")
 }
 
+// chanCell is chanCellUncached, memoized on what the cell shows.
 func chanCell(chans []model.Channel, curName string, i int) string {
+	if i >= len(chans) {
+		return fitCell("", chanW)
+	}
+	c := chans[i]
+	k := chanKey{name: c.Name, kind: c.Kind, gone: c.Gone, unread: c.Unread, cur: c.Name == curName}
+	chanCells.mu.Lock()
+	defer chanCells.mu.Unlock()
+	if s, ok := chanCells.m[k]; ok {
+		return s
+	}
+	s := chanCellUncached(chans, curName, i)
+	if len(chanCells.m) >= styledMax {
+		chanCells.m = map[chanKey]string{}
+	}
+	chanCells.m[k] = s
+	return s
+}
+
+// chanKey is everything chanCellUncached reads for one channel.
+type chanKey struct {
+	name      string
+	kind      model.ChanKind
+	gone, cur bool
+	unread    int
+}
+
+// chanCells holds rendered channel cells across frames.
+var chanCells = struct {
+	mu sync.Mutex
+	m  map[chanKey]string
+}{m: map[chanKey]string{}}
+
+// chanCellUncached is channel row i of the channel pane, chanW wide.
+func chanCellUncached(chans []model.Channel, curName string, i int) string {
 	if i >= len(chans) {
 		return fit(cell, "", chanW)
 	}
@@ -680,4 +781,31 @@ var gutterBar = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Render("▌
 func frameRule(text string, w int) string {
 	s := "─ " + text + " "
 	return s + strings.Repeat("─", max(w-lipgloss.Width(s), 0))
+}
+
+// borderGlyphs holds each border character rendered in border and in focusBorder: a frame draws
+// four per row, and the style never changes.
+var borderGlyphs = struct {
+	mu sync.Mutex
+	m  map[[2]string]string
+}{m: map[[2]string]string{}}
+
+// borderGlyph is s in focusBorder (focused) or border, rendered once per process.
+func borderGlyph(focused bool, s string) string {
+	k := [2]string{"", s}
+	if focused {
+		k[0] = "f"
+	}
+	borderGlyphs.mu.Lock()
+	defer borderGlyphs.mu.Unlock()
+	if g, ok := borderGlyphs.m[k]; ok {
+		return g
+	}
+	st := border
+	if focused {
+		st = focusBorder
+	}
+	g := st.Render(s)
+	borderGlyphs.m[k] = g
+	return g
 }

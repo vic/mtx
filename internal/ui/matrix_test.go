@@ -89,3 +89,26 @@ func TestHelpButtonsOpenLinks(t *testing.T) {
 		t.Fatal("click outside buttons hit one")
 	}
 }
+
+// TestSeenWaitsAfterSwitch: a switch schedules the hook; the due message runs it only for the current channel.
+func TestSeenWaitsAfterSwitch(t *testing.T) {
+	var log []sent
+	var seen []string
+	a := newApp(t, &log, nil).WithSeen(func(ch string) error { seen = append(seen, ch); return nil })
+	next, cmd := a.Update(FocusMsg("#b"))
+	a = next.(App)
+	if cmd == nil || len(seen) != 0 {
+		t.Fatalf("switch must schedule, not call: cmd %v seen %v", cmd != nil, seen)
+	}
+	if _, cmd := a.Update(seenDueMsg("#a")); cmd != nil {
+		t.Fatal("due message for a channel no longer current must do nothing")
+	}
+	_, cmd = a.Update(seenDueMsg("#b"))
+	if cmd == nil {
+		t.Fatal("due message for the current channel must run the hook")
+	}
+	cmd()
+	if len(seen) != 1 || seen[0] != "#b" {
+		t.Fatalf("seen %v", seen)
+	}
+}

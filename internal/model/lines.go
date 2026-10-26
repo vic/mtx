@@ -17,7 +17,6 @@ var (
 
 // AddLine appends l to channel ch, counting it unread unless ch is focused.
 // The returned Model gives ch its own Ring; m is never modified.
-// shortcut: clone is O(cap) per line, upgrade to persistent ring if cap/rate grows
 func (m Model) AddLine(ch string, l Line) (Model, error) { return m.add(ch, l, true) }
 
 // AddHistory appends l like AddLine but as history: no unread count, and the
@@ -30,7 +29,6 @@ func (m Model) add(ch string, l Line, live bool) (Model, error) {
 			continue
 		}
 		l.Nick, l.Text = clean(l.Nick), cleanText(l.Text)
-		c.Lines = c.Lines.clone()
 		c.Lines.Push(l)
 		if !live {
 			return m.withChan(i, c), nil
@@ -113,15 +111,30 @@ func cleanText(s string) string {
 	return strings.Join(lines, "\n")
 }
 
-// AddHistoryLines appends ls to channel ch as history, cloning the ring once for the whole batch.
+// AddHistoryLines merges ls into channel ch as history, as one update: the scrollback stays in time
+// order (history usually arrives after live lines) and a line whose ID is already there is skipped.
 func (m Model) AddHistoryLines(ch string, ls []Line) (Model, error) {
 	for i, c := range m.chans {
 		if c.Name != ch {
 			continue
 		}
-		c.Lines = c.Lines.clone()
+		all := c.Lines.All()
+		have := make(map[string]bool, len(all))
+		for _, l := range all {
+			if l.ID != "" {
+				have[l.ID] = true
+			}
+		}
 		for _, l := range ls {
+			if l.ID != "" && have[l.ID] {
+				continue
+			}
 			l.Nick, l.Text = clean(l.Nick), cleanText(l.Text)
+			all = append(all, l)
+		}
+		slices.SortStableFunc(all, func(a, b Line) int { return a.At.Compare(b.At) })
+		c.Lines = RingOf[Line](m.cap)
+		for _, l := range all {
 			c.Lines.Push(l)
 		}
 		return m.withChan(i, c), nil

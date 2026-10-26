@@ -3,9 +3,9 @@ package matrix
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"maunium.net/go/mautrix"
-	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
@@ -22,35 +22,19 @@ func IsHistory(ctx context.Context) bool {
 	return v
 }
 
-// backfillLimit is how many events before the first sync's timeline are replayed per room.
+// backfillLimit is how many recent events a room's history loads.
 const backfillLimit = 100
 
-// backfillRoom syncs one room with a timeline limit, so the room's recent events and state come
-// back in one request, and delivers them as history. Events already handled are skipped.
+// backfillRoom fetches room's last backfillLimit events with /messages (read only) and delivers
+// them oldest first as history. Events already shown this run are skipped.
 func (c *Client) backfillRoom(ctx context.Context, room id.RoomID, h Handler) error {
-	filter, err := c.cli.CreateFilter(ctx, &mautrix.Filter{
-		Presence: &mautrix.FilterPart{NotTypes: []event.Type{{Type: "*"}}},
-		Room: &mautrix.RoomFilter{
-			Rooms:    []id.RoomID{room},
-			Timeline: &mautrix.FilterPart{Limit: backfillLimit},
-			// state is skipped: the room's members come from the room list, and their join lines are not history
-			State: &mautrix.FilterPart{NotTypes: []event.Type{{Type: "*"}}},
-		},
-	})
+	resp, err := c.cli.Messages(ctx, room, "", "", mautrix.DirectionBackward, nil, backfillLimit)
 	if err != nil {
-		return fmt.Errorf("backfill filter %s: %w", room, err)
+		return fmt.Errorf("history %s: %w", room, err)
 	}
-	resp, err := c.cli.FullSyncRequest(ctx, mautrix.ReqSync{Timeout: 0, FilterID: filter.FilterID})
-	if err != nil {
-		return fmt.Errorf("backfill %s: %w", room, err)
-	}
-	if rr, ok := resp.Rooms.Join[room]; ok {
-		if err := c.roomEvents(WithHistory(ctx), room, rr.State.Events, rr.Timeline.Events, h, true); err != nil {
-			return err
-		}
-	}
-	_, err = c.db.RawDB.ExecContext(ctx, `INSERT OR IGNORE INTO room_backfill(room_id) VALUES(?)`, room.String())
-	return err
+	evs := resp.Chunk
+	slices.Reverse(evs) // /messages backward is newest first
+	return c.roomEvents(WithHistory(ctx), room, nil, evs, h, true)
 }
 
 // Progress is one toast-sized status: Total > 0 draws a bar; Finished ends it.

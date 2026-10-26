@@ -53,3 +53,30 @@ func TestRingZeroValuePush(t *testing.T) {
 		t.Fatalf("zero ring held items: %v", r.All())
 	}
 }
+
+// TestRingCopiesStayApart: a push on a copy never shows in the original, even when both push.
+func TestRingCopiesStayApart(t *testing.T) {
+	a, err := NewRing[int](3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []int{1, 2} {
+		a.Push(v)
+	}
+	b := a
+	b.Push(3)
+	a.Push(9)
+	b.Push(4)
+	if got := a.All(); !reflect.DeepEqual(got, []int{1, 2, 9}) {
+		t.Fatalf("a = %v", got)
+	}
+	if got := b.All(); !reflect.DeepEqual(got, []int{2, 3, 4}) {
+		t.Fatalf("b = %v", got)
+	}
+	for i := range 10 { // wraps buf several times
+		b.Push(10 + i)
+	}
+	if got := b.All(); !reflect.DeepEqual(got, []int{17, 18, 19}) || b.At(0) != 17 {
+		t.Fatalf("b = %v", got)
+	}
+}

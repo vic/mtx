@@ -63,13 +63,25 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 		return err
 	}
 	var p *tea.Program
-	in := ui.Coalesce(func(msg tea.Msg) { p.Send(msg) }) // human keys and wheel only, one batch per window
-	r := newRunner(c.MX(), func(msg tea.Msg) { p.Send(msg) })
+	in := ui.Coalesce(func(msg tea.Msg) { p.Send(msg) }) // one batch, one render per burst
+	r := newRunner(c.MX(), func(msg tea.Msg) {           // backend bursts share the input queue: one batch, one render
+		if !in(msg) {
+			p.Send(msg) // queue full: deliver directly
+		}
+	})
 	r.loadHistory = func(room id.RoomID) {
 		go func() {
 			c.LoadRoom(ctx, room, r.onEvent)
 			if name, ok := r.nameOf(room); ok {
 				r.flushHistory(name)
+			}
+		}()
+	}
+	r.cacheLine = startCacher(ctx, c.SaveLines)
+	r.cacheRooms = func(ls map[id.RoomID]string) {
+		go func() {
+			if err := c.SaveRooms(ctx, ls); err != nil {
+				logf("cache rooms: %v", err)
 			}
 		}()
 	}
@@ -87,9 +99,10 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 	app := ui.New(m, r.send).WithUser(localpart(cfg.UserID)).WithCmd(cs.cmd).WithLiteral(r.sendLiteral).WithSeen(r.seen).WithReply(r.reply).WithEdit(r.edit).WithPicker()
 	p = tea.NewProgram(app, tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
 		switch msg.(type) {
-		case tea.MouseWheelMsg, tea.KeyPressMsg: // in order, summed per frame: one render
-			in(msg)
-			return nil
+		case tea.MouseWheelMsg, tea.KeyPressMsg: // in order, summed per batch: one render
+			if in(msg) {
+				return nil
+			}
 		}
 		return msg
 	}))
@@ -99,11 +112,14 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 
 	syncErr := make(chan error, 1)
 	go func() {
-		if err := r.refresh(); err != nil {
-			syncErr <- err
-			p.Quit()
-			return
-		}
+		r.loadCache(ctx, c.LoadRooms, c.LoadLines)
+		go func() { // the room list loads beside sync: cached rooms already show
+			r.refreshMu.Lock()
+			defer r.refreshMu.Unlock()
+			if err := r.refresh(); err != nil {
+				r.emit(ui.ToastMsg{Text: "rooms: " + err.Error(), Err: true})
+			}
+		}()
 		if err := c.Run(ctx, r.onEvent); err != nil && !errors.Is(err, context.Canceled) {
 			logf("sync stopped: %v", err)
 			syncErr <- err

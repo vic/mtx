@@ -1,44 +1,41 @@
 package ui
 
 import (
-	"time"
-
 	tea "charm.land/bubbletea/v2"
 )
-
-// frameEvery is the coalescing window: at most one batch per frame (~60 fps). Like jjui's
-// debounce, a burst of events from sync and history is one update and one render, not one each.
-const frameEvery = 60 * time.Millisecond
 
 // BatchMsg carries the updates that arrived within one frame. Update applies them in order, then
 // the view renders once.
 type BatchMsg []tea.Msg
 
-// Coalesce returns a send func that queues messages and passes them on as one BatchMsg per frame.
-// send is only called from the coalescer's goroutine.
-func Coalesce(send func(tea.Msg)) func(tea.Msg) {
+// Coalesce returns an enqueue func for input events. The coalescer goroutine sends each batch as
+// soon as it has one: what queued while the previous batch was being applied goes out together.
+// enqueue never blocks: it returns false when the queue is full, and the caller passes the event on.
+func Coalesce(send func(tea.Msg)) func(tea.Msg) bool {
 	in := make(chan tea.Msg, 4096)
 	go func() {
-		tick := time.NewTicker(frameEvery)
-		defer tick.Stop()
-		var buf BatchMsg
-		for {
-			select {
-			case m := <-in:
-				buf = append(buf, m)
-			case <-tick.C:
-				if len(buf) > 0 {
-					send(buf)
-					buf = nil
+		for m := range in {
+			buf := BatchMsg{m}
+			for more := true; more; {
+				select {
+				case m := <-in:
+					buf = append(buf, m)
+				default:
+					more = false
 				}
 			}
+			send(buf)
 		}
 	}()
-	return func(m tea.Msg) { in <- m }
+	return func(m tea.Msg) bool {
+		select {
+		case in <- m:
+			return true
+		default:
+			return false
+		}
+	}
 }
-
-// wheelBatch is how many notches one WheelMsg step carries: a burst is computed in steps of 5.
-const wheelBatch = 5
 
 // WheelMsg is wheel notches summed over a run: N > 0 down, N < 0 up.
 type WheelMsg struct {
@@ -63,7 +60,7 @@ type KeyRun struct {
 	N int
 }
 
-// coalesceRuns sums same-direction wheel notches and repeated j/k keys into steps of up to wheelBatch.
+// coalesceRuns sums same-direction wheel notches and repeated j/k keys into one step per run.
 // Any other message ends a run and passes through unchanged.
 func coalesceRuns(in []tea.Msg) []tea.Msg {
 	var out []tea.Msg
@@ -91,7 +88,7 @@ func coalesceRuns(in []tea.Msg) []tea.Msg {
 			}
 			if w == nil {
 				w = &WheelMsg{}
-			} else if (w.N > 0) != (n > 0) || w.N >= wheelBatch || w.N <= -wheelBatch {
+			} else if (w.N > 0) != (n > 0) {
 				flush()
 				w = &WheelMsg{}
 			}
@@ -105,7 +102,7 @@ func coalesceRuns(in []tea.Msg) []tea.Msg {
 			if w != nil {
 				flush()
 			}
-			if k != nil && (k.M.String() != m.String() || k.N >= wheelBatch) {
+			if k != nil && k.M.String() != m.String() {
 				flush()
 			}
 			if k == nil {

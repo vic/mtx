@@ -557,7 +557,12 @@ func runTUI(nick string, opts ...tea.ProgramOption) int {
 		return 1
 	}
 	var p *tea.Program
-	r := newRunner(claude, procRoot, user, func(msg tea.Msg) { p.Send(msg) })
+	in := ui.Coalesce(func(msg tea.Msg) { p.Send(msg) }) // one batch, one render per burst
+	r := newRunner(claude, procRoot, user, func(msg tea.Msg) {
+		if !in(msg) {
+			p.Send(msg) // queue full: deliver directly
+		}
+	})
 	r.autoNick = nick == ""
 	defer r.close()
 	dir, err := roomsDir()

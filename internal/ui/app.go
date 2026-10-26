@@ -1437,7 +1437,11 @@ func (a App) pickSource() []string {
 		}
 	case pickThreads:
 		for _, h := range a.threads[a.m.Current().Name] {
-			out = append(out, threadLabel(h))
+			label := threadLabel(h)
+			if !h.At.IsZero() {
+				label = h.At.Format("01-02 15:04") + "  " + label
+			}
+			out = append(out, label)
 		}
 	case pickUsers:
 		cur := a.m.Current()
@@ -1494,6 +1498,18 @@ func (a App) pickSource() []string {
 // pickKey runs one key in the open picker: enter goes to the selected channel or line.
 func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	ms := pickList(a.pickSource(), a.pq.Value())
+	if a.pickWhat == pickUsers && msg.String() == "enter" && a.psel < len(ms) { // a user: enter opens the DM
+		a.pick = false
+		return a.runCmd(":dm " + ms[a.psel].name)
+	}
+	if a.pickWhat == pickThreads && msg.String() == "enter" && a.psel < len(ms) { // a head: by its place in the list
+		a.pick = false
+		heads := a.threads[a.m.Current().Name]
+		if idx := ms[a.psel].idx; idx < len(heads) {
+			return a.selectThread(heads[idx].Root), nil
+		}
+		return a, nil
+	}
 	if a.pickWhat == pickEdits && (msg.String() == "enter" || msg.String() == "esc") { // read only: enter closes it too
 		a.pick = false
 		return a, nil
@@ -2750,7 +2766,7 @@ var menus = map[string][]menuItem{
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}, {"⌫", "all NORMAL keys", "menu:normal"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},
-	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"e", "emote (/me)", ":me "}},
+	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"d", "direct message", "pick:user"}, {"D", "dm (type a user)", ":dm "}, {"e", "emote (/me)", ":me "}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"b", "ban", ":ban "}, {"B", "unban", ":unban "}, {"o", "op (power)", ":op "}, {"j", "join rule", ":joinrule "}, {"h", "history visibility", ":history "}, {"a", "alias", ":alias "}, {"v", "room avatar", ":roomavatar "}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
 		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},
 		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},

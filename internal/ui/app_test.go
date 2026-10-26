@@ -1609,3 +1609,38 @@ func TestZen(t *testing.T) {
 		t.Fatal("z again did not restore the panes")
 	}
 }
+
+// TestUserPickerOpensDM: enter on a user in the user picker runs /dm for them.
+func TestUserPickerOpensDM(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(RoomsMsg{"&r"})
+	next, _ = next.(App).Update(MembersMsg{Ch: "&r", Nicks: []string{"bob"}})
+	a = next.(App).focusName("&r")
+	a = a.openPick(pickUsers)
+	a.pq.SetValue("bob")
+	_, cmd := press(t, a, "enter")
+	if cmd == nil {
+		t.Fatal("no command")
+	}
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdDM || cm.Cmd.Args()[0] != "@bob" {
+		t.Fatalf("user picker: %#v", cmd())
+	}
+}
+
+// TestThreadPickerTimes: the thread picker shows each head's last-activity time; enter selects its root.
+func TestThreadPickerTimes(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1, At: at}}}
+	a = a.openPick(pickThreads)
+	if src := a.pickSource(); len(src) != 1 || !strings.HasPrefix(src[0], "10-21 09:00  bob: start") {
+		t.Fatalf("rows %q", src)
+	}
+	a, _ = press(t, a, "enter")
+	if a.thread != "$a1" {
+		t.Fatalf("thread %q want $a1", a.thread)
+	}
+}

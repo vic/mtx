@@ -648,3 +648,40 @@ func TestPreviewEmits(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, []string{"title: T", "description: D"}, lm.Entries)
 }
+
+// TestDMOpensExisting: /dm opens the direct message room already in m.direct, without creating one.
+func TestDMOpensExisting(t *testing.T) {
+	ts := mockserver.Create(t)
+	ts.Router.HandleFunc("GET /_matrix/client/v3/user/{user}/account_data/m.direct", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"@bob:mock.test":["!dm:mock.test"]}`)
+	})
+	created := false
+	ts.Router.HandleFunc("POST /_matrix/client/v3/createRoom", func(w http.ResponseWriter, r *http.Request) {
+		created = true
+		fmt.Fprint(w, `{"room_id":"!new:mock.test"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	var mu sync.Mutex
+	var got []tea.Msg
+	r := newRunner(cli, func(m tea.Msg) {
+		mu.Lock()
+		got = append(got, m)
+		mu.Unlock()
+	})
+	r.register("!dm:mock.test", "")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/dm @bob:mock.test")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.False(t, created)
+	var focus string
+	for _, m := range got {
+		if f, ok := m.(ui.FocusMsg); ok {
+			focus = string(f)
+		}
+	}
+	require.Equal(t, "#dm", focus) // the room is already registered under its label
+}

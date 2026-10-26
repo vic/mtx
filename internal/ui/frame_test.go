@@ -501,9 +501,9 @@ func TestPickerNicks(t *testing.T) {
 	next, _ := a.Update(AgentsMsg{Ch: "#a", Agents: []model.Agent{{Nick: "driver-1"}}})
 	a, _ = press(t, next.(App), "space", "o", "u")
 	a = typeText(t, a, "@dri")
-	a, _ = press(t, a, "enter")
-	if a.pick || a.mode != Insert || a.in.Value() != "@driver-1 " || cur(a) != "#a" {
-		t.Fatalf("nick pick: mode %v input %q cur %s", a.mode, a.in.Value(), cur(a))
+	a, cmd := press(t, a, "enter")
+	if cm, ok := cmd().(CmdMsg); a.pick || !ok || cm.Cmd.Name() != model.CmdDM || cm.Cmd.Args()[0] != "@driver-1" {
+		t.Fatalf("nick pick: pick %v cmd %#v", a.pick, cmd())
 	}
 	a, _ = press(t, a, "esc", "ctrl+o")
 	a = typeText(t, a, "#b")

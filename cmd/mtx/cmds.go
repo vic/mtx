@@ -78,6 +78,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.explore(strings.Join(args, " "))
 	case model.CmdDevices:
 		return c.devices()
+	case model.CmdDM:
+		return c.dm(args[0])
 	case model.CmdPreview:
 		return c.preview(args[0])
 	case model.CmdSearch:
@@ -804,5 +806,21 @@ func (c *cmds) preview(url string) error {
 		rows = []string{"no preview for " + url}
 	}
 	c.r.emit(ui.ListMsg{Title: "link preview", Entries: rows})
+	return nil
+}
+
+// dm opens the direct message with user: the room we have with them, else a new one.
+func (c *cmds) dm(user string) error {
+	uid, err := c.fullUser(user)
+	if err != nil {
+		return err
+	}
+	room, err := c.dmRoom(uid)
+	if err != nil {
+		return err
+	}
+	name := c.r.register(room, "@"+localpart(uid.String()))
+	c.r.emitRooms()
+	c.r.emit(ui.FocusMsg(name))
 	return nil
 }

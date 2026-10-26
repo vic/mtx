@@ -368,3 +368,10 @@ func TestPreviewParse(t *testing.T) {
 		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+func TestDMParse(t *testing.T) {
+	c, err := ParseCmd("/dm @bob:mock.test")
+	if err != nil || c.Name() != CmdDM || !slices.Equal(c.Args(), []string{"@bob:mock.test"}) {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+}

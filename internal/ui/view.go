@@ -921,3 +921,27 @@ func jumpLabel(of []int, k int) string {
 	}
 	return alert.Render(string(jumpKeys[n]))
 }
+
+// menuBox is an open which-key menu as a bordered box: the menu name, then one "key  label" row per item.
+func menuBox(name string, items []menuItem) string {
+	rows := []string{title.Render(name)}
+	for _, it := range items {
+		rows = append(rows, shortcut.Bold(true).Render(it.key)+"  "+it.label)
+	}
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("5")).Padding(0, 1).Render(strings.Join(rows, "\n"))
+}
+
+// overlayRight draws box at the right edge of screen, its bottom row on row bottom (w columns).
+func overlayRight(screen string, w, bottom int, box string) string {
+	rows := strings.Split(screen, "\n")
+	bl := strings.Split(box, "\n")
+	bw := lipgloss.Width(bl[0])
+	x := max(w-bw-1, 0)
+	for j := len(bl) - 1; j >= 0 && bottom >= 0; j-- {
+		if bottom < len(rows) {
+			rows[bottom] = ansi.Cut(rows[bottom], 0, x) + bl[j] + ansi.Cut(rows[bottom], x+bw, w)
+		}
+		bottom--
+	}
+	return strings.Join(rows, "\n")
+}

@@ -681,7 +681,17 @@ func TestLeaderMenu(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	a, _ = press(t, a, "space")
-	if a.menu != "space" || !strings.Contains(ansi.Strip(strings.Join(a.suggest(), "")), "react") {
+	rows := strings.Split(ansi.Strip(a.View().Content), "\n")
+	ri, ti := -1, -1
+	for i, r := range rows {
+		if strings.Contains(r, "r  react") {
+			ri = i
+		}
+		if strings.Contains(r, "t  thread") {
+			ti = i
+		}
+	}
+	if a.menu != "space" || ri < 0 || ti < 0 || ri == ti {
 		t.Fatalf("menu not open: %q %q", a.menu, a.suggest())
 	}
 	a, _ = press(t, a, "m")

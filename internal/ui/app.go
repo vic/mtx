@@ -1003,8 +1003,12 @@ func (a App) chatScreen() string {
 	label, input, hint := a.inputLine()
 	screen := render(a.m, model.Status(a.m, label, a.info, a.now()), input, a.w, a.h, a.off(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
 	modeline := a.h - len(inputRows(input, a.w, a.h)) - 1
-	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest())             // floats above the prompt: the layout does not move
-	return withSponsor(overlayToasts(screen, a.w, modeline-1, a.toasts), a.w) // cards sit just above the modeline
+	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest()) // floats above the prompt: the layout does not move
+	screen = overlayToasts(screen, a.w, modeline-1, a.toasts)     // cards sit just above the modeline
+	if a.menu != "" {                                             // the which-key menu: one key per row, at the bottom right
+		screen = overlayRight(screen, a.w, modeline-1, menuBox(a.menu, menus[a.menu]))
+	}
+	return withSponsor(screen, a.w)
 }
 
 // page is the number of scrollback rows View shows; a long input takes rows from it.
@@ -1399,13 +1403,6 @@ func (a App) nickPool() []string {
 
 // suggest is the completion row above an INSERT line (0 or 1 row): what tab puts in.
 func (a App) suggest() []string {
-	if a.menu != "" {
-		var parts []string
-		for _, it := range menus[a.menu] {
-			parts = append(parts, shortcut.Bold(true).Render(it.key)+" "+dimmed.Render(it.label))
-		}
-		return []string{title.Render(a.menu) + "  " + strings.Join(parts, "  ")}
-	}
 	if a.reactRow {
 		var parts []string
 		for i, e := range quickReacts {

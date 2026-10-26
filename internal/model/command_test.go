@@ -361,3 +361,10 @@ func TestThemeParse(t *testing.T) {
 		t.Fatalf("bare: %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+func TestPreviewParse(t *testing.T) {
+	c, err := ParseCmd("/preview https://x.org/a")
+	if err != nil || c.Name() != CmdPreview || !slices.Equal(c.Args(), []string{"https://x.org/a"}) {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+}

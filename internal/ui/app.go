@@ -1056,6 +1056,14 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 		}
 		line = strings.TrimSpace("/redact " + l.ID + " " + strings.TrimSpace(rest))
 	}
+	if line == "/preview" { // the target is the selected line's first link
+		l, _ := a.lastWithID(a.hit)
+		u := firstURL(l.Text)
+		if u == "" {
+			return a.note("preview: no link here"), nil
+		}
+		line = "/preview " + u
+	}
 	if line == "/pin" || line == "/unpin" { // the target is the cursor line
 		l, ok := a.lastWithID(a.hit)
 		if !ok {
@@ -2701,7 +2709,7 @@ var menus = map[string][]menuItem{
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}, {"d", "devices", ":devices"}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"s", "seen by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"L", "link preview", ":preview"}, {"s", "seen by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
 	"emoji":   emojiMenu(),

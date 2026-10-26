@@ -1434,3 +1434,20 @@ func TestEveryNormalKeyInMenus(t *testing.T) {
 		}
 	}
 }
+
+// TestPreviewCommand: :preview with no argument uses the selected line's first link.
+func TestPreviewCommand(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "see https://x.org", ID: "$1"}})
+	a = next.(App)
+	a.hit = 0
+	_, cmd := a.runCmd(":preview")
+	if cmd == nil {
+		t.Fatal("no command")
+	}
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdPreview || cm.Cmd.Args()[0] != "https://x.org" {
+		t.Fatalf("preview: %#v", cmd())
+	}
+}

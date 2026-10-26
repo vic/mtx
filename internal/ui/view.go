@@ -711,6 +711,7 @@ var helpSections = []struct {
 		{":create &room public", "create a public room listed in the directory (no encryption)"},
 		{":explore [term]", "list the public rooms on this server; enter joins the picked one"},
 		{":devices", "list my devices: id, name, last seen (read only)"},
+		{":preview", "preview the selected line's link (title, site, description)"},
 		{"space T", "theme: browse every base16/base24 scheme with live preview; enter keeps it"},
 		{":goto <date | date time | HH:MM | yesterday>", "select the first loaded message at or after that time"},
 		{":search <term>", "search this room on the server; enter jumps to the message if it is loaded"},

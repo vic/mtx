@@ -621,3 +621,30 @@ func TestDevicesEmits(t *testing.T) {
 	require.True(t, strings.HasSuffix(lm.Entries[0], "  (this device)"))
 	require.True(t, strings.HasPrefix(lm.Entries[1], "OLD  old phone  last seen "))
 }
+
+// TestPreviewEmits: /preview asks for the link's preview and lists its title and description.
+func TestPreviewEmits(t *testing.T) {
+	ts := mockserver.Create(t)
+	ts.Router.HandleFunc("GET /_matrix/client/v1/media/preview_url", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"og:title":"T","og:description":"D"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	var mu sync.Mutex
+	var got []tea.Msg
+	r := newRunner(cli, func(m tea.Msg) {
+		mu.Lock()
+		got = append(got, m)
+		mu.Unlock()
+	})
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/preview https://x.org")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, got, 1)
+	lm, ok := got[0].(ui.ListMsg)
+	require.True(t, ok)
+	require.Equal(t, []string{"title: T", "description: D"}, lm.Entries)
+}

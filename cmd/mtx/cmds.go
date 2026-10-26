@@ -78,6 +78,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.explore(strings.Join(args, " "))
 	case model.CmdDevices:
 		return c.devices()
+	case model.CmdPreview:
+		return c.preview(args[0])
 	case model.CmdSearch:
 		return c.search(ch, args[0])
 	case model.CmdJoin:
@@ -779,5 +781,28 @@ func (c *cmds) devices() error {
 		entries = append(entries, line)
 	}
 	c.r.emit(ui.ListMsg{Title: "devices", Entries: entries})
+	return nil
+}
+
+// preview asks the homeserver for the link preview of url and lists its title, site, description in the
+// read-only list picker.
+func (c *cmds) preview(url string) error {
+	ctx, cancel := c.ctx()
+	defer cancel()
+	var og map[string]any
+	u := c.r.mx.BuildURLWithQuery(mautrix.ClientURLPath{"v1", "media", "preview_url"}, map[string]string{"url": url})
+	if _, err := c.r.mx.MakeRequest(ctx, http.MethodGet, u, nil, &og); err != nil {
+		return err
+	}
+	var rows []string
+	for _, k := range []string{"og:title", "og:site_name", "og:description", "og:url"} {
+		if s, ok := og[k].(string); ok && s != "" {
+			rows = append(rows, strings.TrimPrefix(k, "og:")+": "+s)
+		}
+	}
+	if len(rows) == 0 {
+		rows = []string{"no preview for " + url}
+	}
+	c.r.emit(ui.ListMsg{Title: "link preview", Entries: rows})
 	return nil
 }

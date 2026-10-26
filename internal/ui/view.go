@@ -109,7 +109,10 @@ var fitCells = struct {
 	m  map[fitKey]string
 }{m: map[fitKey]string{}}
 
-func wide(w, h int) bool { return w >= minWide && h >= minWideH }
+// zen is z: the chat alone, full width (the narrow layout at any size). One UI per process, like the palette.
+var zen bool
+
+func wide(w, h int) bool { return !zen && w >= minWide && h >= minWideH }
 
 // paneRows is how many scrollback rows View shows in a w x h screen with in input rows.
 func paneRows(w, h, in int) int {
@@ -358,7 +361,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 				nk = presenceStyle(mark) + nickStyle(name).Render(name)
 			}
 			cc, nc := chanCell(chans, cur.Name, i), fitCell(" "+nk, nickW)
-			if p.focus == focusChans && i == p.sel && i < len(chans) {
+			if p.focus == focusChans && i+p.chanTop == p.sel && i < len(chans) {
 				cc = fit(current, " "+chans[i].Name, chanW)
 			}
 			if p.chanJump && i < len(chans) && !strings.HasPrefix(chans[i].Name, nickLabel) {
@@ -366,7 +369,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 					cc = fit(cell, alert.Render(string(jumpKeys[k]))+" "+chans[i].Name, chanW)
 				}
 			}
-			if p.focus == focusNicks && i == p.nickSel {
+			if p.focus == focusNicks && i+p.nickTop == p.nickSel {
 				nc = fit(current, " "+p.nicks[min(i+p.nickTop, len(p.nicks)-1)], nickW)
 			}
 			if sep == 1 && i == tRows { // the line between the threads box and the chat box
@@ -716,6 +719,7 @@ var helpSections = []struct {
 		{":explore [term]", "list the public rooms on this server; enter joins the picked one"},
 		{":devices", "list my devices: id, name, last seen (read only)"},
 		{"nick pane ● ◐ ○", "presence: online, away, offline"},
+		{"z", "zen: the chat alone, full width (z again restores the panes)"},
 		{"space ⌫", "all NORMAL keys in one menu; ⌫ in a submenu goes back"},
 		{":preview", "preview the selected line's link (title, site, description)"},
 		{"space T", "theme: browse every base16/base24 scheme with live preview; enter keeps it"},
@@ -730,10 +734,16 @@ var helpSections = []struct {
 func helpText() string {
 	head := title.Render("mtx") + dimmed.Render("  Matrix client: & rooms, threads, end-to-end encryption")
 	rows := []string{head, ""}
+	kw := 0 // the widest key: every description starts in one column
+	for _, s := range helpSections {
+		for _, k := range s.keys {
+			kw = max(kw, lipgloss.Width(k[0]))
+		}
+	}
 	for _, s := range helpSections {
 		rows = append(rows, helpHead.Render(s.head))
 		for _, k := range s.keys {
-			rows = append(rows, "  "+shortcut.Width(20).Render(k[0])+k[1])
+			rows = append(rows, "  "+shortcut.Width(kw+2).Render(k[0])+k[1])
 		}
 		rows = append(rows, "")
 	}

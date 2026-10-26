@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"charm.land/lipgloss/v2"
+	"time"
+
 	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 
@@ -281,4 +282,29 @@ func TestReadMarkLead(t *testing.T) {
 	require.Equal(t, readMark, p.lead(of, shown, 0))
 	require.Equal(t, " ", p.lead(of, shown, 1))
 	require.Equal(t, " ", p.lead(of, shown, 2))
+}
+
+// TestHelpAligned: every description starts in the same column, however long its key is.
+func TestHelpAligned(t *testing.T) {
+	col := -1
+	for _, row := range strings.Split(ansi.Strip(helpText()), "\n") {
+		if !strings.HasPrefix(row, "  ") || len(row) < 4 || row[2] == ' ' {
+			continue
+		}
+		for _, s := range helpSections {
+			for _, k := range s.keys {
+				if strings.HasPrefix(strings.TrimLeft(row, " "), k[0]) && strings.Contains(row, k[1]) && k[1] != "" {
+					at := lipgloss.Width(row[:strings.Index(row, k[1])]) // a column, not a byte
+					if col < 0 {
+						col = at
+					} else if at != col {
+						t.Fatalf("description of %q at column %d, want %d", k[0], at, col)
+					}
+				}
+			}
+		}
+	}
+	if col < 0 {
+		t.Fatal("no help rows found")
+	}
 }

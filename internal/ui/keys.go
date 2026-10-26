@@ -72,6 +72,7 @@ const (
 	PickPins
 	JumpReply
 	Bracket
+	Zen
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -201,6 +202,8 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: PickInvite}, Normal, ""
 		case "t":
 			return Action{Kind: ThreadNext}, Normal, ""
+		case "z":
+			return Action{Kind: Zen}, Normal, ""
 		case "f":
 			return Action{Kind: JumpLine}, Normal, ""
 		case "[", "]":

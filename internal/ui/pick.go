@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"unicode"
@@ -55,10 +56,12 @@ func pickList(names []string, q string) []pickMatch {
 // pickBox is the picker box (channels or lines, titled what), drawn over the screen by overlayCentered.
 func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, marks []string) string {
 	rows := []string{title.Render(what) + " " + prompt.Render(">") + " " + q, ""}
-	for i, m := range ms {
-		if i >= max(h-6, 1) {
-			break
-		}
+	start, end := pickWindow(len(ms), sel, max(h-6, 1))
+	if start > 0 {
+		rows = append(rows, dimmed.Render(fmt.Sprintf("↑ %d more", start)))
+	}
+	for i := start; i < end; i++ {
+		m := ms[i]
 		mark, st := " ", dimmed
 		if i == sel {
 			mark, st = "◆", cell.Bold(true)
@@ -83,6 +86,9 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 		}
 		rows = append(rows, title.Render(mark)+" "+check+b.String())
 	}
+	if end < len(ms) {
+		rows = append(rows, dimmed.Render(fmt.Sprintf("↓ %d more", len(ms)-end)))
+	}
 	if len(ms) == 0 {
 		rows = append(rows, dimmed.Render("no match"))
 	}
@@ -101,4 +107,24 @@ func grepBox(w int, q string) string {
 	rows := []string{title.Render("grep") + " " + prompt.Render(">") + " " + q, "", keyHint("enter", "keep", "esc", "clear")}
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).
 		Padding(0, 1).Width(min(max(w/2, 40), w)).Render(strings.Join(rows, "\n"))
+}
+
+// pickWindow is the matches a picker of rowsMax rows shows: [start, end) with the selection sel in it. A
+// "↑ more" row above and a "↓ more" row below take a row each when there are matches past the window.
+func pickWindow(n, sel, rowsMax int) (start, end int) {
+	for range 3 {
+		top := 0
+		if start > 0 {
+			top = 1
+		}
+		end = min(start+rowsMax-top, n)
+		if end < n {
+			end = min(start+rowsMax-top-1, n)
+		}
+		if sel < end || sel < start {
+			return start, end
+		}
+		start += sel - end + 1
+	}
+	return start, min(start+rowsMax, n)
 }

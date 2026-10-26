@@ -1526,3 +1526,86 @@ func TestMenuBoxColumns(t *testing.T) {
 		}
 	}
 }
+
+// TestPickerFollowsSelection: a picker taller than its box shows the selection, not only the first rows.
+func TestPickerFollowsSelection(t *testing.T) {
+	ms := make([]pickMatch, 100)
+	for i := range ms {
+		ms[i] = pickMatch{name: fmt.Sprintf("e%03d", i), idx: i}
+	}
+	box := ansi.Strip(pickBox(120, 20, "pick", "", ms, 50, false, nil))
+	if !strings.Contains(box, "e050") || strings.Contains(box, "e000") {
+		t.Fatalf("box does not follow the selection: %q", box)
+	}
+}
+
+// TestPaneFollowsSelection: moving the channel selection down scrolls the channel pane to it.
+func TestPaneFollowsSelection(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 20
+	var names []string
+	for i := range 40 {
+		names = append(names, fmt.Sprintf("&c%d", i))
+	}
+	next, _ := a.Update(RoomsMsg(names))
+	a = next.(App)
+	a.focus = focusChans
+	a, _ = press(t, a, "down", "down", "down", "down", "down", "down", "down", "down", "down", "down",
+		"down", "down", "down", "down", "down", "down", "down", "down", "down", "down",
+		"down", "down", "down", "down", "down", "down", "down", "down", "down", "down")
+	if a.ptop[focusChans] <= 0 {
+		t.Fatalf("channel pane did not scroll: top %d", a.ptop[focusChans])
+	}
+	_, rows := a.paneItems(focusChans)
+	if sel := rows[a.fsel]; !strings.Contains(ansi.Strip(a.screen()), sel) {
+		t.Fatalf("selected %q is not on screen", sel)
+	}
+}
+
+// TestSideWheelOneRow: one wheel notch over the channel pane scrolls it one row.
+func TestSideWheelOneRow(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 20
+	var names []string
+	for i := range 40 {
+		names = append(names, fmt.Sprintf("&c%d", i))
+	}
+	next, _ := a.Update(RoomsMsg(names))
+	a = next.(App)
+	a = a.wheel(tea.MouseWheelMsg{X: 2, Y: 5, Button: tea.MouseWheelDown}, 1)
+	if a.ptop[focusChans] != 1 {
+		t.Fatalf("top %d after one notch, want 1", a.ptop[focusChans])
+	}
+}
+
+// TestWheelMovesPicker: a wheel notch in the theme picker moves its selection and previews that theme.
+func TestWheelMovesPicker(t *testing.T) {
+	t.Cleanup(func() { usePalette(ansiPalette) })
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.runCmd(":theme")
+	a = next.(App)
+	next = a.wheel(tea.MouseWheelMsg{X: 60, Y: 10, Button: tea.MouseWheelDown}, 1)
+	a = next.(App)
+	if a.psel != 1 || a.themeNow == "" || a.themeNow != a.themeIDs[1] {
+		t.Fatalf("psel %d theme %q", a.psel, a.themeNow)
+	}
+}
+
+// TestZen: z hides the side panes (the narrow layout at any size); z again restores them.
+func TestZen(t *testing.T) {
+	t.Cleanup(func() { zen = false })
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	a, _ = press(t, a, "z")
+	if wide(a.w, a.h) || strings.Contains(ansi.Strip(a.screen()), "channels") {
+		t.Fatal("z did not hide the panes")
+	}
+	a, _ = press(t, a, "z")
+	if !wide(a.w, a.h) {
+		t.Fatal("z again did not restore the panes")
+	}
+}

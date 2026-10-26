@@ -847,6 +847,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.toast("delete my selected message? y to confirm", true), nil
 	case OpenLine:
 		return a.runCmd(":open")
+	case Zen:
+		zen = !zen
+		a.offs = nil // row counts change with the width
 	case Bracket:
 		a = a.bracket(act.N > 0, act.Key)
 	case JumpReply:
@@ -1177,7 +1180,7 @@ func (a App) inputLine() (label, input, hint string) {
 func (a App) footer() string {
 	// states first: on a narrow screen the keys fall off the end (they are in ? help)
 	return fit(cell, " "+keyHint("t", "thread:"+cmp.Or(threadState(a.thread), "main"), "M", "mentions:"+onOff(a.mentions), "s", "time:"+onOff(a.stamps),
-		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "C", "edit", "O", "thread reply", ":", "command"), max(a.w, 1)) // one row
+		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "C", "edit", "O", "thread reply", "z", "zen:"+onOff(zen), ":", "command"), max(a.w, 1)) // one row
 }
 
 // View is the full-screen frame; screen is its text.
@@ -2175,7 +2178,7 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			a.fq, a.fsel = a.fq+msg.Text, 0
 		}
 	}
-	return a, nil
+	return a.keepSelVisible(), nil
 }
 
 // click handles a left click in wide mode: a channel row switches to that channel,
@@ -2501,17 +2504,6 @@ func (a App) highlight() string {
 	return a.query
 }
 
-// roomMark is the status of a room member: busy (a session with a PID), typing, or idle.
-func roomMark(busy, typing bool) string {
-	if busy {
-		return busyMark
-	}
-	if typing {
-		return typingMark
-	}
-	return idleMark
-}
-
 // WithSeen sets the read-marker hook: it runs with a channel's name when the channel is shown
 // and a line arrives in it, or when it becomes current. Errors are ignored.
 func (a App) WithSeen(f func(ch string) error) App {
@@ -2618,12 +2610,20 @@ func (a App) paneWheel(p paneFocus, delta int) App {
 
 // wheel scrolls what is under the wheel by n notches: help box, side pane, or chat.
 func (a App) wheel(m tea.MouseWheelMsg, n int) App {
+	if a.pick { // a picker moves its selection, one row a notch; the theme picker previews as keys do
+		ms := pickList(a.pickSource(), a.pq.Value())
+		a.psel = max(min(a.psel+n, len(ms)-1), 0)
+		if a.pickWhat == pickThemes {
+			return a.previewTheme()
+		}
+		return a
+	}
 	step := n * wheelRows
 	if a.help {
 		return a.helpScroll(step)
 	}
 	if p := paneAt(m.X, a.w, a.h); p != focusChat {
-		return a.paneWheel(p, step)
+		return a.paneWheel(p, n)
 	}
 	if rows, _ := a.threadRows(); rows > 0 && m.Y >= 1 && m.Y-1 < rows {
 		a.tscroll += step
@@ -2765,7 +2765,7 @@ var menus = map[string][]menuItem{
 		{"ctrl+d", "half page down", "key:ctrl+d"}, {"ctrl+u", "half page up", "key:ctrl+u"}, {"G", "bottom", "key:G"},
 		{"J", "next speaker", "key:J"}, {"K", "prev speaker", "key:K"}, {"f", "jump to a line", "key:f"}, {"F", "jump: open its link", "key:F"},
 		{"m", "recent chats", "key:m"}, {"ctrl+n", "next line", "key:ctrl+n"}, {"ctrl+p", "prev line", "key:ctrl+p"}, {"tab", "next pane", "key:tab"}},
-	"view": {{"s", "stamps", "key:s"}, {"M", "mentions only", "key:M"}, {"?", "help", "key:?"}, {"#", "open chat", "key:#"},
+	"view": {{"z", "zen (chat only)", "key:z"}, {"s", "stamps", "key:s"}, {"M", "mentions only", "key:M"}, {"?", "help", "key:?"}, {"#", "open chat", "key:#"},
 		{"@", "open user", "key:@"}, {"%", "open thread", "key:%"}, {"^", "pinned", "key:^"}, {"ctrl+g", "grep", "key:ctrl+g"},
 		{"S", "speakers", "key:S"}, {"$", "shell", "key:$"}, {"!", "capture", "key:!"}, {":", "command", "key::"},
 		{"enter", "message menu", "key:enter"}, {"+", "react row", "key:+"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"},
@@ -2908,11 +2908,16 @@ func (a App) themeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if !b.pick {
 		return b, cmd
 	}
-	ms := pickList(b.pickSource(), b.pq.Value())
-	if b.psel < len(ms) {
-		b = b.applyTheme(b.themeIDs[ms[b.psel].idx])
+	return b.previewTheme(), cmd
+}
+
+// previewTheme applies the theme of the picker's selected row, the live preview of the theme picker.
+func (a App) previewTheme() App {
+	ms := pickList(a.pickSource(), a.pq.Value())
+	if a.psel < len(ms) {
+		a = a.applyTheme(a.themeIDs[ms[a.psel].idx])
 	}
-	return b, cmd
+	return a
 }
 
 // keySeq splits a "key:" menu item into the keys it replays: a named key ("up", "ctrl+d") is one key,
@@ -3004,3 +3009,25 @@ func normalMenu() []menuItem {
 }
 
 func init() { menus["normal"] = normalMenu() }
+
+// keepSelVisible scrolls the focused side pane so its selection is on screen.
+func (a App) keepSelVisible() App {
+	f := a.focus
+	if f != focusChans && f != focusNicks {
+		return a
+	}
+	rows := paneRows(a.w, a.h, 1)
+	pos := a.fsel
+	if f == focusNicks {
+		if _, rowOf := a.nickRows(); a.fsel >= 0 && a.fsel < len(rowOf) {
+			pos = rowOf[a.fsel]
+		}
+	}
+	if pos < a.ptop[f] {
+		a.ptop[f] = pos
+	}
+	if pos >= a.ptop[f]+rows {
+		a.ptop[f] = pos - rows + 1
+	}
+	return a
+}

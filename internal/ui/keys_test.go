@@ -57,3 +57,9 @@ func TestKey(t *testing.T) {
 		})
 	}
 }
+
+func TestZenKey(t *testing.T) {
+	if act, _, _ := Key(Normal, "", "z"); act.Kind != Zen {
+		t.Fatalf("z is %v", act.Kind)
+	}
+}

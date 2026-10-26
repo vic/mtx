@@ -763,18 +763,27 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return a.pickKey(msg)
 	}
-	if a.help {
-		switch k { // scroll keys move the box; any other key closes it
-		case "j", "down":
+	if a.help { // the help box: arrows and ctrl+d/u scroll it, esc closes it, a typed key searches help
+		switch k {
+		case "down":
 			return a.helpScroll(1), nil
-		case "k", "up":
+		case "up":
 			return a.helpScroll(-1), nil
 		case "ctrl+d":
 			return a.helpScroll(a.h / 2), nil
 		case "ctrl+u":
 			return a.helpScroll(-a.h / 2), nil
+		case "esc":
+			a.help, a.helpOff = false, 0
+			return a, nil
 		}
-		a.help, a.helpOff = false, 0
+		if t := msg.Text; t != "" { // a typed key: fuzzy search help with it
+			a.help, a.helpOff = false, 0
+			a = a.openPick(pickHelp)
+			a.pq.SetValue(t)
+			a.pq.CursorEnd()
+			return a, nil
+		}
 		return a, nil
 	}
 	if k == "shift+enter" && (a.mode == Insert || a.prompt != 0) && !a.pick && !a.help {
@@ -870,7 +879,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.mentions = a.mentions != (act.Kind == ToggleMentions)
 		a.hit, a.offs = -1, nil // positions index the shown lines, which changed
 	case Help:
-		return a.openPick(pickHelp), nil
+		a.help, a.helpOff = true, 0
 	case ToggleStamps:
 		a.stamps, a.offs = !a.stamps, nil // row counts changed
 	case Yank:
@@ -1570,10 +1579,6 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if idx := ms[a.psel].idx; idx < len(heads) {
 			return a.selectThread(heads[idx].Root), nil
 		}
-		return a, nil
-	}
-	if a.pickWhat == pickHelp && msg.String() == "?" { // ? again: the help box with its buttons
-		a.pick, a.help, a.helpOff = false, true, 0
 		return a, nil
 	}
 	if a.pickWhat == pickEdits && (msg.String() == "enter" || msg.String() == "esc") { // read only: enter closes it too

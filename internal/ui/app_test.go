@@ -1509,3 +1509,20 @@ func TestMenuBackspace(t *testing.T) {
 		t.Fatal("f in the normal menu did not run as NORMAL f")
 	}
 }
+
+// TestMenuBoxColumns: a menu taller than maxRows goes into columns; every label is still there.
+func TestMenuBoxColumns(t *testing.T) {
+	var items []menuItem
+	for i := range 40 {
+		items = append(items, menuItem{strconv.Itoa(i % 10), "label" + strconv.Itoa(i), "key:x"})
+	}
+	box := menuBox("big", items, 12)
+	if n := strings.Count(box, "\n") + 1; n > 12 {
+		t.Fatalf("box is %d rows tall, want at most 12", n)
+	}
+	for i := range 40 {
+		if !strings.Contains(box, "label"+strconv.Itoa(i)) {
+			t.Fatalf("label%d missing", i)
+		}
+	}
+}

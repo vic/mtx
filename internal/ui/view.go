@@ -994,13 +994,6 @@ func chanRowIndex(chans []model.Channel, i int) int {
 }
 
 // menuBox is an open which-key menu as a bordered box: the menu name, then one "key  label" row per item.
-func menuBox(name string, items []menuItem) string {
-	rows := []string{title.Render(name)}
-	for _, it := range items {
-		rows = append(rows, shortcut.Bold(true).Render(it.key)+"  "+it.label)
-	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
-}
 
 // overlayRight draws box at the right edge of screen, its bottom row on row bottom (w columns).
 func overlayRight(screen string, w, bottom int, box string) string {
@@ -1028,4 +1021,34 @@ func presenceStyle(mark string) string {
 		return dimmed.Render("○") + " "
 	}
 	return mark
+}
+
+// menuBox is an open which-key menu as a bordered box: the menu name, then one "key  label" row per item.
+// Items that would make the box taller than maxRows (the screen) go into side-by-side columns.
+func menuBox(name string, items []menuItem, maxRows int) string {
+	per := max(maxRows-3, 1) // the title and the border take three rows
+	var cols []string
+	for i := 0; i < len(items); i += per {
+		end := min(i+per, len(items))
+		w := 0
+		for _, it := range items[i:end] {
+			w = max(w, lipgloss.Width(it.key+"  "+it.label))
+		}
+		var rows []string
+		for _, it := range items[i:end] {
+			plain := it.key + "  " + it.label
+			rows = append(rows, shortcut.Bold(true).Render(it.key)+"  "+it.label+strings.Repeat(" ", w-lipgloss.Width(plain)))
+		}
+		cols = append(cols, strings.Join(rows, "\n"))
+	}
+	var blocks []string
+	for i, c := range cols {
+		if i > 0 {
+			blocks = append(blocks, "  ")
+		}
+		blocks = append(blocks, c)
+	}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).
+		Render(title.Render(name) + "\n" + body)
 }

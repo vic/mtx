@@ -1219,7 +1219,7 @@ func (a App) chatScreen() string {
 		name = a.pending // a prefix waiting for its second key lists the continuations
 	}
 	if name != "" {
-		screen = overlayRight(screen, a.w, modeline-1, menuBox(name, menus[name]))
+		screen = overlayRight(screen, a.w, modeline-1, menuBox(name, menus[name], a.h-4))
 	}
 	return withSponsor(screen, a.w)
 }
@@ -2032,7 +2032,7 @@ func (a App) paneNicks() []string {
 			case p != "": // a dot for a nick we know the presence of
 				out[i] = p + out[i]
 			default:
-				out[i] = idleMark + out[i]
+				// no presence known: no mark
 			}
 		case i == 1: // the main agent
 			out[i] = mark(busy(cur.PID)) + out[i]
@@ -2747,7 +2747,7 @@ var menus = map[string][]menuItem{
 	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
 		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"T", "theme", ":theme"}, {"k", "keys…", "menu:keys"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
-		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
+		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}, {"⌫", "all NORMAL keys", "menu:normal"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},
 	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"e", "emote (/me)", ":me "}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"b", "ban", ":ban "}, {"B", "unban", ":unban "}, {"o", "op (power)", ":op "}, {"j", "join rule", ":joinrule "}, {"h", "history visibility", ":history "}, {"a", "alias", ":alias "}, {"v", "room avatar", ":roomavatar "}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},

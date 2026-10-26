@@ -21,7 +21,7 @@ func TestTypingMarksRoomMember(t *testing.T) {
 	a.m, _ = a.m.WithRoomMembers("&r", []model.Member{{Nick: "lib1"}, {Nick: "lib2"}})
 	next, _ = a.Update(TypingMsg{Ch: "&r", Nicks: []string{"lib1"}})
 	a = next.(App)
-	if got := strings.Join(a.paneNicks(), ","); !strings.Contains(got, "💬lib1") || !strings.Contains(got, "💤lib2") {
+	if got := strings.Join(a.paneNicks(), ","); !strings.Contains(got, "💬lib1") || strings.Contains(got, "💤lib2") {
 		t.Fatalf("typing marks %q", got)
 	}
 }

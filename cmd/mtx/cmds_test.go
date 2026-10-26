@@ -273,6 +273,33 @@ func TestMuteSends(t *testing.T) {
 	require.Contains(t, body, `"actions":[]`)
 }
 
+// TestUnreadSends: /unread sets the m.marked_unread room account data flag.
+func TestUnreadSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var path, body string
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/user/{user}/rooms/{room}/account_data/{type}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		path, body = r.URL.Path, string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/unread")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, path, "/rooms/")
+	require.Contains(t, path, "/account_data/m.marked_unread")
+	require.JSONEq(t, `{"unread":true}`, body)
+}
+
 // TestUnmuteSends: /unmute deletes that room push rule.
 func TestUnmuteSends(t *testing.T) {
 	ts := mockserver.Create(t)

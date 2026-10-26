@@ -101,6 +101,16 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 			return c.r.mx.DeletePushRule(ctx, "global", pushrules.RoomRule, string(room))
 		}
 		return c.r.mx.PutPushRule(ctx, "global", pushrules.RoomRule, string(room), &mautrix.ReqPutPushRule{Actions: []*pushrules.PushAction{}})
+	case model.CmdRead:
+		return c.r.markRead(roomArg(args, ch))
+	case model.CmdUnread:
+		room, err := c.r.roomOf(roomArg(args, ch))
+		if err != nil {
+			return err
+		}
+		ctx, cancel := c.ctx()
+		defer cancel()
+		return c.r.mx.SetRoomAccountData(ctx, room, "m.marked_unread", map[string]bool{"unread": true})
 	case model.CmdAvatar:
 		return c.r.setAvatar(args[0])
 	case model.CmdUpload:
@@ -166,6 +176,30 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 }
 
 func (c *cmds) ctx() (context.Context, context.CancelFunc) { return callCtx() }
+
+// markRead sets the read markers of room ch to its newest line and clears a marked-unread flag,
+// even when seen already marked it: /read always sends.
+func (r *runner) markRead(ch string) error {
+	room, err := r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	last, ok := r.last[room]
+	r.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	ctx, cancel := callCtx()
+	defer cancel()
+	if err := r.mx.SetReadMarkers(ctx, room, &mautrix.ReqSetReadMarkers{Read: last, FullyRead: last}); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	r.marked[room] = last
+	r.mu.Unlock()
+	return r.mx.SetRoomAccountData(ctx, room, "m.marked_unread", map[string]bool{"unread": false})
+}
 
 // join: /join name joins #name:<server> and focuses it.
 func (c *cmds) join(s string) error {

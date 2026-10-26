@@ -675,6 +675,8 @@ var helpSections = []struct {
 		{":docs", "open the documentation (mtx.oeiuwq.com)"},
 		{":mute [room]", "no notifications from this room (all devices)"},
 		{":unmute [room]", "notifications from this room again"},
+		{":read [room]", "mark the room read"},
+		{":unread [room]", "mark the room unread (it stays unread until you read it)"},
 	}},
 }
 

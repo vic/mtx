@@ -25,6 +25,8 @@ func TestParseCmd(t *testing.T) {
 		{"/msg bob\thi", CmdMsg, []string{"bob", "hi"}, false},
 		{"/whois bob", CmdWhois, []string{"bob"}, false},
 		{"/quit", CmdQuit, nil, false},
+		{"/read", CmdRead, nil, false},
+		{":unread &x", CmdUnread, []string{"&x"}, false},
 		{":q", CmdQuit, nil, false},
 		{"/rm &x", CmdClose, []string{"&x"}, false},
 		{"/foo", "", nil, true},

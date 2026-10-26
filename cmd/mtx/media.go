@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"mime"
 	"net/http"
 	"os"
@@ -11,9 +16,13 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "golang.org/x/image/webp"
+
 	"maunium.net/go/mautrix/crypto/attachment"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+
+	"mtx/internal/ui"
 )
 
 // isMediaType reports whether a message of this type carries a file that /open can save.
@@ -205,4 +214,26 @@ func mediaJSON(evt *event.Event) string {
 		return ""
 	}
 	return string(b)
+}
+
+// view decodes event ev's image and shows it in the popup.
+func (r *runner) view(ev string) error {
+	r.mu.Lock()
+	m := r.media[id.EventID(ev)]
+	r.mu.Unlock()
+	if m == nil || m.MsgType != event.MsgImage {
+		return fmt.Errorf("view: that line has no image")
+	}
+	ctx, cancel := callCtx()
+	defer cancel()
+	data, err := r.fetchMedia(ctx, m)
+	if err != nil {
+		return err
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("view: %w", err)
+	}
+	r.emit(ui.ImageMsg{Img: img})
+	return nil
 }

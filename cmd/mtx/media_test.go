@@ -161,3 +161,12 @@ func TestEncryptedMediaRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, plain, got)
 }
+
+// TestViewNoImage: :view of a line without an image says so, without a request.
+func TestViewNoImage(t *testing.T) {
+	r := newRunner(nil, func(tea.Msg) {})
+	err := r.view("$unknown")
+	require.ErrorContains(t, err, "no image")
+	r.recordMedia("$file", &event.MessageEventContent{MsgType: event.MsgFile, Body: "x.pdf", URL: "mxc://mock.test/x"})
+	require.ErrorContains(t, r.view("$file"), "no image")
+}

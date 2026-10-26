@@ -160,6 +160,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.whois(args[0])
 	case model.CmdMe:
 		return c.emote(ch, args[0])
+	case model.CmdView:
+		return c.r.view(args[0])
 	case model.CmdOpen:
 		return c.r.open(args[0])
 	case model.CmdMute, model.CmdUnmute:

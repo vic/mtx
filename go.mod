@@ -10,6 +10,7 @@ require (
 	github.com/charmbracelet/x/mosaic v0.0.0-20261025003702-835ad0048169
 	github.com/stretchr/testify v1.12.0
 	go.mau.fi/util v0.11.0
+	golang.org/x/image v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 	maunium.net/go/mautrix v0.32.0
 	modernc.org/sqlite v1.61.0
@@ -46,7 +47,6 @@ require (
 	github.com/yuin/goldmark v1.8.6 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
-	golang.org/x/image v0.44.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect

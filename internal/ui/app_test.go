@@ -1194,3 +1194,31 @@ func TestInfoPicker(t *testing.T) {
 		t.Fatal("enter did not close the list")
 	}
 }
+
+// TestEveryPickerRenders: every picker kind and every which-key menu renders without a panic.
+func TestEveryPickerRenders(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 40
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$1"}})
+	a = next.(App)
+	render := func(name string, f func()) {
+		t.Helper()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("%s panicked: %v", name, r)
+			}
+		}()
+		f()
+	}
+	for k := pickKind(0); k <= pickLast; k++ {
+		b := a
+		b.pick, b.pickWhat = true, k
+		render(fmt.Sprintf("picker kind %d", k), func() { _ = b.View() })
+	}
+	for name := range menus {
+		b := a
+		b.menu = name
+		render("menu "+name, func() { _ = b.View() })
+	}
+}

@@ -1138,7 +1138,11 @@ func (a App) screen() string {
 	case a.pick && a.pickWhat == pickGrep:
 		return overlayCentered(screen, a.w, a.h, grepBox(a.w, a.pq.Value()))
 	case a.pick:
-		what := [...]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned", pickEdits: "edit history", pickExplore: "explore", pickFound: "search results", pickInfo: a.listTitle}[a.pickWhat]
+		titles := map[pickKind]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned", pickEdits: "edit history", pickExplore: "explore", pickFound: "search results", pickInfo: a.listTitle}
+		what, ok := titles[a.pickWhat]
+		if !ok {
+			what = "pick"
+		}
 		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), pickList(a.pickSource(), a.pq.Value()), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
 	}
 	return screen
@@ -1310,6 +1314,9 @@ const (
 	pickFound                     // :search: the server's matches in this room; enter selects the message if loaded
 	pickInfo                      // a read-only list (ListMsg, e.g. :devices): enter and esc close it
 )
+
+// pickLast is the last pickKind; tests walk 0..pickLast so a new kind is rendered by the tests too.
+const pickLast = pickInfo
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
 const allSpeakers = "(all)"

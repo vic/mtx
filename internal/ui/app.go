@@ -179,43 +179,44 @@ type App struct {
 	w, h        int
 	prompt      rune // 0 or promptCmd (:): the input line holds a prompt
 	query       string
-	hit         int                                                   // index in the current channel of the last search hit, -1 none
-	rows        *rowCache                                             // wrapped rows per line: scrolling reuses them
-	lc          *linesCache                                           // shown lines of the current channel, see lines
-	sc          *sideCache                                            // side panes between frames, see sides
-	offs        map[string]int                                        // per channel: lines scrolled back from the newest
-	help        bool                                                  // the ? popup is shown; the next key closes it
-	focus       paneFocus                                             // tab: which pane takes keys (chat, channels, nicks)
-	fq          string                                                // query typed in a focused side pane (fuzzy filter)
-	fsel        int                                                   // selected row in the focused side pane
-	ptop        [focusThreads]int                                     // first shown row of the channel and nick panes (wheel scrolls it)
-	stamps      bool                                                  // s: show "15:04 " before each line
-	pick        bool                                                  // ctrl+o or /: the picker is open
-	pickWhat    pickKind                                              // what the picker lists: channels (ctrl+o), lines (/), speakers (S)
-	speakers    []string                                              // S: show only these nicks' lines; none = all
-	grep        string                                                // ctrl+g: show only lines fuzzy-matching this; "" off
-	marks       []string                                              // S picker: nicks marked with space, applied by enter
-	toasts      []toast                                               // notification cards, newest last; the tick drops old ones
-	helpOff     int                                                   // help box scroll (j k, wheel) when it is taller than the screen
-	pq          textinput.Model                                       // picker query (own input: a typed message survives)
-	files       []string                                              // pickFiles: the session's files, from git ls-files (filesMsg)
-	psel        int                                                   // picker selection, an index in pickList
-	comp        completion                                            // tab completion state of the INSERT line
-	tools       bool                                                  // t: show tool lines
-	mentions    bool                                                  // m: show only direct lines (see shows)
-	typing      map[string][]string                                   // channel -> nicks typing now (TypingMsg); a room's nick pane marks them
-	reply       func(ch string, to model.Line, text string) error     // A + send: a reply to a line with an ID; nil = plain send with a quote
-	seen        func(ch string) error                                 // the channel's newest line is on screen (read markers); nil = none
-	threads     map[string][]model.Thread                             // per channel: thread heads (ThreadsMsg)
-	thread      string                                                // selected thread root ("" = main chat): the chat pane shows it, sends go to it
-	tags        map[string]string                                     // channel -> tag group (TagsMsg)
-	tagsVer     int                                                   // bumped by TagsMsg: the side pane cache key
-	typingFn    func(ch string)                                       // tells the room I am typing; must not block; nil = off
-	typedAt     time.Time                                             // last typing notice sent
-	reactRow    bool                                                  // +: the quick reaction row is open; the next key picks
-	menu        string                                                // the open leader menu ("" none)
-	threadOpen  func(ch, root string)                                 // loads a thread's history when it is opened; must not block; nil = off
-	pins        map[string][]string                                   // per channel: pinned event IDs (PinsMsg)
+	hit         int                                               // index in the current channel of the last search hit, -1 none
+	rows        *rowCache                                         // wrapped rows per line: scrolling reuses them
+	lc          *linesCache                                       // shown lines of the current channel, see lines
+	sc          *sideCache                                        // side panes between frames, see sides
+	offs        map[string]int                                    // per channel: lines scrolled back from the newest
+	help        bool                                              // the ? popup is shown; the next key closes it
+	focus       paneFocus                                         // tab: which pane takes keys (chat, channels, nicks)
+	fq          string                                            // query typed in a focused side pane (fuzzy filter)
+	fsel        int                                               // selected row in the focused side pane
+	ptop        [focusThreads]int                                 // first shown row of the channel and nick panes (wheel scrolls it)
+	stamps      bool                                              // s: show "15:04 " before each line
+	pick        bool                                              // ctrl+o or /: the picker is open
+	pickWhat    pickKind                                          // what the picker lists: channels (ctrl+o), lines (/), speakers (S)
+	speakers    []string                                          // S: show only these nicks' lines; none = all
+	grep        string                                            // ctrl+g: show only lines fuzzy-matching this; "" off
+	marks       []string                                          // S picker: nicks marked with space, applied by enter
+	toasts      []toast                                           // notification cards, newest last; the tick drops old ones
+	helpOff     int                                               // help box scroll (j k, wheel) when it is taller than the screen
+	pq          textinput.Model                                   // picker query (own input: a typed message survives)
+	files       []string                                          // pickFiles: the session's files, from git ls-files (filesMsg)
+	psel        int                                               // picker selection, an index in pickList
+	comp        completion                                        // tab completion state of the INSERT line
+	tools       bool                                              // t: show tool lines
+	mentions    bool                                              // m: show only direct lines (see shows)
+	typing      map[string][]string                               // channel -> nicks typing now (TypingMsg); a room's nick pane marks them
+	reply       func(ch string, to model.Line, text string) error // A + send: a reply to a line with an ID; nil = plain send with a quote
+	seen        func(ch string) error                             // the channel's newest line is on screen (read markers); nil = none
+	threads     map[string][]model.Thread                         // per channel: thread heads (ThreadsMsg)
+	thread      string                                            // selected thread root ("" = main chat): the chat pane shows it, sends go to it
+	tags        map[string]string                                 // channel -> tag group (TagsMsg)
+	tagsVer     int                                               // bumped by TagsMsg: the side pane cache key
+	typingFn    func(ch string)                                   // tells the room I am typing; must not block; nil = off
+	typedAt     time.Time                                         // last typing notice sent
+	reactRow    bool                                              // +: the quick reaction row is open; the next key picks
+	menu        string                                            // the open leader menu ("" none)
+	threadOpen  func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
+	pins        map[string][]string                               // per channel: pinned event IDs (PinsMsg)
+	pinsVer     int
 	jump        bool                                                  // f: line labels are shown; the next key picks a line
 	confirmDel  bool                                                  // d: waiting for y to delete the selected message
 	lastLineCmd string                                                // the last :react command run on a line, for .
@@ -358,6 +359,7 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.pins = map[string][]string{}
 		}
 		a.pins[msg.Ch] = slices.Clone(msg.IDs)
+		a.pinsVer++
 	case RemoveLineMsg:
 		if m, err := a.m.RemoveLine(msg.Ch, msg.ID); err == nil {
 			a.m = m
@@ -556,6 +558,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return a.openPick(pickChans), nil
 				case "thread":
 					return a.openPick(pickThreads), nil
+				case "pins":
+					return a.openPick(pickPins), nil
 				}
 				return a.openPick(pickUsers), nil
 			case it.do == "thread":
@@ -1022,7 +1026,7 @@ func (a App) screen() string {
 	case a.pick && a.pickWhat == pickGrep:
 		return overlayCentered(screen, a.w, a.h, grepBox(a.w, a.pq.Value()))
 	case a.pick:
-		what := [...]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent"}[a.pickWhat]
+		what := [...]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned"}[a.pickWhat]
 		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), pickList(a.pickSource(), a.pq.Value()), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
 	}
 	return screen
@@ -1211,6 +1215,7 @@ const (
 	pickRecent                    // m: chats most recent first, then this channel's threads
 	pickThreads                   // open thread: this channel's threads
 	pickUsers                     // open user: nicks of this channel and agents elsewhere
+	pickPins                      // space o p: the room's pinned messages
 )
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
@@ -1245,6 +1250,11 @@ func (a App) pickSource() []string {
 		}
 	case pickChans:
 		out = a.chanNames()
+	case pickPins:
+		cur := a.m.Current()
+		for _, id := range a.pins[cur.Name] {
+			out = append(out, pinLabel(a.lines(cur), id))
+		}
 	case pickThreads:
 		for _, h := range a.threads[a.m.Current().Name] {
 			out = append(out, threadLabel(h))
@@ -1311,6 +1321,10 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		a.pick = false
 	case "enter":
+		if a.psel < len(ms) && a.pickWhat == pickPins {
+			a.pick = false
+			return a.jumpToPin(ms[a.psel].idx), nil
+		}
 		if a.psel < len(ms) && a.pickWhat == pickFileBlock {
 			a.pick = false
 			return a, readFileCmd(a.m.Current().Cwd, ms[a.psel].name)
@@ -2243,6 +2257,7 @@ type sideCache struct {
 type sideKey struct {
 	ver                                 uint64
 	cur, fq, thread, user, grep, typing string
+	pinsVer                             int
 	focus                               paneFocus
 	fsel, mainUnread                    int
 	tools, mentions                     bool
@@ -2251,7 +2266,7 @@ type sideKey struct {
 }
 
 func (k sideKey) same(o sideKey) bool {
-	return k.ver == o.ver && k.cur == o.cur && k.fq == o.fq && k.thread == o.thread && k.user == o.user &&
+	return k.ver == o.ver && k.pinsVer == o.pinsVer && k.cur == o.cur && k.fq == o.fq && k.thread == o.thread && k.user == o.user &&
 		k.grep == o.grep && k.typing == o.typing && k.focus == o.focus && k.fsel == o.fsel &&
 		k.mainUnread == o.mainUnread && k.tools == o.tools && k.mentions == o.mentions && slices.Equal(k.heads, o.heads) &&
 		k.tagsVer == o.tagsVer
@@ -2261,7 +2276,7 @@ func (k sideKey) same(o sideKey) bool {
 func (a App) sides() sidePanes {
 	cur := a.m.Current().Name
 	heads := a.threads[cur]
-	k := sideKey{ver: a.m.Version(), cur: cur, fq: a.fq, thread: a.thread, user: a.user, grep: a.grep,
+	k := sideKey{ver: a.m.Version(), pinsVer: a.pinsVer, cur: cur, fq: a.fq, thread: a.thread, user: a.user, grep: a.grep,
 		typing: a.in.Value(), focus: a.focus, fsel: a.fsel, mainUnread: a.mainUnread[cur], tools: a.tools,
 		mentions: a.mentions, heads: slices.Clone(heads), tagsVer: a.tagsVer}
 	p, hit := sidePanes{}, false
@@ -2283,6 +2298,7 @@ func (a App) sides() sidePanes {
 	}
 	p.mainLast, p.mainLastAt = a.mainLast()
 	p.readAt, p.user = a.readAt[cur], a.user
+	p.pinned = pinSet(a.pins[cur])
 	p.jump = a.jump
 	p.unread = a.unreadAll()
 	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)
@@ -2300,7 +2316,7 @@ var menus = map[string][]menuItem{
 		{"i", "invites…", "menu:invites"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
-	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}},
+	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}},
 	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"e", "emote (/me)", ":me "}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
 		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},
@@ -2342,4 +2358,38 @@ func (a App) permalink() (tea.Model, tea.Cmd) {
 	}
 	link := "https://matrix.to/#/" + url.PathEscape(c.ID) + "/" + url.PathEscape(l.ID)
 	return a.toast("copied "+link, false), tea.SetClipboard(link)
+}
+
+// pinLabel is a pinned message's picker row: its "<nick> text" if the line is loaded, else its ID.
+func pinLabel(ls []model.Line, id string) string {
+	for _, l := range ls {
+		if l.ID == id {
+			return "<" + l.Nick + "> " + strings.ReplaceAll(l.Text, "\n", " ")
+		}
+	}
+	return "(not loaded) " + id
+}
+
+// jumpToPin selects pinned message number idx of the current channel in the chat.
+func (a App) jumpToPin(idx int) App {
+	cur := a.m.Current().Name
+	if idx < 0 || idx >= len(a.pins[cur]) {
+		return a
+	}
+	for i, l := range a.lines(a.m.Current()) {
+		if l.ID == a.pins[cur][idx] {
+			a.hit = i
+			return a.showHit()
+		}
+	}
+	return a
+}
+
+// pinSet is the set of pinned message IDs.
+func pinSet(ids []string) map[string]bool {
+	out := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out
 }

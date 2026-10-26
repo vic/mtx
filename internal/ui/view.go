@@ -630,6 +630,7 @@ var helpSections = []struct {
 		{"m", "recent chats and threads (fuzzy): type, enter"},
 		{"f", "jump: a letter on each visible line; type it to select that line"},
 		{"Y", "copy a matrix.to link to the selected message"},
+		{"space o p", "pinned messages of this room"},
 		{"enter", "on a selected line: menu of everything you can do with it"},
 		{"e", "edit my selected message"},
 		{"d y", "delete my selected message"},
@@ -668,6 +669,8 @@ var helpSections = []struct {
 		{":reject [room]", "decline a pending invite"},
 		{":invites", "list pending invites"},
 		{":recover <recovery key>", "verify this device and load old room keys from backup"},
+		{":pin", "pin the selected message"},
+		{":unpin", "unpin the selected message"},
 		{":sponsor", "open github.com/sponsors/vic"},
 		{":docs", "open the documentation (mtx.oeiuwq.com)"},
 		{":mute [room]", "no notifications from this room (all devices)"},
@@ -743,17 +746,18 @@ type sidePanes struct {
 	sel              int
 	nickSel          int // row of the selected nick (-1 none), labels are not selectable
 	q                string
-	heads            []model.Thread // thread heads of the current channel (top rows of the chat column)
-	thread           string         // selected head root
-	unread           []int          // per head: live replies not yet read (same order as heads)
-	mainUnread       int            // main-thread lines not on screen (the main thread row)
-	mainLast         string         // the main thread's newest line, "nick: text"
-	mainLastAt       time.Time      // time of the main thread's newest line
-	readAt           time.Time      // own lines at or before it are read by someone
-	user             string         // the local nick
-	jump             bool           // f: show line labels in the lead column
-	threadTop        int            // first shown row of the threads box (its main thread is the last row)
-	chanTop, nickTop int            // first shown row of the channel and nick panes
+	heads            []model.Thread  // thread heads of the current channel (top rows of the chat column)
+	thread           string          // selected head root
+	unread           []int           // per head: live replies not yet read (same order as heads)
+	mainUnread       int             // main-thread lines not on screen (the main thread row)
+	mainLast         string          // the main thread's newest line, "nick: text"
+	mainLastAt       time.Time       // time of the main thread's newest line
+	readAt           time.Time       // own lines at or before it are read by someone
+	user             string          // the local nick
+	jump             bool            // f: show line labels in the lead column
+	pinned           map[string]bool // the room's pinned message IDs
+	threadTop        int             // first shown row of the threads box (its main thread is the last row)
+	chanTop, nickTop int             // first shown row of the channel and nick panes
 }
 
 // title is a side pane's title: "▸name query" while it has focus.
@@ -879,6 +883,9 @@ func borderGlyph(focused bool, s string) string {
 // readMark is the lead column of an own line another member has read.
 var readMark = dimmed.Render("✓")
 
+// pinMark is the lead column of a pinned message.
+var pinMark = alert.Render("▴")
+
 // lead is the one-column lead of scrollback row k: readMark on the first row of an own line that was
 // read, else a space.
 func (p sidePanes) lead(of []int, shown []model.Line, k int) string {
@@ -889,6 +896,9 @@ func (p sidePanes) lead(of []int, shown []model.Line, k int) string {
 		return " "
 	}
 	l := shown[of[k]]
+	if p.pinned[l.ID] {
+		return pinMark
+	}
 	if p.user != "" && l.Nick == p.user && !p.readAt.IsZero() && !l.At.After(p.readAt) {
 		return readMark
 	}

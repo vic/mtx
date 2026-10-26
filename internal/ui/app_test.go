@@ -919,3 +919,29 @@ func TestMsgMenu(t *testing.T) {
 		t.Fatal("d in the message menu did not ask to delete")
 	}
 }
+
+// TestPinnedPicker: space o p lists the room's pinned messages; enter goes to the chosen one.
+func TestPinnedPicker(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "first", ID: "$1"}})
+	a = next.(App)
+	next, _ = a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "ann", Text: "second", ID: "$2"}})
+	a = next.(App)
+	next, _ = a.Update(PinsMsg{Ch: "#a", IDs: []string{"$2"}})
+	a = next.(App)
+	a, _ = press(t, a, "space")
+	a, _ = press(t, a, "o")
+	a, _ = press(t, a, "p")
+	if !a.pick || a.pickWhat != pickPins {
+		t.Fatalf("pinned picker: pick %v what %v", a.pick, a.pickWhat)
+	}
+	src := a.pickSource()
+	if len(src) != 1 || !strings.Contains(src[0], "second") {
+		t.Fatalf("pinned source %q", src)
+	}
+	a, _ = press(t, a, "enter")
+	if ls := a.lines(a.m.Current()); a.hit < 0 || ls[a.hit].ID != "$2" {
+		t.Fatalf("hit %d", a.hit)
+	}
+}

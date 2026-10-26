@@ -1004,7 +1004,7 @@ func (a App) inputLine() (label, input, hint string) {
 	if a.hit >= 0 {
 		return "NORMAL", a.footer(), keyHint("a", "reply", "A", "quote", "e", "edit", "d", "delete", "+", "react", "T", "thread", "y", "yank", "gx", "open", ".", "repeat", "esc", "unselect")
 	}
-	return "NORMAL", a.footer(), keyHint("↑↓", "line", "C-n/C-p", "channel", "tab", "panes", "C-t", "files", "C-f", "file block", "C-o", "pick", "i", "new", "a", "reply", "T", "thread", "?", "help", "$", "shell", "!", "capture")
+	return "NORMAL", a.footer(), keyHint("SPC", "menu", "?", "help", ":", "command", "#", "rooms", "@", "users", "%", "threads", "^", "pins", "m", "recent", "i", "write", "a", "reply", "f", "jump", "+", "react", "enter", "message", "↑↓", "line")
 }
 
 // footer is the last row outside INSERT: more keys and the toggle states, since

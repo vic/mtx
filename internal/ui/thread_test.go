@@ -241,7 +241,7 @@ func TestCtrlOKeepsChannelsAndNicks(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1, Live: 1}}}
-	if src := a.pickSource(); !slices.Contains(src, "#a") || slices.ContainsFunc(src, func(s string) bool { return strings.HasPrefix(s, "@") || strings.HasPrefix(s, "thread: ") }) {
+	if src := a.pickSource(); !slices.Contains(src, "#a") || slices.ContainsFunc(src, func(s string) bool { return strings.HasPrefix(s, "@") || s == threadLabel(a.threads["#a"][0]) }) {
 		t.Fatalf("open chat source: %v", src)
 	}
 	a = a.openPick(pickThreads)

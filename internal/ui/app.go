@@ -1571,7 +1571,8 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			a.hit, a.query = ms[a.psel].idx, a.pq.Value() // n / N go on from here
 			a = a.showHit()
 		} else if a.psel < len(ms) {
-			if h, ok := a.threadAt(ms[a.psel].name); ok { // a thread: the chat pane shows it
+			_, isChan := a.chanByName(ms[a.psel].name)               // a channel first: a thread label never shadows it
+			if h, ok := a.threadAt(ms[a.psel].name); ok && !isChan { // a thread: the chat pane shows it
 				a = a.selectThread(h.Root)
 			} else if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok {
 				a.mode = Insert

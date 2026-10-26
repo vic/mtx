@@ -913,7 +913,7 @@ func TestOpenPickers(t *testing.T) {
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 1}}}
 	a, _ = press(t, a, "ctrl+o")
 	for _, n := range a.pickSource() {
-		if strings.HasPrefix(n, "thread: ") {
+		if n == threadLabel(a.threads["#a"][0]) {
 			t.Fatalf("ctrl+o lists a thread: %q", n)
 		}
 	}
@@ -925,7 +925,7 @@ func TestOpenPickers(t *testing.T) {
 		t.Fatalf("open thread: pick %v what %v", a.pick, a.pickWhat)
 	}
 	for _, n := range a.pickSource() {
-		if !strings.HasPrefix(n, "thread: ") {
+		if n != threadLabel(a.threads["#a"][0]) {
 			t.Fatalf("thread picker lists %q", n)
 		}
 	}

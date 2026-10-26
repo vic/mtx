@@ -237,3 +237,19 @@ func TestUsage(t *testing.T) {
 		t.Fatalf("nope: %q", Usage("nope"))
 	}
 }
+
+// TestParseMute: /mute and /unmute take an optional room.
+func TestParseMute(t *testing.T) {
+	for _, line := range []string{"/mute", "/mute &x", "/unmute", "/unmute &x"} {
+		if _, err := ParseCmd(line); err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+	}
+	c, err := ParseCmd("/mute &x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name() != CmdMute || len(c.Args()) != 1 || c.Args()[0] != "&x" {
+		t.Fatalf("mute %v %q", c.Name(), c.Args())
+	}
+}

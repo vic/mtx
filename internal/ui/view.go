@@ -657,6 +657,8 @@ var helpSections = []struct {
 		{":reject [room]", "decline a pending invite"},
 		{":invites", "list pending invites"},
 		{":recover <recovery key>", "verify this device and load old room keys from backup"},
+		{":mute [room]", "no notifications from this room (all devices)"},
+		{":unmute [room]", "notifications from this room again"},
 	}},
 }
 

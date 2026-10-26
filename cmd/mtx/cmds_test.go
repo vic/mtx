@@ -246,3 +246,53 @@ func TestReactToggles(t *testing.T) {
 	defer mu.Unlock()
 	require.Contains(t, redacted, "/redact/$mine")
 }
+
+// TestMuteSends: /mute sets a room push rule with no actions, so the room sends no notifications.
+func TestMuteSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var path, body string
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/pushrules/global/room/{rule}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		path, body = r.URL.Path, string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/mute")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, path, "/pushrules/global/room/")
+	require.Contains(t, body, `"actions":[]`)
+}
+
+// TestUnmuteSends: /unmute deletes that room push rule.
+func TestUnmuteSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var path string
+	ts.Router.HandleFunc("DELETE /_matrix/client/v3/pushrules/global/room/{rule}", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		path = r.URL.Path
+		mu.Unlock()
+		fmt.Fprint(w, `{}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/unmute")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, path, "/pushrules/global/room/")
+}

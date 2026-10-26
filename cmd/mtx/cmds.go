@@ -13,6 +13,7 @@ import (
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
+	"maunium.net/go/mautrix/pushrules"
 
 	"mtx/internal/model"
 	"mtx/internal/ui"
@@ -89,6 +90,17 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.emote(ch, args[0])
 	case model.CmdOpen:
 		return c.r.open(args[0])
+	case model.CmdMute, model.CmdUnmute:
+		room, err := c.r.roomOf(roomArg(args, ch))
+		if err != nil {
+			return err
+		}
+		ctx, cancel := c.ctx()
+		defer cancel()
+		if cm.Name() == model.CmdUnmute {
+			return c.r.mx.DeletePushRule(ctx, "global", pushrules.RoomRule, string(room))
+		}
+		return c.r.mx.PutPushRule(ctx, "global", pushrules.RoomRule, string(room), &mautrix.ReqPutPushRule{Actions: []*pushrules.PushAction{}})
 	case model.CmdAvatar:
 		return c.r.setAvatar(args[0])
 	case model.CmdUpload:

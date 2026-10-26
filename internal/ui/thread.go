@@ -2,6 +2,9 @@ package ui
 
 import (
 	"fmt"
+	"slices"
+	"strings"
+	"sync"
 	"time"
 
 	"charm.land/lipgloss/v2"
@@ -260,4 +263,51 @@ func threadTopOf(n, sel int, focused bool, scroll int) int {
 		}
 	}
 	return top
+}
+
+// threadsKey is what the threads box draws: its size, scroll, selection, focus and contents.
+type threadsKey struct {
+	w, rows, top, sel, mainUnread int
+	focus                         paneFocus
+	thread, mainLast, unread      string
+	mainLastAt                    int64
+	heads                         string
+}
+
+// threadsCache holds the rendered threads boxes; it is cleared when it is full.
+var threadsCache = struct {
+	mu sync.Mutex
+	m  map[threadsKey][]string
+}{m: map[threadsKey][]string{}}
+
+// threadsPane is the threads box as one block of rows (w columns, rows tall): the heads, then the main
+// thread. Memoized: the box changes only when the heads, the selection, focus or unread counts do.
+// Each entry is threadsRow(p, i, w); the result is a copy the caller may change.
+func threadsPane(p sidePanes, rows, w int) []string {
+	var heads, unread strings.Builder
+	for _, h := range p.heads {
+		fmt.Fprintf(&heads, "%s|%s|%s|%d|%d;", h.Root, h.Nick, h.Text, h.Count, h.At.UnixNano())
+	}
+	for _, u := range p.unread {
+		fmt.Fprintf(&unread, "%d,", u)
+	}
+	k := threadsKey{w: w, rows: rows, top: p.threadTop, sel: p.sel, mainUnread: p.mainUnread, focus: p.focus,
+		thread: p.thread, mainLast: p.mainLast, unread: unread.String(), mainLastAt: p.mainLastAt.UnixNano(), heads: heads.String()}
+	threadsCache.mu.Lock()
+	if out, ok := threadsCache.m[k]; ok {
+		threadsCache.mu.Unlock()
+		return slices.Clone(out)
+	}
+	threadsCache.mu.Unlock()
+	out := make([]string, rows)
+	for i := range out {
+		out[i] = threadsRow(p, i, w)
+	}
+	threadsCache.mu.Lock()
+	if len(threadsCache.m) >= 256 {
+		threadsCache.m = map[threadsKey][]string{}
+	}
+	threadsCache.m[k] = out
+	threadsCache.mu.Unlock()
+	return slices.Clone(out)
 }

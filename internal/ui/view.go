@@ -302,6 +302,10 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			chans = append(chans, byName[n])
 		}
 		mid := w - chanW - nickW - 4 // four border columns
+		var tBlock []string          // the threads box rows, memoized
+		if tRows > 0 {
+			tBlock = threadsPane(p, tRows, mid)
+		}
 		// The focused pane's borders are drawn in focusBorder (vic 2026-10-23). Pane k
 		// (0 channels, 1 chat, 2 nicks) owns vertical borders k and k+1 and segment k.
 		pane := 1
@@ -372,7 +376,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			}
 			midCell := ""
 			if i < tRows {
-				midCell = threadsRow(p, i, mid)
+				midCell = tBlock[i]
 			} else {
 				midCell = lineRow(lines, of, shown, hit, i-tRows-sep, mid, p.lead(of, shown, i-tRows-sep), code, q)
 			}

@@ -253,3 +253,33 @@ func TestCtrlOKeepsChannelsAndNicks(t *testing.T) {
 		t.Fatalf("open user source lacks @nicks: %v", a.pickSource())
 	}
 }
+
+// TestThreadsPaneMatchesRows: the threads block is threadsRow for each of its rows, equal on repeat calls,
+// and a caller that changes its copy does not change the next one.
+func TestThreadsPaneMatchesRows(t *testing.T) {
+	at := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	p := sidePanes{
+		heads: []model.Thread{
+			{Root: "$a", Nick: "ana", Text: "one", Count: 2, Live: 1, At: at},
+			{Root: "$b", Nick: "bob", Text: "two", Count: 1, At: at},
+			{Root: "$c", Nick: "cy", Text: "three", Count: 5, At: at},
+		},
+		unread:     []int{1, 0, 2},
+		mainUnread: 3,
+		mainLast:   "ana: hi",
+		mainLastAt: at,
+	}
+	got := threadsPane(p, 4, 60)
+	for i := range 4 {
+		if got[i] != threadsRow(p, i, 60) {
+			t.Fatalf("row %d: %q want %q", i, got[i], threadsRow(p, i, 60))
+		}
+	}
+	if again := threadsPane(p, 4, 60); !slices.Equal(got, again) {
+		t.Fatal("second call differs")
+	}
+	got[0] = "changed"
+	if threadsPane(p, 4, 60)[0] == "changed" {
+		t.Fatal("the cached block changed with its copy")
+	}
+}

@@ -624,27 +624,24 @@ func TestColonTabCompletes(t *testing.T) {
 	a, _ = press(t, a, ":")
 	a = typeText(t, a, "jo")
 	a, _ = press(t, a, "tab")
-	if a.in.Value() != "join " {
+	if !strings.HasPrefix(a.in.Value(), "join") {
 		t.Fatalf("command %q", a.in.Value())
 	}
-	a = typeText(t, a, "#")
+	a = typeText(t, a, " #")
 	a, _ = press(t, a, "tab")
 	if !strings.HasPrefix(a.in.Value(), "join #") {
 		t.Fatalf("channel %q", a.in.Value())
 	}
 }
 
-// TestPaletteListsCommands: : opens the command palette, which lists the commands and filters them.
-func TestPaletteListsCommands(t *testing.T) {
+// TestColonSuggests: the : line suggests the commands that match the word typed, with what they do.
+func TestColonSuggests(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	a, _ = press(t, a, ":")
-	if !a.pick || a.pickWhat != pickCmds {
-		t.Fatalf("palette not open: pick %v what %v", a.pick, a.pickWhat)
-	}
-	a = typeText(t, a, "reac")
-	ms := a.pickMatches()
-	if len(ms) == 0 || !strings.HasPrefix(ms[0].name, ":react") {
-		t.Fatalf("first match %v", ms)
+	a = typeText(t, a, "rea")
+	s := a.suggest()
+	if len(s) == 0 || !strings.Contains(ansi.Strip(strings.Join(s, "")), ":react") {
+		t.Fatalf("suggest %q", s)
 	}
 }

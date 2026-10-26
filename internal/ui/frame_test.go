@@ -63,7 +63,7 @@ func TestHelpAndArrows(t *testing.T) {
 		var log []sent
 		a := newApp(t, &log, nil)
 		next, _ := a.Update(tea.WindowSizeMsg{Width: sz[0], Height: sz[1]})
-		a, _ = press(t, next.(App), "?")
+		a, _ = press(t, next.(App), "?", "?") // the picker, then the box
 		if v := checkFrame(t, a, sz[0], sz[1]); !strings.Contains(v, "Matrix client") {
 			t.Fatalf("%v: no help on screen", sz)
 		}
@@ -732,7 +732,7 @@ func TestHelpScrolls(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(tea.WindowSizeMsg{Width: 100, Height: 12}) // help is taller than 12 rows
-	a, _ = press(t, next.(App), "?")
+	a, _ = press(t, next.(App), "?", "?")
 	top := ansi.Strip(a.screen())
 	a, _ = press(t, a, "j", "j")
 	if a.helpOff != 2 || ansi.Strip(a.screen()) == top || !a.help {

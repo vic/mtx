@@ -870,7 +870,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.mentions = a.mentions != (act.Kind == ToggleMentions)
 		a.hit, a.offs = -1, nil // positions index the shown lines, which changed
 	case Help:
-		a.help = true
+		return a.openPick(pickHelp), nil
 	case ToggleStamps:
 		a.stamps, a.offs = !a.stamps, nil // row counts changed
 	case Yank:
@@ -1255,7 +1255,7 @@ func (a App) screen() string {
 	case a.pick && a.pickWhat == pickGrep:
 		return overlayCentered(screen, a.w, a.h, grepBox(a.w, a.pq.Value()))
 	case a.pick:
-		titles := map[pickKind]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned", pickEdits: "edit history", pickExplore: "explore", pickFound: "search results", pickInfo: a.listTitle}
+		titles := map[pickKind]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned", pickEdits: "edit history", pickExplore: "explore", pickFound: "search results", pickInfo: a.listTitle, pickHelp: "help"}
 		what, ok := titles[a.pickWhat]
 		if !ok {
 			what = "pick"
@@ -1439,10 +1439,11 @@ const (
 	pickFound                     // :search: the server's matches in this room; enter selects the message if loaded
 	pickInfo                      // a read-only list (ListMsg, e.g. :devices): enter and esc close it
 	pickThemes                    // space T, :theme: the color schemes with live preview; enter keeps, esc restores
+	pickHelp                      // ?: every key and command with its description; type to filter, enter and esc close it
 )
 
 // pickLast is the last pickKind; tests walk 0..pickLast so a new kind is rendered by the tests too.
-const pickLast = pickThemes
+const pickLast = pickHelp
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
 const allSpeakers = "(all)"
@@ -1486,6 +1487,12 @@ func (a App) pickSource() []string {
 		}
 	case pickInfo:
 		out = a.list
+	case pickHelp:
+		for _, s := range helpSections {
+			for _, k := range s.keys {
+				out = append(out, s.head+"  "+k[0]+"  "+k[1])
+			}
+		}
 	case pickEdits:
 		l, _ := a.lastWithID(a.hit)
 		out = append(slices.Clone(a.edits[l.ID]), l.Text+"  (now)")
@@ -1565,11 +1572,15 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	}
+	if a.pickWhat == pickHelp && msg.String() == "?" { // ? again: the help box with its buttons
+		a.pick, a.help, a.helpOff = false, true, 0
+		return a, nil
+	}
 	if a.pickWhat == pickEdits && (msg.String() == "enter" || msg.String() == "esc") { // read only: enter closes it too
 		a.pick = false
 		return a, nil
 	}
-	if a.pickWhat == pickInfo && (msg.String() == "enter" || msg.String() == "esc") { // read only
+	if (a.pickWhat == pickInfo || a.pickWhat == pickHelp) && (msg.String() == "enter" || msg.String() == "esc") { // read only
 		a.pick = false
 		return a, nil
 	}

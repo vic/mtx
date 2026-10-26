@@ -1792,3 +1792,37 @@ func TestOlderMotions(t *testing.T) {
 		}
 	})
 }
+
+// TestHelpFuzzy: ? opens help as a picker; typing filters it; a query that matches nothing shows no row.
+func TestHelpFuzzy(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 40
+	a, _ = press(t, a, "?")
+	if !a.pick || a.pickWhat != pickHelp {
+		t.Fatalf("? did not open the help picker: pick %v kind %v", a.pick, a.pickWhat)
+	}
+	a = typeText(t, a, "seen")
+	if !strings.Contains(ansi.Strip(a.screen()), "seen") {
+		t.Fatalf("help filter shows no seen row:\n%s", ansi.Strip(a.screen()))
+	}
+	a, _ = press(t, a, "esc")
+	if a.pick {
+		t.Fatal("esc did not close the help picker")
+	}
+	a, _ = press(t, a, "?")
+	a = typeText(t, a, "zzqqxx")
+	if got := pickList(a.pickSource(), a.pq.Value()); len(got) != 0 {
+		t.Fatalf("query matched %d help rows", len(got))
+	}
+}
+
+// TestHelpPickerBox: ? twice opens the help box (it holds the buttons); the picker is closed.
+func TestHelpPickerBox(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, "?", "?")
+	if !a.help || a.pick {
+		t.Fatalf("? ? gave help %v pick %v", a.help, a.pick)
+	}
+}

@@ -38,6 +38,7 @@ type PinsMsg struct {
 type ReplaceLineMsg struct {
 	Ch, ID string
 	L      model.Line
+	Edit   bool // an edit (keep the old text in the line's history), not a decrypt
 }
 
 // ReadMsg says another member read channel Ch up to the line with event ID; own lines up to it show read.
@@ -213,6 +214,7 @@ type App struct {
 	reactRow    bool                                              // +: the quick reaction row is open; the next key picks
 	menu        string                                            // the open leader menu ("" none)
 	threadOpen  func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
+	edits       map[string][]string                               // per event ID: earlier texts, oldest first (EDIT history)
 	pins        map[string][]string                               // per channel: pinned event IDs (PinsMsg)
 	pinsVer     int
 	forwarding  bool                                                  // w in the message menu: the chat picker forwards the selected line
@@ -349,6 +351,17 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	case ReplaceLineMsg:
+		if c, ok := a.chanByName(msg.Ch); ok && msg.Edit {
+			for i := range c.Lines.Len() {
+				if l := c.Lines.At(i); l.ID == msg.ID {
+					if a.edits == nil {
+						a.edits = map[string][]string{}
+					}
+					a.edits[msg.ID] = append(slices.Clone(a.edits[msg.ID]), l.Text)
+					break
+				}
+			}
+		}
 		if m, err := a.m.ReplaceLine(msg.Ch, msg.ID, msg.L); err == nil {
 			a.m = m
 		}
@@ -585,6 +598,11 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return a.openPick(pickThreads), nil
 				case "pins":
 					return a.openPick(pickPins), nil
+				case "edits":
+					if l, ok := a.lastWithID(a.hit); !ok || len(a.edits[l.ID]) == 0 {
+						return a.toast("no edits", false), nil
+					}
+					return a.openPick(pickEdits), nil
 				}
 				return a.openPick(pickUsers), nil
 			case it.do == "thread":
@@ -1256,6 +1274,7 @@ const (
 	pickThreads                   // open thread: this channel's threads
 	pickUsers                     // open user: nicks of this channel and agents elsewhere
 	pickPins                      // space o p: the room's pinned messages
+	pickEdits                     // message menu h: the selected message's earlier versions, read only
 )
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
@@ -1290,6 +1309,9 @@ func (a App) pickSource() []string {
 		}
 	case pickChans:
 		out = a.chanNames()
+	case pickEdits:
+		l, _ := a.lastWithID(a.hit)
+		out = append(slices.Clone(a.edits[l.ID]), l.Text+"  (now)")
 	case pickPins:
 		cur := a.m.Current()
 		for _, id := range a.pins[cur.Name] {
@@ -1354,6 +1376,10 @@ func (a App) pickSource() []string {
 // pickKey runs one key in the open picker: enter goes to the selected channel or line.
 func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	ms := pickList(a.pickSource(), a.pq.Value())
+	if a.pickWhat == pickEdits && (msg.String() == "enter" || msg.String() == "esc") { // read only: enter closes it too
+		a.pick = false
+		return a, nil
+	}
 	if a.forwarding && a.pickWhat == pickChans && (msg.String() == "enter" || msg.String() == "esc") {
 		a.forwarding, a.pick = false, false
 		if msg.String() == "esc" || a.psel >= len(ms) {
@@ -2511,7 +2537,7 @@ var menus = map[string][]menuItem{
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
 	"emoji":   emojiMenu(),

@@ -462,7 +462,7 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 		}
 		line.ID = m.RelatesTo.EventID.String() // the edit replaces the original line in place
 		if !old || !r.replaceBuffered(name, line) {
-			r.emit(ui.ReplaceLineMsg{Ch: name, ID: line.ID, L: line})
+			r.emit(ui.ReplaceLineMsg{Ch: name, ID: line.ID, L: line, Edit: true})
 		}
 		if r.cacheLine != nil {
 			r.cacheLine(matrix.CachedLine{Room: evt.RoomID, EventID: id.EventID(line.ID), TS: evt.Timestamp, Nick: line.Nick, Text: line.Text, Dim: line.Dim, Thread: line.Thread})

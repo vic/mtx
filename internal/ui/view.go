@@ -636,6 +636,7 @@ var helpSections = []struct {
 		{"F", "jump: a letter on each visible line; type it to open its link or media"},
 		{"gc", "jump to a channel: a letter on each channel"},
 		{"gr", "go to the message the selected reply answers"},
+		{"enter h", "edit history of the selected message"},
 		{"]] [[", "next / previous speaker change"},
 		{"]m [m", "my messages"},
 		{"]@ [@", "mentions of me"},

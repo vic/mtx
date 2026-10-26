@@ -1120,3 +1120,24 @@ func TestBrackets(t *testing.T) {
 		t.Fatalf("]p hit %d want 1", b.hit)
 	}
 }
+
+// TestEditHistory: an edit keeps the text it replaces; enter then h lists the versions, read only.
+func TestEditHistory(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "first", ID: "$1"}})
+	a = next.(App)
+	next, _ = a.Update(ReplaceLineMsg{Ch: "#a", ID: "$1", Edit: true, L: model.Line{ID: "$1", Text: "second (edited)"}})
+	a = next.(App)
+	if got := a.edits["$1"]; len(got) != 1 || got[0] != "first" {
+		t.Fatalf("edits %v", got)
+	}
+	a.hit = 0
+	a, _ = press(t, a, "enter", "h")
+	if a.pickWhat != pickEdits {
+		t.Fatalf("picker %v", a.pickWhat)
+	}
+	if got := a.pickSource(); len(got) != 2 || got[0] != "first" || got[1] != "second (edited)  (now)" {
+		t.Fatalf("history %q", got)
+	}
+}

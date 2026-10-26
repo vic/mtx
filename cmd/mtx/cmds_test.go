@@ -296,3 +296,33 @@ func TestUnmuteSends(t *testing.T) {
 	defer mu.Unlock()
 	require.Contains(t, path, "/pushrules/global/room/")
 }
+
+// TestPinSends: pin adds to the pinned list and unpin removes from it, sent as the room's pinned_events state.
+func TestPinSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var body string
+	ts.Router.HandleFunc("GET /_matrix/client/v3/rooms/{room}/state/m.room.pinned_events/{key...}", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"pinned":["$a"]}`)
+	})
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{room}/state/m.room.pinned_events/{key...}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		body = string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{"event_id":"$s"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	require.NoError(t, cs.pin("#r", "$b", true))
+	mu.Lock()
+	require.Contains(t, body, `"$a","$b"`)
+	mu.Unlock()
+	require.NoError(t, cs.pin("#r", "$a", false))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, body, `"pinned":[]`)
+}

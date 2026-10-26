@@ -29,6 +29,10 @@ type SessionsMsg []model.Session
 // note. Old is history replayed at attach: no unread count, no move to the front.
 // ThreadRootMsg fills in the text of a thread head whose root was not seen this session.
 type ThreadRootMsg struct{ Ch, Root, Nick, Text string }
+type PinsMsg struct {
+	Ch  string
+	IDs []string // the room's pinned event IDs, oldest pin first
+}
 
 // ReplaceLineMsg swaps a placeholder line (same ID) for the decrypted one.
 type ReplaceLineMsg struct {
@@ -211,6 +215,7 @@ type App struct {
 	reactRow    bool                                                  // +: the quick reaction row is open; the next key picks
 	menu        string                                                // the open leader menu ("" none)
 	threadOpen  func(ch, root string)                                 // loads a thread's history when it is opened; must not block; nil = off
+	pins        map[string][]string                                   // per channel: pinned event IDs (PinsMsg)
 	jump        bool                                                  // f: line labels are shown; the next key picks a line
 	confirmDel  bool                                                  // d: waiting for y to delete the selected message
 	lastLineCmd string                                                // the last :react command run on a line, for .
@@ -348,6 +353,11 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m, err := a.m.SetReacts(msg.Ch, msg.ID, msg.Reacts); err == nil {
 			a.m = m
 		}
+	case PinsMsg:
+		if a.pins == nil {
+			a.pins = map[string][]string{}
+		}
+		a.pins[msg.Ch] = slices.Clone(msg.IDs)
 	case RemoveLineMsg:
 		if m, err := a.m.RemoveLine(msg.Ch, msg.ID); err == nil {
 			a.m = m
@@ -903,6 +913,13 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 			return a.note("redact: no message of mine here"), nil
 		}
 		line = strings.TrimSpace("/redact " + l.ID + " " + strings.TrimSpace(rest))
+	}
+	if line == "/pin" || line == "/unpin" { // the target is the cursor line
+		l, ok := a.lastWithID(a.hit)
+		if !ok {
+			return a.note("pin: no message with an ID here"), nil
+		}
+		line += " " + l.ID
 	}
 	if line == "/open" {
 		l, ok := a.lastWithID(a.hit)
@@ -2291,7 +2308,7 @@ var menus = map[string][]menuItem{
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}},
+		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 }
 

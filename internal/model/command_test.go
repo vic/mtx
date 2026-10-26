@@ -269,3 +269,17 @@ func TestParseSponsorDocs(t *testing.T) {
 		t.Fatalf("docs %v", c.Name())
 	}
 }
+
+// TestParsePin: /pin and /unpin take one event ID, which the UI adds from the selected line.
+func TestParsePin(t *testing.T) {
+	c, err := ParseCmd("/pin $e")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name() != CmdPin || len(c.Args()) != 1 || c.Args()[0] != "$e" {
+		t.Fatalf("pin %v %q", c.Name(), c.Args())
+	}
+	if _, err := ParseCmd("/unpin $e"); err != nil {
+		t.Fatal(err)
+	}
+}

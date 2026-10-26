@@ -105,6 +105,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.r.setAvatar(args[0])
 	case model.CmdUpload:
 		return c.r.upload(ch, args[0])
+	case model.CmdPin, model.CmdUnpin:
+		return c.pin(ch, args[0], cm.Name() == model.CmdPin)
 	case model.CmdRecover:
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
@@ -513,5 +515,25 @@ func (c *cmds) emote(ch, text string) error {
 	ctx, cancel := c.ctx()
 	defer cancel()
 	_, err = c.r.mx.SendMessageEvent(ctx, room, event.EventMessage, &event.MessageEventContent{MsgType: event.MsgEmote, Body: text})
+	return err
+}
+
+// pin adds event ev to (on) or removes it from channel ch's pinned messages.
+func (c *cmds) pin(ch, ev string, on bool) error {
+	room, err := c.r.roomOf(ch)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := c.ctx()
+	defer cancel()
+	var pe event.PinnedEventsEventContent
+	if err := c.r.mx.StateEvent(ctx, room, event.StatePinnedEvents, "", &pe); err != nil && !errors.Is(err, mautrix.MNotFound) {
+		return err
+	}
+	pe.Pinned = slices.DeleteFunc(pe.Pinned, func(e id.EventID) bool { return e == id.EventID(ev) })
+	if on {
+		pe.Pinned = append(pe.Pinned, id.EventID(ev))
+	}
+	_, err = c.r.mx.SendStateEvent(ctx, room, event.StatePinnedEvents, "", &pe)
 	return err
 }

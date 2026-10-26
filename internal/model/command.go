@@ -38,6 +38,8 @@ const (
 	CmdReject   CmdName = "reject"
 	CmdInvites  CmdName = "invites"
 	CmdReact    CmdName = "react"
+	CmdPin      CmdName = "pin"
+	CmdUnpin    CmdName = "unpin"
 	CmdRedact   CmdName = "redact"
 	CmdQuit     CmdName = "quit"
 	CmdHelp     CmdName = "help"
@@ -45,7 +47,7 @@ const (
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "react", "redact", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "pin", "unpin", "react", "redact", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -96,6 +98,8 @@ func arity(n CmdName) (count int, raw, ok bool) {
 		return 1, false, true
 	case CmdRedact:
 		return -1, false, true
+	case CmdPin, CmdUnpin:
+		return 1, false, true
 	case CmdReact:
 		return 2, false, true
 	case CmdPart, CmdClose, CmdNames, CmdQuit, CmdHelp:
@@ -179,6 +183,8 @@ var usage = map[CmdName]string{
 	CmdReject:   ":reject [room]",
 	CmdInvites:  ":invites",
 	CmdReact:    ":react <emoji> (on the selected line)",
+	CmdPin:      ":pin (the selected line)",
+	CmdUnpin:    ":unpin (the selected line)",
 	CmdRedact:   ":redact [reason] (on my selected line)",
 	CmdQuit:     ":quit",
 	CmdHelp:     ":help",

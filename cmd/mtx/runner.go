@@ -245,6 +245,7 @@ func (r *runner) refresh() error {
 		name, _ := r.nameOf(m.room)
 		tags[name] = m.tag
 		r.emit(ui.MembersMsg{Ch: name, Nicks: m.nicks, Levels: m.levels})
+		r.emit(ui.PinsMsg{Ch: name, IDs: m.pins})
 	}
 	for _, s := range spaces {
 		label := strings.TrimPrefix(roomLabel(s, ""), "#")
@@ -273,6 +274,7 @@ type roomMeta struct {
 	err         error
 	tag         string // "favourite", "lowpriority" or ""
 	space       bool
+	pins        []string
 	children    []id.RoomID
 }
 
@@ -286,6 +288,12 @@ func (r *runner) fetchRoom(room id.RoomID) roomMeta {
 	}
 	if tags, err := r.mx.GetTags(ctx, room); err == nil {
 		m.tag = tagGroup(tags.Tags)
+	}
+	var pe event.PinnedEventsEventContent
+	if err := r.mx.StateEvent(ctx, room, event.StatePinnedEvents, "", &pe); err == nil {
+		for _, e := range pe.Pinned {
+			m.pins = append(m.pins, e.String())
+		}
 	}
 	var create event.CreateEventContent
 	if err := r.mx.StateEvent(ctx, room, event.StateCreate, "", &create); err == nil && create.Type == event.RoomTypeSpace {
@@ -390,6 +398,18 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 	if evt.Type == event.StateRoomName {
 		if n := evt.Content.AsRoomName(); n != nil {
 			r.systemOut(old, name, systemLine(evt, fmt.Sprintf("%s renamed the room to %s", localpart(evt.Sender.String()), n.Name)))
+		}
+		return nil
+	}
+	if evt.Type == event.StatePinnedEvents {
+		if err := evt.Content.ParseRaw(evt.Type); err == nil {
+			if pe := evt.Content.AsPinnedEvents(); pe != nil {
+				ids := make([]string, 0, len(pe.Pinned))
+				for _, e := range pe.Pinned {
+					ids = append(ids, e.String())
+				}
+				r.emit(ui.PinsMsg{Ch: name, IDs: ids})
+			}
 		}
 		return nil
 	}

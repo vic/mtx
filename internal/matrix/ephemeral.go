@@ -56,3 +56,20 @@ func (c *Client) receiptsOf(room id.RoomID, events []*event.Event) error {
 	}
 	return nil
 }
+
+// OnPresence sets the hook called with each sync's presence update: user is online, unavailable or offline.
+func (c *Client) OnPresence(fn func(user id.UserID, presence string)) { c.onPresence = fn }
+
+// presenceOf delivers the m.presence events of a sync to the hook.
+func (c *Client) presenceOf(events []*event.Event) {
+	for _, e := range events {
+		if c.onPresence == nil {
+			return
+		}
+		if e.Content.ParseRaw(event.EphemeralEventPresence) == nil {
+			if p := e.Content.AsPresence(); p != nil {
+				c.onPresence(e.Sender, string(p.Presence))
+			}
+		}
+	}
+}

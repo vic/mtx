@@ -110,3 +110,8 @@ func (r *runner) typing(ch string) {
 		_, _ = r.mx.UserTyping(ctx, room, true, 10*time.Second)
 	}()
 }
+
+// onPresence passes a user's presence (online, unavailable, offline) to the UI.
+func (r *runner) onPresence(u id.UserID, p string) {
+	r.emit(ui.PresenceMsg{Nick: localpart(u.String()), State: p})
+}

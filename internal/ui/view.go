@@ -351,7 +351,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 						mark, name = sm, rest
 					}
 				}
-				nk = mark + nickStyle(name).Render(name)
+				nk = presenceStyle(mark) + nickStyle(name).Render(name)
 			}
 			cc, nc := chanCell(chans, cur.Name, i), fitCell(" "+nk, nickW)
 			if p.focus == focusChans && i == p.sel && i < len(chans) {
@@ -711,6 +711,7 @@ var helpSections = []struct {
 		{":create &room public", "create a public room listed in the directory (no encryption)"},
 		{":explore [term]", "list the public rooms on this server; enter joins the picked one"},
 		{":devices", "list my devices: id, name, last seen (read only)"},
+		{"nick pane ● ◐ ○", "presence: online, away, offline"},
 		{":preview", "preview the selected line's link (title, site, description)"},
 		{"space T", "theme: browse every base16/base24 scheme with live preview; enter keeps it"},
 		{":goto <date | date time | HH:MM | yesterday>", "select the first loaded message at or after that time"},
@@ -1009,4 +1010,17 @@ func overlayRight(screen string, w, bottom int, box string) string {
 		bottom--
 	}
 	return strings.Join(rows, "\n")
+}
+
+// presenceStyle colors a presence dot: online green, away yellow, offline dim; other marks are as they are.
+func presenceStyle(mark string) string {
+	switch mark {
+	case presenceOnline:
+		return fg(pal.slots[0x0B]).Render("●") + " "
+	case presenceAway:
+		return fg(pal.slots[0x0A]).Render("◐") + " "
+	case presenceOffline:
+		return dimmed.Render("○") + " "
+	}
+	return mark
 }

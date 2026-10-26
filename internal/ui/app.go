@@ -224,6 +224,8 @@ type App struct {
 	threads       map[string][]model.Thread                         // per channel: thread heads (ThreadsMsg)
 	thread        string                                            // selected thread root ("" = main chat): the chat pane shows it, sends go to it
 	tags          map[string]string                                 // channel -> tag group (TagsMsg)
+	presence      map[string]string                                 // nick -> online, unavailable or offline (PresenceMsg)
+	presenceVer   int                                               // bumped by PresenceMsg: the side pane cache key
 	tagsVer       int                                               // bumped by TagsMsg: the side pane cache key
 	typingFn      func(ch string)                                   // tells the room I am typing; must not block; nil = off
 	typedAt       time.Time                                         // last typing notice sent
@@ -478,6 +480,12 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			a = a.setSeen(msg.Ch, msg.ID)
 		}
+	case PresenceMsg:
+		if a.presence == nil {
+			a.presence = map[string]string{}
+		}
+		a.presence[msg.Nick] = msg.State
+		a.presenceVer++
 	case TagsMsg:
 		if a.tags == nil {
 			a.tags = map[string]string{}
@@ -1966,7 +1974,28 @@ const (
 // quickReacts is the + row: + then 1-9 reacts to the cursor line with that emoji.
 var quickReacts = []string{"👍", "❤️", "😂", "🎉", "😮", "😢", "🙏", "🔥", "👀"}
 
-var statusMarks = []string{busyMark, typingMark, idleMark}
+var statusMarks = []string{busyMark, typingMark, idleMark, presenceOnline, presenceAway, presenceOffline}
+
+// Presence dots before a nick (PresenceMsg): green online, yellow away, dim offline. Each is one glyph
+// with a space, so the view can split it from the nick and style it.
+const (
+	presenceOnline  = "● "
+	presenceAway    = "◐ "
+	presenceOffline = "○ "
+)
+
+// presenceMark is the dot of a presence state; "" for a nick with none.
+func presenceMark(state string) string {
+	switch state {
+	case "online":
+		return presenceOnline
+	case "unavailable":
+		return presenceAway
+	case "offline":
+		return presenceOffline
+	}
+	return ""
+}
 
 // paneNicks is chanNicks with a status mark before each nick.
 func (a App) paneNicks() []string {
@@ -1987,7 +2016,16 @@ func (a App) paneNicks() []string {
 		switch {
 		case cur.Kind == model.RoomChan:
 			nick := cur.Members[i-1].Nick
-			out[i] = roomMark(busy(a.pidOf(nick)), slices.Contains(a.typing[cur.Name], nick)) + out[i]
+			switch p := presenceMark(a.presence[nick]); {
+			case busy(a.pidOf(nick)):
+				out[i] = busyMark + out[i]
+			case slices.Contains(a.typing[cur.Name], nick):
+				out[i] = typingMark + out[i]
+			case p != "": // a dot for a nick we know the presence of
+				out[i] = p + out[i]
+			default:
+				out[i] = idleMark + out[i]
+			}
 		case i == 1: // the main agent
 			out[i] = mark(busy(cur.PID)) + out[i]
 		default:
@@ -2637,6 +2675,7 @@ type sideKey struct {
 	fsel, mainUnread                    int
 	mentions                            bool
 	tagsVer                             int
+	presenceVer                         int
 	heads                               []model.Thread
 }
 
@@ -2644,7 +2683,7 @@ func (k sideKey) same(o sideKey) bool {
 	return k.ver == o.ver && k.pinsVer == o.pinsVer && k.cur == o.cur && k.fq == o.fq && k.thread == o.thread && k.user == o.user &&
 		k.grep == o.grep && k.typing == o.typing && k.focus == o.focus && k.fsel == o.fsel &&
 		k.mainUnread == o.mainUnread && k.mentions == o.mentions && slices.Equal(k.heads, o.heads) &&
-		k.tagsVer == o.tagsVer
+		k.tagsVer == o.tagsVer && k.presenceVer == o.presenceVer
 }
 
 // sides are the side panes of the current frame.
@@ -2653,7 +2692,7 @@ func (a App) sides() sidePanes {
 	heads := a.threads[cur]
 	k := sideKey{ver: a.m.Version(), pinsVer: a.pinsVer, cur: cur, fq: a.fq, thread: a.thread, user: a.user, grep: a.grep,
 		typing: a.in.Value(), focus: a.focus, fsel: a.fsel, mainUnread: a.mainUnread[cur],
-		mentions: a.mentions, heads: slices.Clone(heads), tagsVer: a.tagsVer}
+		mentions: a.mentions, heads: slices.Clone(heads), tagsVer: a.tagsVer, presenceVer: a.presenceVer}
 	p, hit := sidePanes{}, false
 	if a.sc != nil && len(a.info) == 0 && a.sc.key.same(k) {
 		p, hit = a.sc.val, true
@@ -2808,6 +2847,9 @@ func (a App) WithThemeSave(f func(id string)) App {
 
 // ThemeMsg is the saved theme to apply at start ("" is the terminal default).
 type ThemeMsg string
+
+// PresenceMsg is a member's presence: State is online, unavailable or offline.
+type PresenceMsg struct{ Nick, State string }
 
 // themeCmd runs :theme: with a scheme ID it applies and saves that theme; bare, it opens the theme picker.
 func (a App) themeCmd(args []string) App {

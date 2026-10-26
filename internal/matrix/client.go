@@ -30,6 +30,7 @@ type Client struct {
 	user        id.UserID
 	onInvite    func(Invite)
 	onTyping    func(id.RoomID, []id.UserID)
+	onPresence  func(id.UserID, string)
 	onReceipt   func(id.RoomID, id.EventID, id.UserID)
 	progress    func(Progress)
 	mu          sync.Mutex          // one event at a time: see lock
@@ -182,6 +183,7 @@ func (c *Client) apply(ctx context.Context, resp *mautrix.RespSync, since string
 	if err := c.retryPending(ctx, h); err != nil { // keys that just arrived unlock parked events
 		return err
 	}
+	c.presenceOf(resp.Presence.Events)
 	// Invites go to the hook; the user accepts or rejects them (/accept, /reject).
 	for roomID, inv := range resp.Rooms.Invite {
 		in, err := c.inviteOf(roomID, inv)

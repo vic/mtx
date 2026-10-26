@@ -87,6 +87,7 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 	}
 	c.OnInvite(r.toastInvite)
 	c.OnTyping(r.onTyping)
+	c.OnPresence(r.onPresence)
 	c.OnReceipt(r.onReceipt)
 	me := c.MX().UserID.String() // cfg.UserID is empty when the login came from the store
 	_, server, _ := strings.Cut(me, ":")

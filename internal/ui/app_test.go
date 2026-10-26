@@ -1451,3 +1451,27 @@ func TestPreviewCommand(t *testing.T) {
 		t.Fatalf("preview: %#v", cmd())
 	}
 }
+
+// TestPresenceMark: a member whose presence is known gets a dot before the nick in the nick pane.
+func TestPresenceMark(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(RoomsMsg{"&r"})
+	next, _ = next.(App).Update(MembersMsg{Ch: "&r", Nicks: []string{"ana", "bob"}})
+	a = next.(App).focusName("&r")
+	next, _ = a.Update(PresenceMsg{Nick: "ana", State: "online"})
+	a = next.(App)
+	found := false
+	rows, _ := a.nickRows()
+	for _, row := range rows {
+		if strings.Contains(row, "ana") && strings.Contains(row, "●") {
+			found = true
+		}
+		if strings.Contains(row, "bob") && strings.Contains(row, "●") {
+			t.Fatalf("bob has no presence but shows a dot: %q", row)
+		}
+	}
+	if !found {
+		t.Fatalf("no dot on ana: %q", rows)
+	}
+}

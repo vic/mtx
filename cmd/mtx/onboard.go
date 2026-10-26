@@ -388,7 +388,7 @@ func startConfig(args []string, dataHome string) (matrix.Config, error) {
 		return loginNew(dataHome)
 	}
 	if len(args) > 0 {
-		return matrix.Config{}, fmt.Errorf("unknown arguments %q (usage: mtx [login])", args)
+		return matrix.Config{}, fmt.Errorf("unknown arguments %q (usage: mtx [login|demo])", args)
 	}
 	cfg, err := matrix.LoadConfig(os.Getenv, dataHome)
 	if errors.Is(err, matrix.ErrNoEnv) {

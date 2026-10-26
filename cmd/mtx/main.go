@@ -25,6 +25,13 @@ const ringCap = 1000
 func main() { os.Exit(run(os.Args[1:])) }
 
 func run(args []string) int {
+	if len(args) == 1 && args[0] == "demo" { // made-up data, no account, no network
+		if err := runDemo(); err != nil {
+			fmt.Fprintln(os.Stderr, "mtx:", err)
+			return 1
+		}
+		return 0
+	}
 	dataHome := os.Getenv("XDG_DATA_HOME")
 	if dataHome == "" {
 		home, err := os.UserHomeDir()

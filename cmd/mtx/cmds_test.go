@@ -353,3 +353,57 @@ func TestPinSends(t *testing.T) {
 	defer mu.Unlock()
 	require.Contains(t, body, `"pinned":[]`)
 }
+
+// TestBanSends: /ban posts the ban with the user and the reason.
+func TestBanSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var path, body string
+	ts.Router.HandleFunc("POST /_matrix/client/v3/rooms/{room}/ban", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		path, body = r.URL.Path, string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/ban @bob:mock.test spam here")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, path, "/ban")
+	require.JSONEq(t, `{"user_id":"@bob:mock.test","reason":"spam here"}`, body)
+}
+
+// TestOpSends: /op reads the power levels, sets the user's level and sends them back.
+func TestOpSends(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var put string
+	ts.Router.HandleFunc("GET /_matrix/client/v3/rooms/{room}/state/m.room.power_levels/{key...}", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"users":{}}`)
+	})
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{room}/state/m.room.power_levels/{key...}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		put = string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{"event_id":"$pl"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/op @bob:mock.test 50")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, put, `"@bob:mock.test":50`)
+}

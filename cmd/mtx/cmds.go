@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -80,6 +81,51 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.invite(args[0], args[1])
 	case model.CmdKick:
 		return c.kick(ch, args[0])
+	case model.CmdBan, model.CmdUnban:
+		if len(args) == 0 {
+			return errors.New("usage: :ban <user> [reason]")
+		}
+		uid, err := c.fullUser(args[0])
+		if err != nil {
+			return err
+		}
+		room, err := c.r.roomOf(ch)
+		if err != nil {
+			return err
+		}
+		ctx, cancel := c.ctx()
+		defer cancel()
+		if cm.Name() == model.CmdUnban {
+			_, err = c.r.mx.UnbanUser(ctx, room, &mautrix.ReqUnbanUser{UserID: uid})
+			return err
+		}
+		_, err = c.r.mx.BanUser(ctx, room, &mautrix.ReqBanUser{UserID: uid, Reason: strings.Join(args[1:], " ")})
+		return err
+	case model.CmdOp:
+		uid, err := c.fullUser(args[0])
+		if err != nil {
+			return err
+		}
+		level, err := strconv.Atoi(args[1])
+		if err != nil {
+			return errors.New("usage: :op <user> <level> (100 admin, 50 mod, 0 member)")
+		}
+		room, err := c.r.roomOf(ch)
+		if err != nil {
+			return err
+		}
+		ctx, cancel := c.ctx()
+		defer cancel()
+		var pl event.PowerLevelsEventContent
+		if err := c.r.mx.StateEvent(ctx, room, event.StatePowerLevels, "", &pl); err != nil {
+			return err
+		}
+		if pl.Users == nil {
+			pl.Users = map[id.UserID]int{}
+		}
+		pl.Users[uid] = level
+		_, err = c.r.mx.SendStateEvent(ctx, room, event.StatePowerLevels, "", &pl)
+		return err
 	case model.CmdMsg:
 		return c.msg(args[0], args[1])
 	case model.CmdNames:

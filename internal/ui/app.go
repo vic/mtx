@@ -2531,7 +2531,7 @@ var menus = map[string][]menuItem{
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}},
 	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"e", "emote (/me)", ":me "}},
-	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
+	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"b", "ban", ":ban "}, {"B", "unban", ":unban "}, {"o", "op (power)", ":op "}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
 		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},
 		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},

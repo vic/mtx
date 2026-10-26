@@ -740,6 +740,9 @@ var helpSections = []struct {
 		{":explore [term]", "list the public rooms on this server; enter joins the picked one"},
 		{":dm <user>", "open the direct message with a user (created if missing)"},
 		{":devices", "list my devices: id, name, last seen (read only)"},
+		{":verify", "verify this device with my other devices (emoji check)"},
+		{":verify accept", "accept a verification request from another device"},
+		{":verify cancel", "cancel the verification in progress"},
 		{"●", "nick pane: online (green)"},
 		{"◐", "nick pane: away (yellow)"},
 		{"○", "nick pane: offline"},
@@ -1085,4 +1088,10 @@ func menuBox(name string, items []menuItem, maxRows int) string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).
 		Render(title.Render(name) + "\n" + body)
+}
+
+// verifyBox is the emoji box of a device verification: the emojis to compare, and the answer keys.
+func verifyBox(emojis string) string {
+	rows := []string{title.Render("verify this device"), "", emojis, "", keyHint("y", "they match", "n", "they differ")}
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
 }

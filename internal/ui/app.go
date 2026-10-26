@@ -226,6 +226,8 @@ type App struct {
 	tags          map[string]string                                 // channel -> tag group (TagsMsg)
 	presence      map[string]string                                 // nick -> online, unavailable or offline (PresenceMsg)
 	presenceVer   int                                               // bumped by PresenceMsg: the side pane cache key
+	verifyTxn     string                                            // the device verification in progress (VerifyMsg)
+	verifySAS     string                                            // the emojis to compare, while the verification box is open; "" none
 	loadContext   func(ch, id string)                               // fetches a message and its neighbours; must not block; nil = off
 	wantHit       string                                            // the event ID to select once its history arrives
 	loadOlder     func(ch string)                                   // fetches one older page of history; must not block; nil = off
@@ -444,6 +446,8 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a = a.note("line for unknown channel " + msg.Ch)
 		}
 		a = a.applyPending(msg.Ch)
+	case VerifyMsg:
+		a = a.verifyStep(msg)
 	case ThemeMsg:
 		a = a.applyTheme(string(msg))
 	case ExploreMsg:
@@ -610,6 +614,15 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	k := msg.String()
 	if k == "ctrl+c" {
 		return a, tea.Quit
+	}
+	if a.verifySAS != "" { // the emoji box: y they match, n they differ
+		switch k {
+		case "y":
+			return a.runCmd(":verify confirm")
+		case "n", "esc":
+			return a.runCmd(":verify cancel")
+		}
+		return a, nil
 	}
 	if a.jump {
 		a.jump = false
@@ -1086,6 +1099,12 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 		}
 		line = strings.TrimSpace("/redact " + l.ID + " " + strings.TrimSpace(rest))
 	}
+	if sub, ok := strings.CutPrefix(line, "/verify "); ok && (sub == "accept" || sub == "confirm" || sub == "cancel") { // the verification in progress is the target
+		if a.verifyTxn == "" {
+			return a.note("no verification in progress"), nil
+		}
+		line = "/verify " + sub + " " + a.verifyTxn
+	}
 	if line == "/preview" { // the target is the selected line's first link
 		l, _ := a.lastWithID(a.hit)
 		u := firstURL(l.Text)
@@ -1212,6 +1231,8 @@ func (a App) View() tea.View {
 func (a App) screen() string {
 	screen := a.chatScreen()
 	switch {
+	case a.verifySAS != "":
+		return overlayCentered(screen, a.w, a.h, verifyBox(a.verifySAS))
 	case a.help:
 		return overlayCentered(screen, a.w, a.h, helpBox(a.h, a.helpOff))
 	case a.pick && a.pickWhat == pickGrep:
@@ -2793,7 +2814,7 @@ var menus = map[string][]menuItem{
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"b", "ban", ":ban "}, {"B", "unban", ":unban "}, {"o", "op (power)", ":op "}, {"j", "join rule", ":joinrule "}, {"h", "history visibility", ":history "}, {"a", "alias", ":alias "}, {"v", "room avatar", ":roomavatar "}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
 		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},
 		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
-	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
+	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"v", "verify this device", ":verify"}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
 		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}, {"d", "devices", ":devices"}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
 		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"L", "link preview", ":preview"}, {"s", "seen by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
@@ -2879,6 +2900,9 @@ func (a App) WithThemeSave(f func(id string)) App {
 	a.themeSave = f
 	return a
 }
+
+// VerifyMsg is one step of a device verification (verify.go): Kind is request, ready, sas, done or cancel.
+type VerifyMsg struct{ Kind, Txn, From, Emojis, Reason string }
 
 // ThemeMsg is the saved theme to apply at start ("" is the terminal default).
 type ThemeMsg string
@@ -3124,5 +3148,26 @@ func (a App) jumpToPin(idx int) App {
 // WithOlderLoad sets the hook that fetches one older page of history (must not block).
 func (a App) WithOlderLoad(f func(ch string)) App {
 	a.loadOlder = f
+	return a
+}
+
+// verifyStep applies one device verification step: the request, ready, SAS (the box to compare emojis
+// in), done, or cancel.
+func (a App) verifyStep(msg VerifyMsg) App {
+	switch msg.Kind {
+	case "request":
+		a.verifyTxn = msg.Txn
+		return a.toast("verification request from "+msg.From+": :verify accept", false)
+	case "ready":
+		return a.toast("verification ready with "+msg.From, false)
+	case "sas":
+		a.verifyTxn, a.verifySAS = msg.Txn, msg.Emojis
+	case "done":
+		a.verifyTxn, a.verifySAS = "", ""
+		return a.toast("device verified ✓", false)
+	case "cancel":
+		a.verifyTxn, a.verifySAS = "", ""
+		return a.toast("verification cancelled: "+msg.Reason, true)
+	}
 	return a
 }

@@ -382,3 +382,10 @@ func TestOlderParse(t *testing.T) {
 		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+func TestVerifyParse(t *testing.T) {
+	c, err := ParseCmd("/verify accept")
+	if err != nil || c.Name() != CmdVerify || !slices.Equal(c.Args(), []string{"accept"}) {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+}

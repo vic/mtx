@@ -7,6 +7,7 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
+	"mtx/internal/matrix"
 	"mtx/internal/model"
 	"mtx/internal/ui"
 )
@@ -114,4 +115,9 @@ func (r *runner) typing(ch string) {
 // onPresence passes a user's presence (online, unavailable, offline) to the UI.
 func (r *runner) onPresence(u id.UserID, p string) {
 	r.emit(ui.PresenceMsg{Nick: localpart(u.String()), State: p})
+}
+
+// onVerify passes a device verification step to the UI.
+func (r *runner) onVerify(e matrix.VerifyEvent) {
+	r.emit(ui.VerifyMsg{Kind: e.Kind, Txn: e.Txn, From: e.From, Emojis: e.Emojis, Reason: e.Reason})
 }

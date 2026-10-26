@@ -23,11 +23,20 @@ import (
 )
 
 // cmds runs the parsed / commands against Matrix. me is the user; server is its domain.
+// verifier is the device verification of this client (matrix.Client).
+type verifier interface {
+	StartVerify(context.Context) (string, error)
+	AcceptVerify(context.Context, string) error
+	ConfirmVerify(context.Context, string) error
+	CancelVerify(context.Context, string) error
+}
+
 type cmds struct {
 	r      *runner
 	me     id.UserID
 	server string
 	inv    inviteAnswerer
+	ver    verifier
 	rec    interface {
 		Recover(context.Context, string) error
 	}
@@ -78,6 +87,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.explore(strings.Join(args, " "))
 	case model.CmdDevices:
 		return c.devices()
+	case model.CmdVerify:
+		return c.verify(args)
 	case model.CmdDM:
 		return c.dm(args[0])
 	case model.CmdPreview:
@@ -823,4 +834,30 @@ func (c *cmds) dm(user string) error {
 	c.r.emitRooms()
 	c.r.emit(ui.FocusMsg(name))
 	return nil
+}
+
+// verify starts a device verification with my other devices (no argument), or answers the one in progress:
+// accept, confirm (the emojis match) or cancel, with its transaction ID.
+func (c *cmds) verify(args []string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if len(args) == 0 {
+		if _, err := c.ver.StartVerify(ctx); err != nil {
+			return err
+		}
+		c.r.emit(ui.ToastMsg{Text: "verification requested: accept on your other device"})
+		return nil
+	}
+	if len(args) != 2 {
+		return errors.New("usage: :verify [accept|cancel]")
+	}
+	switch args[0] {
+	case "accept":
+		return c.ver.AcceptVerify(ctx, args[1])
+	case "confirm":
+		return c.ver.ConfirmVerify(ctx, args[1])
+	case "cancel":
+		return c.ver.CancelVerify(ctx, args[1])
+	}
+	return errors.New("usage: :verify [accept|cancel]")
 }

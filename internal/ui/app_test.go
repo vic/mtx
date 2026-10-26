@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -1685,5 +1686,27 @@ func TestBackwardMotionLoadsOlder(t *testing.T) {
 	a = next.(App)
 	if got := a.lines(a.m.Current()); a.hit < 0 || a.hit >= len(got) || got[a.hit].ID != "$me0" {
 		t.Fatalf("hit %d: the older own line is not selected", a.hit)
+	}
+}
+
+// TestVerifyFlow: a SAS step opens the emoji box; y answers it with confirm; done closes the box.
+func TestVerifyFlow(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(VerifyMsg{Kind: "sas", Txn: "t1", Emojis: "🐶 dog"})
+	a = next.(App)
+	view := ansi.Strip(a.screen())
+	if !strings.Contains(view, "🐶 dog") || !strings.Contains(view, "they match") {
+		t.Fatalf("emoji box missing:\n%s", view)
+	}
+	_, cmd := press(t, a, "y")
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdVerify || !slices.Equal(cm.Cmd.Args(), []string{"confirm", "t1"}) {
+		t.Fatalf("y: %#v", cmd())
+	}
+	next, _ = a.Update(VerifyMsg{Kind: "done"})
+	a = next.(App)
+	if a.verifySAS != "" || len(a.toasts) == 0 {
+		t.Fatalf("done: sas %q toasts %d", a.verifySAS, len(a.toasts))
 	}
 }

@@ -685,3 +685,37 @@ func TestDMOpensExisting(t *testing.T) {
 	}
 	require.Equal(t, "#dm", focus) // the room is already registered under its label
 }
+
+// fakeVerifier records the verification calls.
+type fakeVerifier struct{ calls []string }
+
+func (f *fakeVerifier) StartVerify(context.Context) (string, error) {
+	f.calls = append(f.calls, "start")
+	return "t1", nil
+}
+func (f *fakeVerifier) AcceptVerify(_ context.Context, txn string) error {
+	f.calls = append(f.calls, "accept "+txn)
+	return nil
+}
+func (f *fakeVerifier) ConfirmVerify(_ context.Context, txn string) error {
+	f.calls = append(f.calls, "confirm "+txn)
+	return nil
+}
+func (f *fakeVerifier) CancelVerify(_ context.Context, txn string) error {
+	f.calls = append(f.calls, "cancel "+txn)
+	return nil
+}
+
+// TestVerifyCommands: bare :verify starts a verification; :verify confirm passes the transaction on.
+func TestVerifyCommands(t *testing.T) {
+	r := newRunner(nil, func(tea.Msg) {})
+	fv := &fakeVerifier{}
+	cs := &cmds{r: r, ver: fv}
+	start, err := model.ParseCmd("/verify")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", start))
+	confirm, err := model.ParseCmd("/verify confirm t1")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", confirm))
+	require.Equal(t, []string{"start", "confirm t1"}, fv.calls)
+}

@@ -1372,3 +1372,65 @@ func TestThemePicker(t *testing.T) {
 		t.Fatalf("saved %q now %q", saved, a.themeNow)
 	}
 }
+
+// normalProbes are the keys a NORMAL user can press: every printable ASCII rune, plus the named keys.
+func normalProbes() []string {
+	var out []string
+	for c := 0x21; c <= 0x7e; c++ {
+		out = append(out, string(rune(c)))
+	}
+	return append(out, "space", "up", "down", "enter", "tab", "ctrl+d", "ctrl+u", "ctrl+n", "ctrl+p", "ctrl+o", "ctrl+t", "ctrl+f", "ctrl+g")
+}
+
+// TestEveryNormalKeyInMenus: every NORMAL key that does something is in a which-key menu (as its key:
+// item), and every continuation of a prefix key (g [ ]) is in that prefix's menu. Digits are count
+// prefixes, not actions, so they are not listed. The bracket prefixes take any key (a no-op for most), so
+// only their motion keys (m l p t @ c) are checked; [[ and ]] are the speaker keys listed as their own rows.
+func TestEveryNormalKeyInMenus(t *testing.T) {
+	hasKey := func(items []menuItem, k string) bool {
+		for _, it := range items {
+			if it.key == k {
+				return true
+			}
+		}
+		return false
+	}
+	have := map[string]bool{}
+	for _, items := range menus {
+		for _, it := range items {
+			have[it.do] = true
+		}
+	}
+	for _, k := range normalProbes() {
+		if k == "space" || (k >= "0" && k <= "9") { // digits are count prefixes
+			continue
+		}
+		act, _, pend := Key(Normal, "", k)
+		if act.Kind == None && pend == "" {
+			continue
+		}
+		if pend != "" {
+			if _, ok := menus[pend]; !ok {
+				t.Errorf("prefix %q has no menu", pend)
+			}
+			continue
+		}
+		if !have["key:"+k] {
+			t.Errorf("NORMAL key %q is in no menu", k)
+		}
+	}
+	for _, p := range menuPrefixes {
+		for _, c := range normalProbes() {
+			act, _, _ := Key(Normal, p, c)
+			if act.Kind == None {
+				continue
+			}
+			if p != "g" && !strings.Contains("mplt@c", c) {
+				continue // a bracket takes any key; only its motions are listed
+			}
+			if !hasKey(menus[p], c) {
+				t.Errorf("%s%s is not in the %q menu", p, c, p)
+			}
+		}
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -642,9 +643,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.reactRow = true
 			case strings.HasPrefix(it.do, "key:"):
 				var cmd tea.Cmd
-				for _, r := range strings.TrimPrefix(it.do, "key:") {
+				for _, k := range keySeq(strings.TrimPrefix(it.do, "key:")) {
 					var m tea.Model
-					m, cmd = a.key(tea.KeyPressMsg{Code: r, Text: string(r)})
+					m, cmd = a.key(keyMsg(k))
 					a = m.(App)
 				}
 				return a, cmd
@@ -1189,8 +1190,12 @@ func (a App) chatScreen() string {
 	modeline := a.h - len(inputRows(input, a.w, a.h)) - 1
 	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest()) // floats above the prompt: the layout does not move
 	screen = overlayToasts(screen, a.w, modeline-1, a.toasts)     // cards sit just above the modeline
-	if a.menu != "" {                                             // the which-key menu: one key per row, at the bottom right
-		screen = overlayRight(screen, a.w, modeline-1, menuBox(a.menu, menus[a.menu]))
+	name := a.menu                                                // the which-key menu: one key per row, at the bottom right
+	if name == "" && slices.Contains(menuPrefixes, a.pending) {
+		name = a.pending // a prefix waiting for its second key lists the continuations
+	}
+	if name != "" {
+		screen = overlayRight(screen, a.w, modeline-1, menuBox(name, menus[name]))
 	}
 	return withSponsor(screen, a.w)
 }
@@ -2685,7 +2690,7 @@ func emojiMenu() []menuItem {
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
-		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"T", "theme", ":theme"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
+		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"T", "theme", ":theme"}, {"k", "keys…", "menu:keys"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},
@@ -2700,6 +2705,25 @@ var menus = map[string][]menuItem{
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
 	"emoji":   emojiMenu(),
+	"keys":    {{"m", "move…", "menu:move"}, {"v", "view…", "menu:view"}, {"g", "go/prefix g…", "menu:g"}, {"]", "next…", "menu:]"}, {"[", "prev…", "menu:["}},
+	"move": {{"j", "down line", "key:j"}, {"k", "up line", "key:k"}, {"up", "up line", "key:up"}, {"down", "down line", "key:down"},
+		{"ctrl+d", "half page down", "key:ctrl+d"}, {"ctrl+u", "half page up", "key:ctrl+u"}, {"G", "bottom", "key:G"},
+		{"J", "next speaker", "key:J"}, {"K", "prev speaker", "key:K"}, {"f", "jump to a line", "key:f"}, {"F", "jump: open its link", "key:F"},
+		{"m", "recent chats", "key:m"}, {"ctrl+n", "next line", "key:ctrl+n"}, {"ctrl+p", "prev line", "key:ctrl+p"}, {"tab", "next pane", "key:tab"}},
+	"view": {{"s", "stamps", "key:s"}, {"M", "mentions only", "key:M"}, {"?", "help", "key:?"}, {"#", "open chat", "key:#"},
+		{"@", "open user", "key:@"}, {"%", "open thread", "key:%"}, {"^", "pinned", "key:^"}, {"ctrl+g", "grep", "key:ctrl+g"},
+		{"S", "speakers", "key:S"}, {"$", "shell", "key:$"}, {"!", "capture", "key:!"}, {":", "command", "key::"},
+		{"enter", "message menu", "key:enter"}, {"+", "react row", "key:+"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"},
+		{"C", "edit last", "key:C"}, {"e", "edit", "key:e"}, {"d", "delete", "key:d"}, {"y", "yank", "key:y"}, {"Y", "copy link", "key:Y"},
+		{"o", "open", "key:o"}, {"O", "open (other)", "key:O"}, {"t", "next thread", "key:t"}, {"T", "thread", "key:T"},
+		{"i", "insert", "key:i"}, {"I", "invite", "key:I"}, {"ctrl+o", "open chat", "key:ctrl+o"}, {"ctrl+f", "file block", "key:ctrl+f"},
+		{"ctrl+t", "file", "key:ctrl+t"}, {".", "repeat", "key:."}},
+	"g": {{"g", "top", "key:gg"}, {"t", "next chat", "key:gt"}, {"T", "prev chat", "key:gT"}, {"x", "open media/link", "key:gx"},
+		{"r", "go to replied", "key:gr"}, {"c", "jump to channel", "key:gc"}},
+	"]": {{"]", "next speaker", "key:]]"}, {"m", "my next msg", "key:]m"}, {"@", "next mention", "key:]@"}, {"l", "next link", "key:]l"},
+		{"p", "next pin", "key:]p"}, {"t", "next thread", "key:]t"}, {"c", "next unread chat", "key:]c"}},
+	"[": {{"[", "prev speaker", "key:[["}, {"m", "my prev msg", "key:[m"}, {"@", "prev mention", "key:[@"}, {"l", "prev link", "key:[l"},
+		{"p", "prev pin", "key:[p"}, {"t", "prev thread", "key:[t"}, {"c", "prev unread chat", "key:[c"}},
 }
 
 // jumpKeys are the f labels, home row first; jumpTargets are the shown lines they name, top to bottom.
@@ -2832,3 +2856,46 @@ func (a App) themeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	return b, cmd
 }
+
+// keySeq splits a "key:" menu item into the keys it replays: a named key ("up", "ctrl+d") is one key,
+// anything else is one key per rune ("gg" is two).
+func keySeq(s string) []string {
+	switch s {
+	case "up", "down", "enter", "tab", "space", "esc":
+		return []string{s}
+	}
+	if strings.Contains(s, "+") && len(s) > 1 {
+		return []string{s}
+	}
+	var out []string
+	for _, r := range s {
+		out = append(out, string(r))
+	}
+	return out
+}
+
+// keyMsg is the key press that key name s stands for: a named key, ctrl+<letter>, or a single rune.
+func keyMsg(s string) tea.KeyPressMsg {
+	switch s {
+	case "up":
+		return tea.KeyPressMsg{Code: tea.KeyUp}
+	case "down":
+		return tea.KeyPressMsg{Code: tea.KeyDown}
+	case "enter":
+		return tea.KeyPressMsg{Code: tea.KeyEnter}
+	case "tab":
+		return tea.KeyPressMsg{Code: tea.KeyTab}
+	case "esc":
+		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "space":
+		return tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
+	}
+	if letter, ok := strings.CutPrefix(s, "ctrl+"); ok && len(letter) == 1 {
+		return tea.KeyPressMsg{Code: rune(letter[0]), Mod: tea.ModCtrl}
+	}
+	r, _ := utf8.DecodeRuneInString(s)
+	return tea.KeyPressMsg{Code: r, Text: s}
+}
+
+// menuPrefixes are the prefix keys whose continuations the which-key popup lists while they wait.
+var menuPrefixes = []string{"g", "[", "]"}

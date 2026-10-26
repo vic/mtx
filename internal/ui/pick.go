@@ -91,7 +91,7 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 		keys = keyHint("space", "select", "enter", "go", "esc", "close")
 	}
 	rows = append(rows, "", keys)
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).
 		Padding(0, 1).Width(min(max(w/2, 40), w)).Render(strings.Join(rows, "\n"))
 	return box
 }
@@ -99,6 +99,6 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 // grepBox is the ctrl+g input box: the filter text, drawn over the screen by overlayCentered.
 func grepBox(w int, q string) string {
 	rows := []string{title.Render("grep") + " " + prompt.Render(">") + " " + q, "", keyHint("enter", "keep", "esc", "clear")}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).
 		Padding(0, 1).Width(min(max(w/2, 40), w)).Render(strings.Join(rows, "\n"))
 }

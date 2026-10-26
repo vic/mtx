@@ -2,6 +2,7 @@ package ui
 
 import (
 	"hash/fnv"
+	"image/color"
 	"regexp"
 	"strconv"
 	"strings"
@@ -24,38 +25,40 @@ const (
 
 // Styles are named by role, one table; ANSI 16 colors only, so the terminal theme
 // picks the shades.
+// The styles are set by usePalette (palette.go) from the palette in use.
 var (
-	cell        = lipgloss.NewStyle().Inline(true)
-	dimmed      = fg("8")
-	border      = dimmed
-	focusBorder = fg("13").Bold(true) // the pane that takes keys
-	faint       = dimmed
-	title       = fg("5").Bold(true)
-	shortcut    = fg("5")
-	prompt      = fg("6").Bold(true)
-	unread      = fg("3").Bold(true)
-	roomName    = fg("13")
-	alert       = fg("9").Bold(true)
-	current     = cell.Background(lipgloss.Color("236"))                                           // selected pane row
-	cursor      = cell.Background(lipgloss.Color("13"))                                            // the input cursor: the focused pane border color
-	selected    = cell.Bold(true).Background(lipgloss.Color("8")).Foreground(lipgloss.Color("15")) // current channel
-	helpHead    = fg("2").Bold(true)
-	// nickColors leaves out red (bypass) and gray (dim lines).
-	nickColors = []string{"2", "3", "4", "5", "6", "10", "11", "12", "13", "14"}
+	cell        lipgloss.Style
+	dimmed      lipgloss.Style
+	border      lipgloss.Style
+	focusBorder lipgloss.Style // the pane that takes keys
+	faint       lipgloss.Style
+	title       lipgloss.Style
+	shortcut    lipgloss.Style
+	prompt      lipgloss.Style
+	unread      lipgloss.Style
+	roomName    lipgloss.Style
+	alert       lipgloss.Style
+	current     lipgloss.Style // selected pane row
+	cursor      lipgloss.Style // the input cursor: the focused pane border color
+	selected    lipgloss.Style // current channel
+	helpHead    lipgloss.Style
+	nickColors  []color.Color
+	cursorOn    string
+	cursorOff   string
 )
 
-func fg(c string) lipgloss.Style { return cell.Foreground(lipgloss.Color(c)) }
+func fg(c color.Color) lipgloss.Style { return cell.Foreground(c) }
 
 // badge is the mode block at the left of the modeline: black on a mode color, red in bypass.
 func badge(mode string, bypass bool) string {
-	bg := "5"
+	bg := pal.slots[0x0E]
 	if mode == "INSERT" {
-		bg = "6" // cyan
+		bg = pal.slots[0x0C] // cyan
 	}
 	if bypass {
-		bg = "9"
+		bg = pal.slots[8]
 	}
-	return cell.Bold(true).Background(lipgloss.Color(bg)).Foreground(lipgloss.Color("0")).Render(" " + mode + " ") // Inline drops Padding
+	return cell.Bold(true).Background(bg).Foreground(pal.slots[0]).Render(" " + mode + " ") // Inline drops Padding
 }
 
 // keyHint is "key desc" pairs: keys in the shortcut color, descriptions dimmed.
@@ -224,7 +227,7 @@ func lineRowUncached(rows []string, of []int, shown []model.Line, hit, i, n int,
 	if after, ok := strings.CutPrefix(r, nk); ok {
 
 		if of[i] == hit { // the selected line: nick bold italic, its <> in the cursor color
-			br := fg("13").Bold(true).Italic(true)
+			br := fg(pal.slots[0x0D]).Bold(true).Italic(true)
 			return fit(cell, lead+br.Render("<")+nickStyle(l.Nick).Bold(true).Italic(true).Render(l.Nick)+br.Render(">")+body(after), n)
 		}
 		return fit(cell, lead+nickStyle(l.Nick).Render(nk)+body(after), n)
@@ -568,7 +571,7 @@ func chanNicks(c model.Channel, user string) []string {
 
 // helpBox is the help box in h rows at most: taller than that, a window that scrolls.
 func helpBox(h, off int) string {
-	box := strings.Split(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1).Render(helpText()), "\n")
+	box := strings.Split(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).Padding(0, 1).Render(helpText()), "\n")
 	if len(box) <= h {
 		return strings.Join(box, "\n")
 	}
@@ -818,9 +821,9 @@ func overlayToasts(screen string, w, bottom int, ts []toast) string {
 	rows := strings.Split(screen, "\n")
 	maxW := max(w/2, 20)
 	for i := len(ts) - 1; i >= max(len(ts)-toastCards, 0) && bottom >= 0; i-- {
-		color := lipgloss.Color("2")
+		color := pal.slots[0x0B]
 		if ts[i].err {
-			color = lipgloss.Color("9")
+			color = pal.slots[8]
 		}
 		card := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(color).Padding(0, 1).
 			Width(min(lipgloss.Width(ts[i].text)+4, maxW)).Render(ts[i].text)
@@ -844,7 +847,7 @@ func overlaySuggest(screen string, w, bottom int, sugg []string) string {
 	if len(sugg) == 0 || bottom < 2 {
 		return screen
 	}
-	box := strings.Split(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("5")).
+	box := strings.Split(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).
 		Padding(0, 1).Render(strings.Join(sugg, "\n")), "\n")
 	rows := strings.Split(screen, "\n")
 	bw := lipgloss.Width(box[0])
@@ -858,7 +861,7 @@ func overlaySuggest(screen string, w, bottom int, sugg []string) string {
 }
 
 // hitStyle marks the text a ctrl+g grep or / search matched: a background, not inverted.
-var hitStyle = lipgloss.NewStyle().Background(lipgloss.Color("3")).Foreground(lipgloss.Color("0"))
+var hitStyle lipgloss.Style // the search hit: set by usePalette
 
 // markHits is markdown with the case-insensitive matches of q in hitStyle.
 func markHits(s string, st lipgloss.Style, code bool, q string) string {
@@ -883,7 +886,7 @@ func markHits(s string, st lipgloss.Style, code bool, q string) string {
 }
 
 // gutterBar marks the current message in the lines pane's lead column.
-var gutterBar = lipgloss.NewStyle().Foreground(lipgloss.Color("13")).Render("▌") // the cursor color
+var gutterBar string // the current message's lead bar: set by usePalette
 
 // frameRule is a horizontal frame line of width w with text in it: "─ text ───".
 func frameRule(text string, w int) string {
@@ -919,10 +922,10 @@ func borderGlyph(focused bool, s string) string {
 }
 
 // readMark is the lead column of an own line another member has read.
-var readMark = dimmed.Render("✓")
+var readMark string // set by usePalette
 
 // pinMark is the lead column of a pinned message.
-var pinMark = alert.Render("▴")
+var pinMark string // set by usePalette
 
 // lead is the one-column lead of scrollback row k: readMark on the first row of an own line that was
 // read, else a space.
@@ -988,7 +991,7 @@ func menuBox(name string, items []menuItem) string {
 	for _, it := range items {
 		rows = append(rows, shortcut.Bold(true).Render(it.key)+"  "+it.label)
 	}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("5")).Padding(0, 1).Render(strings.Join(rows, "\n"))
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
 }
 
 // overlayRight draws box at the right edge of screen, its bottom row on row bottom (w columns).

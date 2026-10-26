@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"os"
 	"os/exec"
 	"strings"
@@ -19,17 +20,17 @@ const (
 // helpButtons are the two links at the top right of the help box: label, URL, background.
 var helpButtons = []struct {
 	label, url string
-	bg         string
+	bg         func() color.Color // the button background in the palette in use
 }{
-	{"github:vic/mtx", repoURL, "8"},
-	{"sponsor @vic", donateURL, "1"},
+	{"github:vic/mtx", repoURL, func() color.Color { return pal.slots[3] }},
+	{"sponsor @vic", donateURL, func() color.Color { return pal.donate }},
 }
 
 // renderHelpButtons is the help buttons row: white text on each button's background.
 func renderHelpButtons() string {
 	var parts []string
 	for _, b := range helpButtons {
-		parts = append(parts, lipgloss.NewStyle().Background(lipgloss.Color(b.bg)).Foreground(lipgloss.Color("15")).Render(" "+b.label+" "))
+		parts = append(parts, lipgloss.NewStyle().Background(b.bg()).Foreground(pal.slots[5]).Render(" "+b.label+" "))
 	}
 	return strings.Join(parts, " ")
 }
@@ -96,7 +97,7 @@ func (a App) helpClick(m tea.Mouse) (App, tea.Cmd) {
 const sponsorLabel = " sponsor @vic "
 
 // sponsorButton is sponsorLabel in the muted button style.
-var sponsorButton = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Background(lipgloss.Color("236")).Render(sponsorLabel)
+var sponsorButton string // set by usePalette
 
 // withSponsor draws sponsorButton at the right end of the screen's last row (w columns wide).
 func withSponsor(screen string, w int) string {

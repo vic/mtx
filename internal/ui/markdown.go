@@ -10,7 +10,7 @@ import (
 // Simple markdown coloring (vic 2026-10-22). Markers stay visible but dimmed, so
 // widths never change: wrapping and scroll counts stay the plain-text ones.
 var (
-	codeSt   = fg("6")
+	codeSt   lipgloss.Style // set by usePalette
 	inlineRE = regexp.MustCompile("`[^`]+`|\\*\\*[^*]+\\*\\*|\\*[^*\\s][^*]*\\*|\\b_[^_\\s][^_]*_\\b")
 	bulletRE = regexp.MustCompile(`^(\s*)([-*+]|\d+\.) `)
 	headRE   = regexp.MustCompile(`^\s*#{1,6} `)

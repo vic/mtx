@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"charm.land/lipgloss/v2"
+
 	"mtx/internal/model"
 )
 
@@ -110,7 +112,7 @@ func (a App) unreadOf(h model.Thread) int {
 }
 
 // unreadMark is the channel unread count style (the number next to a channel with unread lines).
-var unreadMark = unread
+var unreadMark lipgloss.Style // set by usePalette
 
 // lastWithID is the message at index i of the current channel's shown lines, or the newest one
 // before it when that line has no event ID (local echoes have none). i < 0 means the newest.

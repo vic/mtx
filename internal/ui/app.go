@@ -2276,12 +2276,6 @@ const (
 	cursorEndMark = ""
 )
 
-// cursorOn and cursorOff are the SGR that open and close the cursor style.
-var cursorOn, cursorOff = func() (string, string) {
-	parts := strings.SplitN(cursor.Render("\x00"), "\x00", 2)
-	return parts[0], parts[1]
-}()
-
 // Channel is the current channel's name ("" when there is none).
 func (a App) Channel() string { return a.m.Current().Name }
 

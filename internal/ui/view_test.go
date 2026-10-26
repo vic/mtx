@@ -260,7 +260,7 @@ func TestViewWrapsOnlyVisibleLines(t *testing.T) {
 
 // hitNick is the <nick> of a selected line: the nick bold italic in its color, the brackets in the cursor color.
 func hitNick(nick string) string {
-	br := fg("13").Bold(true).Italic(true)
+	br := fg(pal.slots[0x0D]).Bold(true).Italic(true)
 	return br.Render("<") + nickStyle(nick).Bold(true).Italic(true).Render(nick) + br.Render(">")
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"mime"
 	"net/http"
@@ -191,4 +192,17 @@ func (r *runner) setRoomAvatar(ch, path string) error {
 	}
 	_, err = r.mx.SendStateEvent(ctx, room, event.StateRoomAvatar, "", &event.RoomAvatarEventContent{URL: resp.ContentURI.CUString()})
 	return err
+}
+
+// mediaJSON is evt's media content as JSON, for the cache: "" when the message is not media.
+func mediaJSON(evt *event.Event) string {
+	m := evt.Content.AsMessage()
+	if m == nil || !isMediaType(m.MsgType) {
+		return ""
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

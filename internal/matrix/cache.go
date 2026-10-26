@@ -16,6 +16,7 @@ type CachedLine struct {
 	Nick, Text string
 	Dim        bool
 	Thread     string
+	Media      string // the message's media content as JSON (m.image etc.), "" none
 }
 
 // SaveRooms stores each room's channel label, replacing older labels.
@@ -70,8 +71,8 @@ func saveLines(ctx context.Context, db *sql.DB, ls []CachedLine) error {
 		return err
 	}
 	for _, l := range ls {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO cache_lines(event_id, room_id, ts, nick, text, dim, thread) VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET nick = excluded.nick, text = excluded.text, dim = excluded.dim`,
-			l.EventID.String(), l.Room.String(), l.TS, l.Nick, l.Text, l.Dim, l.Thread); err != nil {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO cache_lines(event_id, room_id, ts, nick, text, dim, thread, media) VALUES(?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET nick = excluded.nick, text = excluded.text, dim = excluded.dim, media = excluded.media`,
+			l.EventID.String(), l.Room.String(), l.TS, l.Nick, l.Text, l.Dim, l.Thread, l.Media); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -85,7 +86,7 @@ func (c *Client) LoadLines(ctx context.Context, room id.RoomID, limit int) ([]Ca
 }
 
 func loadLines(ctx context.Context, db *sql.DB, room id.RoomID, limit int) ([]CachedLine, error) {
-	rows, err := db.QueryContext(ctx, `SELECT event_id, ts, nick, text, dim, thread FROM (SELECT * FROM cache_lines WHERE room_id = ? ORDER BY ts DESC LIMIT ?) ORDER BY ts`, room.String(), limit)
+	rows, err := db.QueryContext(ctx, `SELECT event_id, ts, nick, text, dim, thread, media FROM (SELECT * FROM cache_lines WHERE room_id = ? ORDER BY ts DESC LIMIT ?) ORDER BY ts`, room.String(), limit)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func loadLines(ctx context.Context, db *sql.DB, room id.RoomID, limit int) ([]Ca
 	for rows.Next() {
 		l := CachedLine{Room: room}
 		var ev string
-		if err := rows.Scan(&ev, &l.TS, &l.Nick, &l.Text, &l.Dim, &l.Thread); err != nil {
+		if err := rows.Scan(&ev, &l.TS, &l.Nick, &l.Text, &l.Dim, &l.Thread, &l.Media); err != nil {
 			return nil, err
 		}
 		l.EventID = id.EventID(ev)

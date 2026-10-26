@@ -59,3 +59,22 @@ func TestLoadCacheShowsRoomsAndLines(t *testing.T) {
 		t.Fatalf("messages %#v", got)
 	}
 }
+
+// TestLoadCacheRestoresMedia: a cached media line puts its media back, so :open works after a restart.
+func TestLoadCacheRestoresMedia(t *testing.T) {
+	r := newRunner(nil, func(tea.Msg) {})
+	rooms := func(context.Context) (map[id.RoomID]string, error) {
+		return map[id.RoomID]string{"!a:s": "#den"}, nil
+	}
+	lines := func(_ context.Context, room id.RoomID, _ int) ([]matrix.CachedLine, error) {
+		return []matrix.CachedLine{{Room: room, EventID: "$e", TS: 1, Nick: "n", Text: "a.png",
+			Media: `{"msgtype":"m.image","body":"a.png","url":"mxc://s/x"}`}}, nil
+	}
+	r.loadCache(context.Background(), rooms, lines)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m := r.media["$e"]
+	if m == nil || m.Body != "a.png" || m.URL != "mxc://s/x" {
+		t.Fatalf("media %#v", m)
+	}
+}

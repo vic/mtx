@@ -483,7 +483,7 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 			r.emit(ui.ReplaceLineMsg{Ch: name, ID: line.ID, L: line, Edit: true})
 		}
 		if r.cacheLine != nil {
-			r.cacheLine(matrix.CachedLine{Room: evt.RoomID, EventID: id.EventID(line.ID), TS: evt.Timestamp, Nick: line.Nick, Text: line.Text, Dim: line.Dim, Thread: line.Thread})
+			r.cacheLine(matrix.CachedLine{Room: evt.RoomID, EventID: id.EventID(line.ID), TS: evt.Timestamp, Nick: line.Nick, Text: line.Text, Dim: line.Dim, Thread: line.Thread, Media: mediaJSON(evt)})
 		}
 		return nil
 	}
@@ -508,7 +508,7 @@ func (r *runner) onEvent(ctx context.Context, evt *event.Event, decErr error) er
 	}
 	if decErr != matrix.ErrPending {
 		if r.cacheLine != nil {
-			r.cacheLine(matrix.CachedLine{Room: evt.RoomID, EventID: evt.ID, TS: evt.Timestamp, Nick: line.Nick, Text: line.Text, Dim: line.Dim, Thread: line.Thread})
+			r.cacheLine(matrix.CachedLine{Room: evt.RoomID, EventID: evt.ID, TS: evt.Timestamp, Nick: line.Nick, Text: line.Text, Dim: line.Dim, Thread: line.Thread, Media: mediaJSON(evt)})
 		}
 		r.noteText(evt, text)
 		r.noteThread(evt, text, old)

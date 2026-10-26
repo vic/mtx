@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
+	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 
 	"mtx/internal/matrix"
@@ -80,6 +82,12 @@ func (r *runner) loadCache(ctx context.Context, rooms func(context.Context) (map
 		out := make([]model.Line, len(ls))
 		for i, l := range ls {
 			out[i] = model.Line{At: time.UnixMilli(l.TS), Nick: l.Nick, Text: l.Text, Dim: l.Dim, ID: l.EventID.String(), Thread: l.Thread}
+			if l.Media != "" { // the file info survives a restart: :open works on it
+				var mc event.MessageEventContent
+				if json.Unmarshal([]byte(l.Media), &mc) == nil {
+					r.recordMedia(l.EventID, &mc)
+				}
+			}
 		}
 		if len(out) > 0 {
 			r.emit(ui.HistoryLinesMsg{Ch: name, L: out})

@@ -13,6 +13,7 @@ import (
 const (
 	repoURL   = "https://github.com/vic/mtx"
 	donateURL = "https://github.com/sponsors/vic"
+	docsURL   = "https://mtx.oeiuwq.com"
 )
 
 // helpButtons are the two links at the top right of the help box: label, URL, background.

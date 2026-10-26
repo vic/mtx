@@ -253,3 +253,19 @@ func TestParseMute(t *testing.T) {
 		t.Fatalf("mute %v %q", c.Name(), c.Args())
 	}
 }
+
+// TestParseSponsorDocs: /sponsor and /docs take no arguments.
+func TestParseSponsorDocs(t *testing.T) {
+	for _, line := range []string{"/sponsor", "/docs"} {
+		if _, err := ParseCmd(line); err != nil {
+			t.Fatalf("%s: %v", line, err)
+		}
+	}
+	c, err := ParseCmd("/docs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Name() != CmdDocs {
+		t.Fatalf("docs %v", c.Name())
+	}
+}

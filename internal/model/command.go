@@ -30,6 +30,8 @@ const (
 	CmdUpload   CmdName = "upload"
 	CmdAvatar   CmdName = "avatar"
 	CmdMute     CmdName = "mute"
+	CmdSponsor  CmdName = "sponsor"
+	CmdDocs     CmdName = "docs"
 	CmdUnmute   CmdName = "unmute"
 	CmdRecover  CmdName = "recover"
 	CmdAccept   CmdName = "accept"
@@ -43,7 +45,7 @@ const (
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "recover", "accept", "reject", "invites", "react", "redact", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "mute", "unmute", "sponsor", "docs", "recover", "accept", "reject", "invites", "react", "redact", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -68,6 +70,8 @@ func arity(n CmdName) (count int, raw, ok bool) {
 		return 1, false, true
 	case CmdTopic:
 		return 1, true, true
+	case CmdSponsor, CmdDocs:
+		return -1, false, true
 	case CmdMute, CmdUnmute:
 		return -1, false, true
 	case CmdAccept, CmdReject, CmdInvites:
@@ -167,6 +171,8 @@ var usage = map[CmdName]string{
 	CmdUpload:   ":upload <path>",
 	CmdAvatar:   ":avatar <image path>",
 	CmdMute:     ":mute [room]",
+	CmdSponsor:  ":sponsor",
+	CmdDocs:     ":docs",
 	CmdUnmute:   ":unmute [room]",
 	CmdRecover:  ":recover <recovery key>",
 	CmdAccept:   ":accept [room]",

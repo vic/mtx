@@ -705,3 +705,21 @@ func TestLeaderMenu(t *testing.T) {
 		t.Fatalf("mute: %#v", cmd())
 	}
 }
+
+// TestSponsorDocsCommands: :sponsor and :docs open their pages (returned as commands, not run here, so no
+// browser starts) and send nothing to the command handler.
+func TestSponsorDocsCommands(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	var calls []string
+	a = a.WithCmd(func(ch string, c model.Cmd) tea.Cmd { calls = append(calls, string(c.Name())); return nil })
+	for _, line := range []string{":sponsor", ":docs"} {
+		_, cmd := a.runCmd(line)
+		if cmd == nil {
+			t.Fatalf("%s: no command", line)
+		}
+	}
+	if len(calls) != 0 {
+		t.Fatalf("handler got %v", calls)
+	}
+}

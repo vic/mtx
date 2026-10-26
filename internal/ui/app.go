@@ -849,6 +849,12 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 	if err != nil {
 		return a.note(err.Error()), nil
 	}
+	switch c.Name() {
+	case model.CmdSponsor:
+		return a, openURL(donateURL)
+	case model.CmdDocs:
+		return a, openURL(docsURL)
+	}
 	if c.Name() == model.CmdHelp { // the same screen as ? (vic 2026-10-23)
 		a.help = true
 		return a, nil
@@ -2197,7 +2203,8 @@ type menuItem struct{ key, label, do string }
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"r", "react", "react"}, {"t", "thread", "thread"}, {"m", "room…", "menu:room"}, {"j", "join", ":join "},
-		{"u", "upload", ":upload "}, {"o", "open", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"}},
+		{"u", "upload", ":upload "}, {"o", "open", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"},
+		{"s", "sponsor", ":sponsor"}, {"d", "docs", ":docs"}},
 	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
 		{"i", "invite", ":invite "}, {"f", "favourite", ":tag fav"}, {"d", "low priority", ":tag low"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
 }

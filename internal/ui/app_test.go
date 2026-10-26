@@ -671,3 +671,37 @@ func TestQuickReact(t *testing.T) {
 		t.Fatalf("x should only close the row: cmd %v open %v", cmd, a.reactRow)
 	}
 }
+
+// TestLeaderMenu: space opens the leader menu; its keys run an action, open the : prompt for an argument,
+// or open a nested menu; any other key closes it.
+func TestLeaderMenu(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, "space")
+	if a.menu != "space" || !strings.Contains(ansi.Strip(strings.Join(a.suggest(), "")), "react") {
+		t.Fatalf("menu not open: %q %q", a.menu, a.suggest())
+	}
+	a, _ = press(t, a, "m")
+	if a.menu != "room" {
+		t.Fatalf("nested menu %q", a.menu)
+	}
+	a, _ = press(t, a, "n")
+	if a.prompt != promptCmd || a.in.Value() != "name " {
+		t.Fatalf("argument prompt %q %q", string(a.prompt), a.in.Value())
+	}
+	a, _ = press(t, a, "esc")
+	a, _ = press(t, a, "space", "x")
+	if a.menu != "" || a.prompt != 0 {
+		t.Fatalf("other key should close: menu %q prompt %q", a.menu, string(a.prompt))
+	}
+	a, cmd := press(t, a, "space") // opens the menu
+	if cmd != nil {
+		t.Fatal("opening the menu must not run anything")
+	}
+	a, cmd = press(t, a, "m") // opens the room menu
+	a, cmd = press(t, a, "m") // mute
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdMute {
+		t.Fatalf("mute: %#v", cmd())
+	}
+}

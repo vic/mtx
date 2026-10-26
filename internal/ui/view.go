@@ -613,6 +613,7 @@ var helpSections = []struct {
 		{"/", "search: highlights matches, up/down picks the current hit"},
 		{"i", "type a new message to the main chat"},
 		{"+ 1-9", "quick reaction on the selected line: 👍 ❤️ 😂 🎉 😮 😢 🙏 🔥 👀"},
+		{"space", "menu: r react, t thread, m room (mute, rename, topic, invite, fav...), j join, u upload, o open"},
 		{"a", "reply to my last or selected message"},
 		{"A", "reply to my last or selected message, quoted in the text"},
 		{"C", "edit my last or selected message"},

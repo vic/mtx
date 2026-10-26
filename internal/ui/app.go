@@ -208,6 +208,7 @@ type App struct {
 	typingFn   func(ch string)                                       // tells the room I am typing; must not block; nil = off
 	typedAt    time.Time                                             // last typing notice sent
 	reactRow   bool                                                  // +: the quick reaction row is open; the next key picks
+	menu       string                                                // the open leader menu ("" none)
 	readAt     map[string]time.Time                                  // per channel: newest line another member has read (ReadMsg)
 	tscroll    int                                                   // wheel offset of the threads box, negative = up; 0 on a channel switch
 	lastThread string                                                // the last thread opened (T toggles between main and this)
@@ -497,6 +498,31 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if k == "ctrl+c" {
 		return a, tea.Quit
 	}
+	if a.menu != "" {
+		items := menus[a.menu]
+		a.menu = ""
+		for _, it := range items {
+			if it.key != k {
+				continue
+			}
+			switch {
+			case strings.HasPrefix(it.do, "menu:"):
+				a.menu = strings.TrimPrefix(it.do, "menu:")
+			case it.do == "react":
+				a.reactRow = true
+			case it.do == "thread":
+				a = a.nextThread()
+			case strings.HasSuffix(it.do, " "):
+				a = a.openPrompt(promptCmd)
+				a.in.SetValue(strings.TrimPrefix(it.do, ":"))
+				a.in.MoveToEnd()
+			default:
+				return a.runCmd(it.do)
+			}
+			return a, nil
+		}
+		return a, nil // any other key closes the menu
+	}
 	if a.reactRow {
 		a.reactRow = false
 		if n := int(k[0] - '0'); len(k) == 1 && n >= 1 && n <= len(quickReacts) {
@@ -600,6 +626,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch act.Kind {
 	case ReactRow:
 		a.reactRow = true
+		return a, nil
+	case Leader:
+		a.menu = "space"
 		return a, nil
 	case CmdLine:
 		return a.openPrompt(promptCmd), nil
@@ -1298,6 +1327,13 @@ func (a App) nickPool() []string {
 
 // suggest is the completion row above an INSERT line (0 or 1 row): what tab puts in.
 func (a App) suggest() []string {
+	if a.menu != "" {
+		var parts []string
+		for _, it := range menus[a.menu] {
+			parts = append(parts, shortcut.Bold(true).Render(it.key)+" "+dimmed.Render(it.label))
+		}
+		return []string{title.Render(a.menu) + "  " + strings.Join(parts, "  ")}
+	}
 	if a.reactRow {
 		var parts []string
 		for i, e := range quickReacts {
@@ -2151,4 +2187,17 @@ func (a App) sides() sidePanes {
 	p.unread = a.unreadAll()
 	p.threadTop = threadTopOf(len(heads)+1, a.fsel, a.focus == focusThreads, a.tscroll)
 	return p
+}
+
+// menuItem is one key of a leader menu: a label and what it does — another menu ("menu:<name>"),
+// "react" (the + row), "thread" (the next thread), or a command (":word", or ":word " which opens the :
+// prompt for its argument).
+type menuItem struct{ key, label, do string }
+
+// menus are the leader menus: space opens "space"; m in it opens "room".
+var menus = map[string][]menuItem{
+	"space": {{"r", "react", "react"}, {"t", "thread", "thread"}, {"m", "room…", "menu:room"}, {"j", "join", ":join "},
+		{"u", "upload", ":upload "}, {"o", "open", ":open"}, {"i", "invites", ":invites"}, {"a", "accept", ":accept"}, {"?", "help", ":help"}},
+	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
+		{"i", "invite", ":invite "}, {"f", "favourite", ":tag fav"}, {"d", "low priority", ":tag low"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
 }

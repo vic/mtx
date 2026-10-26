@@ -1312,7 +1312,7 @@ func TestSeenBy(t *testing.T) {
 		t.Fatalf("$3 seen %q", seen("$3"))
 	}
 	a.hit = 0
-	a, _ = press(t, a, "enter", "s")
+	a, _ = press(t, a, "enter", "R") // the message menu: seen by is R
 	if a.pickWhat != pickInfo {
 		t.Fatalf("picker %v", a.pickWhat)
 	}
@@ -1824,5 +1824,29 @@ func TestHelpPickerBox(t *testing.T) {
 	a, _ = press(t, a, "?", "?")
 	if !a.help || a.pick {
 		t.Fatalf("? ? gave help %v pick %v", a.help, a.pick)
+	}
+}
+
+// TestSeenByKeys: seen by is space s, and R in the message menu; with no line selected it says so.
+func TestSeenByKeys(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$1"}})
+	a = next.(App)
+	a, _ = press(t, a, "up")
+	a, _ = press(t, a, "space", "s")
+	if !a.pick || a.pickWhat != pickInfo || a.listTitle != "seen by" {
+		t.Fatalf("space s: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
+	}
+	a, _ = press(t, a, "esc")
+	a, _ = press(t, a, "up", "enter", "R")
+	if !a.pick || a.pickWhat != pickInfo || a.listTitle != "seen by" {
+		t.Fatalf("message menu R: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
+	}
+	a, _ = press(t, a, "esc")
+	a.hit = -1
+	a, _ = press(t, a, "space", "s")
+	if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "seen by: select a message first" {
+		t.Fatalf("no toast with no line: %+v", a.toasts)
 	}
 }

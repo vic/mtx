@@ -141,3 +141,26 @@ func (r *runner) upload(ch, path string) error {
 	_, err = r.mx.SendMessageEvent(ctx, room, event.EventMessage, content)
 	return err
 }
+
+// setAvatar uploads the image at path and makes it my avatar.
+func (r *runner) setAvatar(path string) error {
+	if rest, ok := strings.CutPrefix(path, "~/"); ok {
+		home, _ := os.UserHomeDir()
+		path = filepath.Join(home, rest)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	mt := http.DetectContentType(data)
+	if !strings.HasPrefix(mt, "image/") {
+		return fmt.Errorf("avatar: %s is not an image (%s)", filepath.Base(path), mt)
+	}
+	ctx, cancel := callCtx()
+	defer cancel()
+	resp, err := r.mx.UploadBytesWithName(ctx, data, mt, filepath.Base(path))
+	if err != nil {
+		return err
+	}
+	return r.mx.SetAvatarURL(ctx, resp.ContentURI)
+}

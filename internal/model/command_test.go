@@ -213,3 +213,14 @@ func TestParseRecover(t *testing.T) {
 		t.Fatalf("args %q", got)
 	}
 }
+
+// TestParseAvatar: /avatar takes the image path as one raw argument.
+func TestParseAvatar(t *testing.T) {
+	c, err := ParseCmd("/avatar ~/my pic.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Args(); len(got) != 1 || got[0] != "~/my pic.png" {
+		t.Fatalf("args %q", got)
+	}
+}

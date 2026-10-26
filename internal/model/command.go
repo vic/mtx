@@ -28,6 +28,7 @@ const (
 	CmdMe       CmdName = "me"
 	CmdOpen     CmdName = "open"
 	CmdUpload   CmdName = "upload"
+	CmdAvatar   CmdName = "avatar"
 	CmdRecover  CmdName = "recover"
 	CmdAccept   CmdName = "accept"
 	CmdReject   CmdName = "reject"
@@ -40,7 +41,7 @@ const (
 
 // CmdWords are the words a / line can start with (completion lists them); rm and q
 // are aliases ParseCmd maps to close and quit.
-var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "recover", "accept", "reject", "invites", "react", "redact", "help", "quit"}
+var CmdWords = []string{"join", "create", "part", "rm", "close", "invite", "kick", "topic", "name", "tag", "whois", "nick", "ignore", "unignore", "names", "msg", "me", "open", "upload", "avatar", "recover", "accept", "reject", "invites", "react", "redact", "help", "quit"}
 
 // Cmd can only be built by ParseCmd.
 type Cmd struct {
@@ -68,6 +69,8 @@ func arity(n CmdName) (count int, raw, ok bool) {
 	case CmdAccept, CmdReject, CmdInvites:
 		return -1, false, true
 	case CmdRecover:
+		return 1, true, true
+	case CmdAvatar:
 		return 1, true, true
 	case CmdUpload:
 		return 1, true, true
@@ -158,6 +161,7 @@ var usage = map[CmdName]string{
 	CmdMe:       ":me <action>",
 	CmdOpen:     ":open (the selected line's media)",
 	CmdUpload:   ":upload <path>",
+	CmdAvatar:   ":avatar <image path>",
 	CmdRecover:  ":recover <recovery key>",
 	CmdAccept:   ":accept [room]",
 	CmdReject:   ":reject [room]",

@@ -65,3 +65,39 @@ func TestUploadPlain(t *testing.T) {
 	require.Contains(t, sent, `"msgtype":"m.image"`)
 	require.Contains(t, sent, "mxc://mock.test/up1")
 }
+
+// TestSetAvatar: an image uploads and is set as the avatar by its mxc URI.
+func TestSetAvatar(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var avatar string
+	upload := func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"content_uri":"mxc://mock.test/av1"}`) }
+	ts.Router.HandleFunc("POST /_matrix/media/v3/upload", upload)
+	ts.Router.HandleFunc("POST /_matrix/client/v1/media/upload", upload)
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/profile/{user}/avatar_url", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		avatar = string(b)
+		mu.Unlock()
+		fmt.Fprint(w, `{}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	r := newRunner(cli, func(tea.Msg) {})
+	path := filepath.Join(t.TempDir(), "me.png")
+	require.NoError(t, os.WriteFile(path, []byte("\x89PNG\r\n\x1a\nxxxx"), 0o600))
+	require.NoError(t, r.setAvatar(path))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Contains(t, avatar, "mxc://mock.test/")
+}
+
+// TestSetAvatarNotImage: a file that is not an image is refused before any upload.
+func TestSetAvatarNotImage(t *testing.T) {
+	r := newRunner(nil, func(tea.Msg) {})
+	path := filepath.Join(t.TempDir(), "notes.txt")
+	require.NoError(t, os.WriteFile(path, []byte("just some words\n"), 0o600))
+	err := r.setAvatar(path)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not an image")
+}

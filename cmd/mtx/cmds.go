@@ -89,6 +89,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.emote(ch, args[0])
 	case model.CmdOpen:
 		return c.r.open(args[0])
+	case model.CmdAvatar:
+		return c.r.setAvatar(args[0])
 	case model.CmdUpload:
 		return c.r.upload(ch, args[0])
 	case model.CmdRecover:

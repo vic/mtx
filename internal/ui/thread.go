@@ -41,7 +41,10 @@ func (a App) hasHead(root string) bool {
 
 // inThread reports whether l belongs to the selected thread (the head itself included).
 func (a App) inThread(l model.Line) bool {
-	return a.thread == "" || l.ID == a.thread || l.Thread == a.thread
+	if a.thread == "" {
+		return l.Thread == "" // the main chat: no thread replies
+	}
+	return l.ID == a.thread || l.Thread == a.thread
 }
 
 // threadRowsMax is how many rows the threads box shows (main thread plus heads).
@@ -62,7 +65,7 @@ func (a App) unreadAll() []int {
 
 // threadLabel is a head as the thread pane and the Ctrl+O picker list it.
 func threadLabel(h model.Thread) string {
-	return fmt.Sprintf("%s: %s (%d)", h.Nick, h.Text, h.Count)
+	return h.Nick + ": " + h.Text
 }
 
 // threadAt is the head that label names in the current channel.
@@ -189,32 +192,46 @@ func threadState(root string) string {
 }
 
 // threadStampW is the width of a thread row's left column: time, then unread count.
-const threadStampW = 16
+const threadStampW = 25 // time 11, then unread 4, replies 5, mine 1, and a space after each
 
-// threadStamp is the left column of a thread row: the newest reply's time and its unread count.
-func threadStamp(at time.Time, unread int) string {
+// threadSummary is a head's columns after its time, fixed width: unread (●3), replies (💬22), then "@"
+// when I took part. A head with nothing unread, no replies, or not mine leaves those cells blank.
+func threadSummary(h model.Thread, unread int) string {
+	u := ""
+	if unread > 0 {
+		u = unreadMark.Render(fmt.Sprintf("●%d", unread))
+	}
+	r := ""
+	if h.Count > 0 {
+		r = fmt.Sprintf("💬%d", h.Count)
+	}
+	m := " "
+	if h.Mine {
+		m = alert.Render("@")
+	}
+	return fit(cell, u, 4) + " " + fit(cell, r, 5) + " " + m + " "
+}
+
+// threadStamp is the left column of a thread row: the newest reply's time, then the summary columns.
+func threadStamp(at time.Time, h model.Thread, unread int) string {
 	t := "           "
 	if !at.IsZero() {
 		t = at.Format("01-02 15:04")
 	}
-	u := "   "
-	if unread > 0 {
-		u = unreadMark.Render(fmt.Sprintf("%3d", unread))
-	}
-	return fit(cell, t+" "+u, threadStampW)
+	return fit(cell, t+" "+threadSummary(h, unread), threadStampW)
 }
 
-// threadRow is a head of the threads box: stamp, then "nick: text (replies)".
+// threadRow is a head of the threads box: time and summary, then "▸" when selected and "nick: text".
 func threadRow(h model.Thread, selected bool, unread, w int) string {
 	mark := "  "
 	if selected {
 		mark = "▸ "
 	}
-	body := fit(cell, fmt.Sprintf("%s%s: %s (%d)", mark, h.Nick, h.Text, h.Count), w-threadStampW)
+	body := fit(cell, mark+h.Nick+": "+h.Text, w-threadStampW)
 	if unread == 0 && !selected {
 		body = faint.Render(body)
 	}
-	return threadStamp(h.At, unread) + body
+	return threadStamp(h.At, h, unread) + body
 }
 
 // mainThreadRow is the last row of the threads box: the channel's main chat, then its newest line
@@ -228,7 +245,7 @@ func mainThreadRow(selected bool, unread int, at time.Time, last string, w int) 
 	if last != "" {
 		text += ": " + last
 	}
-	return threadStamp(at, unread) + fit(cell, text, w-threadStampW)
+	return threadStamp(at, model.Thread{}, unread) + fit(cell, text, w-threadStampW)
 }
 
 // threadsRow is row i of the threads box, width w: the heads, then the main thread last.

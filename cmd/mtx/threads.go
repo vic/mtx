@@ -26,7 +26,8 @@ func (r *runner) noteThread(evt *event.Event, text string, old bool) {
 	if root == "" {
 		return
 	}
-	heads := r.bumpHead(evt.RoomID, root, old, time.UnixMilli(evt.Timestamp))
+	mine := r.mx != nil && evt.Sender == r.mx.UserID // a reply of mine: the head is mine too
+	heads := r.bumpHead(evt.RoomID, root, old, time.UnixMilli(evt.Timestamp), mine)
 	r.mu.Lock()
 	_, known := r.texts[id.EventID(root)]
 	r.mu.Unlock()
@@ -65,7 +66,7 @@ func (r *runner) threadFallback(room id.RoomID, root id.EventID) id.EventID {
 
 // bumpHead counts one reply under root in room and returns the room's heads. The lock is released
 // by defer, so a panic in the handler cannot leave r.mu held.
-func (r *runner) bumpHead(room id.RoomID, root string, old bool, at time.Time) []model.Thread {
+func (r *runner) bumpHead(room id.RoomID, root string, old bool, at time.Time, mine bool) []model.Thread {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	heads := r.heads[room]
@@ -74,6 +75,7 @@ func (r *runner) bumpHead(room id.RoomID, root string, old bool, at time.Time) [
 		if heads[i].Root == root {
 			heads[i].Count++
 			heads[i].At = at
+			heads[i].Mine = heads[i].Mine || mine
 			if !old {
 				heads[i].Live++
 			}
@@ -81,7 +83,7 @@ func (r *runner) bumpHead(room id.RoomID, root string, old bool, at time.Time) [
 		}
 	}
 	if !found {
-		h := model.Thread{Root: root, Nick: unknownRoot, Count: 1, At: at}
+		h := model.Thread{Root: root, Nick: unknownRoot, Count: 1, At: at, Mine: mine}
 		if !old {
 			h.Live = 1
 		}
@@ -146,6 +148,7 @@ func (r *runner) fetchThreads(room id.RoomID) {
 		}
 		if rel := ev.Unsigned.Relations; rel != nil && rel.Thread != nil {
 			h.Count = rel.Thread.Count
+			h.Mine = rel.Thread.CurrentUserParticipated
 			if l := rel.Thread.LatestEvent; l != nil {
 				h.At = time.UnixMilli(l.Timestamp)
 			}

@@ -190,6 +190,7 @@ type Thread struct {
 	Count int       // replies so far (history included)
 	Live  int       // replies received live this session (unread counts are Live minus what was seen)
 	At    time.Time // newest reply: its time shows at the left of the row
+	Mine  bool      // I sent the root or a reply (server: current_user_participated)
 }
 
 // Version changes whenever the channels or the current channel change.

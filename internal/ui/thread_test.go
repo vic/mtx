@@ -38,7 +38,7 @@ func TestThreadPaneOnScreen(t *testing.T) {
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 2}}}
 	a.thread = "$a1"
 	s := ansi.Strip(a.screen())
-	if !strings.Contains(s, "▸ bob: start (2)") {
+	if !strings.Contains(s, "💬2") || !strings.Contains(s, "▸ bob: start") {
 		t.Fatalf("thread head not on screen:\n%s", s)
 	}
 }
@@ -81,11 +81,11 @@ func TestThreadUnreadCount(t *testing.T) {
 	a.threads = map[string][]model.Thread{"#a": {{Root: "$a1", Nick: "bob", Text: "start", Count: 4, Live: 3}}}
 	a.seenLive = map[string]int{"$a1": 1}
 	s := ansi.Strip(a.screen())
-	if !regexp.MustCompile(`2 .*start \(4\)`).MatchString(s) {
+	if !regexp.MustCompile(`●2 +💬4 +.*bob: start`).MatchString(s) {
 		t.Fatalf("unread not on screen:\n%s", s)
 	}
 	a = a.selectThread("$a1")
-	if s := ansi.Strip(a.screen()); regexp.MustCompile(`2 .*start \(4\)`).MatchString(s) {
+	if s := ansi.Strip(a.screen()); regexp.MustCompile(`●2 +💬4 +.*bob: start`).MatchString(s) {
 		t.Fatalf("selected thread still shows unread:\n%s", s)
 	}
 }
@@ -281,5 +281,42 @@ func TestThreadsPaneMatchesRows(t *testing.T) {
 	got[0] = "changed"
 	if threadsPane(p, 4, 60)[0] == "changed" {
 		t.Fatal("the cached block changed with its copy")
+	}
+}
+
+// TestThreadRowLeft: the time, the unread count, the replies and "@" come before the nick, so they show
+// on a narrow pane.
+func TestThreadRowLeft(t *testing.T) {
+	at := time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)
+	row := ansi.Strip(threadRow(model.Thread{Root: "$r", Nick: "bob", Text: "start", Count: 22, At: at, Mine: true}, false, 3, 60))
+	if !strings.HasPrefix(row, "10-21 09:00") {
+		t.Fatalf("row does not start with the time: %q", row)
+	}
+	nick := strings.Index(row, "bob")
+	for _, part := range []string{"●3", "💬22", "@"} {
+		if i := strings.Index(row, part); i < 0 || i > nick {
+			t.Fatalf("%q missing or after the nick in %q", part, row)
+		}
+	}
+}
+
+// TestMainHidesReplies: the main chat shows the main thread's lines; a thread's replies show in that thread.
+func TestMainHidesReplies(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	for _, l := range []model.Line{
+		{Nick: "bob", Text: "root", ID: "$r"},
+		{Nick: "ana", Text: "reply", ID: "$x", Thread: "$r"},
+		{Nick: "bob", Text: "main", ID: "$m"},
+	} {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	if got := a.lines(a.m.Current()); len(got) != 2 {
+		t.Fatalf("main has %d lines, want 2 (root and main)", len(got))
+	}
+	a = a.selectThread("$r")
+	if got := a.lines(a.m.Current()); len(got) != 2 || got[1].ID != "$x" {
+		t.Fatalf("thread has %d lines", len(got))
 	}
 }

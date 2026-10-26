@@ -119,7 +119,7 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 				logf("theme: %v", err)
 			}
 		}()
-	}).WithTyping(r.typing).WithThreadOpen(r.openThread(c.LoadThread)).WithPicker()
+	}).WithTyping(r.typing).WithThreadOpen(r.openThread(c.LoadThread)).WithContextLoad(r.openContext(c.LoadContext)).WithPicker()
 	p = tea.NewProgram(app, tea.WithFilter(func(_ tea.Model, msg tea.Msg) tea.Msg {
 		switch msg.(type) {
 		case tea.MouseWheelMsg, tea.KeyPressMsg: // in order, summed per batch: one render

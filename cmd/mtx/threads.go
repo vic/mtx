@@ -190,3 +190,22 @@ func (r *runner) openThread(load func(context.Context, id.RoomID, id.EventID, ma
 		}()
 	}
 }
+
+// openContext fetches a message with its neighbours for the UI (a pinned message that is not loaded), in
+// the background; its history arrives in channel ch.
+func (r *runner) openContext(load func(context.Context, id.RoomID, id.EventID, matrix.Handler) error) func(ch, ev string) {
+	return func(ch, ev string) {
+		room, err := r.roomOf(ch)
+		if err != nil {
+			return
+		}
+		go func() {
+			ctx, cancel := callCtx()
+			defer cancel()
+			if err := load(ctx, room, id.EventID(ev), r.onEvent); err != nil {
+				r.emit(ui.ToastMsg{Text: "context: " + err.Error(), Err: true})
+			}
+			r.flushHistory(ch)
+		}()
+	}
+}

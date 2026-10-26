@@ -226,6 +226,8 @@ type App struct {
 	tags          map[string]string                                 // channel -> tag group (TagsMsg)
 	presence      map[string]string                                 // nick -> online, unavailable or offline (PresenceMsg)
 	presenceVer   int                                               // bumped by PresenceMsg: the side pane cache key
+	loadContext   func(ch, id string)                               // fetches a message and its neighbours; must not block; nil = off
+	wantHit       string                                            // the event ID to select once its history arrives
 	tagsVer       int                                               // bumped by TagsMsg: the side pane cache key
 	typingFn      func(ch string)                                   // tells the room I am typing; must not block; nil = off
 	typedAt       time.Time                                         // last typing notice sent
@@ -419,6 +421,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.m = m.SortRecent()
 		}
 		a = a.applyPending(msg.Ch)
+		if msg.Ch == a.m.Current().Name {
+			a = a.selectWanted()
+		}
 	case LineMsg:
 		if msg.Old {
 			if m, err := a.m.AddHistory(msg.Ch, msg.L); err == nil {
@@ -1716,6 +1721,11 @@ func (a App) bracket(fwd bool, key string) App {
 			return a.showHit()
 		}
 	}
+	if key == "p" { // no loaded pin that way: fetch the nearest one that is not loaded
+		if id := a.unloadedPin(fwd); id != "" {
+			return a.loadPin(id)
+		}
+	}
 	return a.toast("no more", false)
 }
 
@@ -2841,19 +2851,6 @@ func pinLabel(ls []model.Line, id string) string {
 }
 
 // jumpToPin selects pinned message number idx of the current channel in the chat.
-func (a App) jumpToPin(idx int) App {
-	cur := a.m.Current().Name
-	if idx < 0 || idx >= len(a.pins[cur]) {
-		return a
-	}
-	for i, l := range a.lines(a.m.Current()) {
-		if l.ID == a.pins[cur][idx] {
-			a.hit = i
-			return a.showHit()
-		}
-	}
-	return a
-}
 
 // pinSet is the set of pinned message IDs.
 func pinSet(ids []string) map[string]bool {
@@ -3047,4 +3044,66 @@ func (a App) keepSelVisible() App {
 		a.ptop[f] = pos - rows + 1
 	}
 	return a
+}
+
+// WithContextLoad sets the hook that fetches a message and its neighbours (must not block).
+func (a App) WithContextLoad(f func(ch, id string)) App {
+	a.loadContext = f
+	return a
+}
+
+// loadPin fetches the pinned message id with its neighbours, then selects it when it arrives.
+func (a App) loadPin(id string) App {
+	if a.loadContext == nil {
+		return a.toast("pinned message not loaded", true)
+	}
+	a.wantHit = id
+	a.loadContext(a.m.Current().Name, id)
+	return a.toast("loading pinned message…", false)
+}
+
+// unloadedPin is the first (fwd) or last pin of the channel that is not loaded yet, "" if none.
+func (a App) unloadedPin(fwd bool) string {
+	cur := a.m.Current().Name
+	ids := a.pins[cur]
+	for k := range ids {
+		id := ids[k]
+		if !fwd {
+			id = ids[len(ids)-1-k]
+		}
+		if !a.m.HasLine(cur, id) {
+			return id
+		}
+	}
+	return ""
+}
+
+// selectWanted selects the line a loadPin asked for, once it is loaded.
+func (a App) selectWanted() App {
+	if a.wantHit == "" {
+		return a
+	}
+	for i, l := range a.lines(a.m.Current()) {
+		if l.ID == a.wantHit {
+			a.hit, a.wantHit = i, ""
+			return a.showHit()
+		}
+	}
+	return a
+}
+
+// jumpToPin selects pinned message idx of the channel; one that is not loaded is fetched with its neighbours.
+func (a App) jumpToPin(idx int) App {
+	cur := a.m.Current().Name
+	if idx < 0 || idx >= len(a.pins[cur]) {
+		return a
+	}
+	id := a.pins[cur][idx]
+	for i, l := range a.lines(a.m.Current()) {
+		if l.ID == id {
+			a.hit = i
+			return a.showHit()
+		}
+	}
+	return a.loadPin(id)
 }

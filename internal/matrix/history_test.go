@@ -47,3 +47,30 @@ func TestLoadThread(t *testing.T) {
 	defer mu.Unlock()
 	require.Equal(t, []string{"$root", "$r1", "$r2"}, got)
 }
+
+// TestLoadContext: a message's neighbours arrive as history, oldest first, with the message between them.
+func TestLoadContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ts := mockserver.Create(t)
+	addWhoami(ts)
+	ts.Router.HandleFunc("GET /_matrix/client/v3/rooms/{roomID}/context/{eventID}", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"event":`+msgJSON("$e", "mid")+`,"events_before":[`+msgJSON("$b2", "two")+`,`+msgJSON("$b1", "one")+`],"events_after":[`+msgJSON("$a1", "after")+`]}`)
+	})
+	tok := tokenFor(t, ctx, ts, testUser, "DEV1")
+	c, err := New(ctx, testConfig(t, ts.Server.URL, tok, "DEV1"))
+	require.NoError(t, err)
+	defer c.Close()
+	var mu sync.Mutex
+	var got []string
+	h := func(_ context.Context, ev *event.Event, _ error) error {
+		mu.Lock()
+		got = append(got, ev.ID.String())
+		mu.Unlock()
+		return nil
+	}
+	require.NoError(t, c.LoadContext(ctx, "!r:mock.test", "$e", h))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Equal(t, []string{"$b1", "$b2", "$e", "$a1"}, got)
+}

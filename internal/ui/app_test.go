@@ -1644,3 +1644,26 @@ func TestThreadPickerTimes(t *testing.T) {
 		t.Fatalf("thread %q want $a1", a.thread)
 	}
 }
+
+// TestPinLoadsContext: enter on a pin that is not loaded asks for it with its neighbours, and selects it
+// when its history arrives.
+func TestPinLoadsContext(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$1", At: time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)}})
+	a = next.(App)
+	next, _ = a.Update(PinsMsg{Ch: "#a", IDs: []string{"$p"}})
+	a = next.(App)
+	var gotCh, gotID string
+	a = a.WithContextLoad(func(ch, id string) { gotCh, gotID = ch, id })
+	a = a.openPick(pickPins)
+	a, _ = press(t, a, "enter")
+	if gotCh != "#a" || gotID != "$p" || a.wantHit != "$p" {
+		t.Fatalf("load %q %q want #a $p, wantHit %q", gotCh, gotID, a.wantHit)
+	}
+	next, _ = a.Update(HistoryLinesMsg{Ch: "#a", L: []model.Line{{Nick: "bob", Text: "pinned", ID: "$p", At: time.Date(2026, 10, 21, 8, 0, 0, 0, time.UTC)}}})
+	a = next.(App)
+	if got := a.lines(a.m.Current()); a.hit < 0 || a.hit >= len(got) || got[a.hit].ID != "$p" {
+		t.Fatalf("hit %d, the pinned line is not selected", a.hit)
+	}
+}

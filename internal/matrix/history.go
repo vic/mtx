@@ -96,3 +96,16 @@ func (c *Client) LoadThread(ctx context.Context, room id.RoomID, root id.EventID
 	slices.Reverse(evs[1:]) // backward is newest first; the root stays first
 	return c.roomEvents(WithHistory(ctx), room, nil, evs, h, true)
 }
+
+// LoadContext fetches event ev with up to limit events around it (read only) and delivers them oldest
+// first as history.
+func (c *Client) LoadContext(ctx context.Context, room id.RoomID, ev id.EventID, h Handler) error {
+	resp, err := c.cli.Context(ctx, room, ev, nil, 10)
+	if err != nil {
+		return fmt.Errorf("context %s: %w", ev, err)
+	}
+	before := slices.Clone(resp.EventsBefore)
+	slices.Reverse(before) // events_before is newest first
+	evs := append(append(before, resp.Event), resp.EventsAfter...)
+	return c.roomEvents(WithHistory(ctx), room, nil, evs, h, true)
+}

@@ -1176,3 +1176,21 @@ func TestFoundPicker(t *testing.T) {
 		t.Fatalf("hit %d want 1", a.hit)
 	}
 }
+
+// TestInfoPicker: a ListMsg opens a read-only picker with its rows; enter closes it.
+func TestInfoPicker(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(ListMsg{Title: "devices", Entries: []string{"THIS  mtx", "OLD  old phone"}})
+	a = next.(App)
+	if !a.pick || a.pickWhat != pickInfo {
+		t.Fatalf("picker open %v kind %v", a.pick, a.pickWhat)
+	}
+	if got := a.pickSource(); len(got) != 2 || got[0] != "THIS  mtx" {
+		t.Fatalf("rows %q", got)
+	}
+	a, _ = press(t, a, "enter")
+	if a.pick {
+		t.Fatal("enter did not close the list")
+	}
+}

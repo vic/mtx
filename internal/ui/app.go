@@ -44,6 +44,12 @@ type ReplaceLineMsg struct {
 // ExploreMsg lists public rooms: Entries are the shown text, Targets what :join takes (same order).
 type ExploreMsg struct{ Entries, Targets []string }
 
+// ListMsg is a read-only list shown in a picker: Title names it, Entries are the rows.
+type ListMsg struct {
+	Title   string
+	Entries []string
+}
+
 // SearchMsg is the server's search results for the room: Entries are shown, IDs are the event IDs (newest first).
 type SearchMsg struct{ Entries, IDs []string }
 
@@ -220,6 +226,8 @@ type App struct {
 	reactRow    bool                                              // +: the quick reaction row is open; the next key picks
 	menu        string                                            // the open leader menu ("" none)
 	threadOpen  func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
+	listTitle   string                                            // the title of the read-only list picker (ListMsg)
+	list        []string                                          // its rows
 	found       []string                                          // :search: the matches shown in the picker
 	foundIDs    []string                                          // the event ID of each match
 	explore     []string                                          // :explore: the public rooms shown in the picker
@@ -411,6 +419,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ExploreMsg:
 		a.explore, a.exploreTo = msg.Entries, msg.Targets
 		a = a.openPick(pickExplore)
+	case ListMsg:
+		a.listTitle, a.list = msg.Title, msg.Entries
+		a = a.openPick(pickInfo)
 	case SearchMsg:
 		a.found, a.foundIDs = msg.Entries, msg.IDs
 		if len(msg.Entries) == 0 {
@@ -1127,7 +1138,7 @@ func (a App) screen() string {
 	case a.pick && a.pickWhat == pickGrep:
 		return overlayCentered(screen, a.w, a.h, grepBox(a.w, a.pq.Value()))
 	case a.pick:
-		what := [...]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned"}[a.pickWhat]
+		what := [...]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned", pickEdits: "edit history", pickExplore: "explore", pickFound: "search results", pickInfo: a.listTitle}[a.pickWhat]
 		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), pickList(a.pickSource(), a.pq.Value()), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
 	}
 	return screen
@@ -1297,6 +1308,7 @@ const (
 	pickEdits                     // message menu h: the selected message's earlier versions, read only
 	pickExplore                   // :explore: the server's public rooms; enter joins the picked one
 	pickFound                     // :search: the server's matches in this room; enter selects the message if loaded
+	pickInfo                      // a read-only list (ListMsg, e.g. :devices): enter and esc close it
 )
 
 // allSpeakers is the speaker picker's first entry: it clears the filter.
@@ -1335,6 +1347,8 @@ func (a App) pickSource() []string {
 		out = a.explore
 	case pickFound:
 		out = a.found
+	case pickInfo:
+		out = a.list
 	case pickEdits:
 		l, _ := a.lastWithID(a.hit)
 		out = append(slices.Clone(a.edits[l.ID]), l.Text+"  (now)")
@@ -1403,6 +1417,10 @@ func (a App) pickSource() []string {
 func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	ms := pickList(a.pickSource(), a.pq.Value())
 	if a.pickWhat == pickEdits && (msg.String() == "enter" || msg.String() == "esc") { // read only: enter closes it too
+		a.pick = false
+		return a, nil
+	}
+	if a.pickWhat == pickInfo && (msg.String() == "enter" || msg.String() == "esc") { // read only
 		a.pick = false
 		return a, nil
 	}
@@ -2582,7 +2600,7 @@ var menus = map[string][]menuItem{
 		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},
 		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
 	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
-		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}},
+		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}, {"d", "devices", ":devices"}},
 	"message": {{"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
 		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},

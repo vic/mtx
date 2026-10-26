@@ -704,6 +704,7 @@ var helpSections = []struct {
 		{":roomavatar <image path>", "set the room's avatar image"},
 		{":create &room public", "create a public room listed in the directory (no encryption)"},
 		{":explore [term]", "list the public rooms on this server; enter joins the picked one"},
+		{":devices", "list my devices: id, name, last seen (read only)"},
 		{":search <term>", "search this room on the server; enter jumps to the message if it is loaded"},
 		{":read [room]", "mark the room read"},
 		{":unread [room]", "mark the room unread (it stays unread until you read it)"},

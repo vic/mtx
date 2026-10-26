@@ -337,3 +337,10 @@ func TestSearchParse(t *testing.T) {
 		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+func TestDevicesParse(t *testing.T) {
+	c, err := ParseCmd("/devices")
+	if err != nil || c.Name() != CmdDevices || len(c.Args()) != 0 {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+}

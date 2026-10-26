@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -587,4 +588,36 @@ func TestSearchEmits(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, []string{"<bob> hello one", "<bob> hello two"}, sm.Entries)
 	require.Equal(t, []string{"$1", "$2"}, sm.IDs)
+}
+
+// TestDevicesEmits: /devices lists my devices, this one marked, most recently seen first.
+func TestDevicesEmits(t *testing.T) {
+	ts := mockserver.Create(t)
+	ts.Router.HandleFunc("GET /_matrix/client/v3/devices", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"devices":[{"device_id":"OLD","display_name":"old phone","last_seen_ts":1000},{"device_id":"THIS","display_name":"mtx","last_seen_ts":2000}]}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	cli.DeviceID = "THIS"
+	var mu sync.Mutex
+	var got []tea.Msg
+	r := newRunner(cli, func(m tea.Msg) {
+		mu.Lock()
+		got = append(got, m)
+		mu.Unlock()
+	})
+	cs := &cmds{r: r, me: "@alice:mock.test", server: "mock.test"}
+	cm, err := model.ParseCmd("/devices")
+	require.NoError(t, err)
+	require.NoError(t, cs.do("#r", cm))
+	mu.Lock()
+	defer mu.Unlock()
+	require.Len(t, got, 1)
+	lm, ok := got[0].(ui.ListMsg)
+	require.True(t, ok)
+	require.Equal(t, "devices", lm.Title)
+	require.Len(t, lm.Entries, 2)
+	require.True(t, strings.HasPrefix(lm.Entries[0], "THIS  mtx  last seen "))
+	require.True(t, strings.HasSuffix(lm.Entries[0], "  (this device)"))
+	require.True(t, strings.HasPrefix(lm.Entries[1], "OLD  old phone  last seen "))
 }

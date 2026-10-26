@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -75,6 +76,8 @@ func (c *cmds) do(ch string, cm model.Cmd) error {
 		return c.createRoom(args[0], len(args) > 1 && args[1] == "public")
 	case model.CmdExplore:
 		return c.explore(strings.Join(args, " "))
+	case model.CmdDevices:
+		return c.devices()
 	case model.CmdSearch:
 		return c.search(ch, args[0])
 	case model.CmdJoin:
@@ -754,5 +757,27 @@ func (c *cmds) search(ch, term string) error {
 		}
 	}
 	c.r.emit(ui.SearchMsg{Entries: entries, IDs: ids})
+	return nil
+}
+
+// devices lists my devices, most recently seen first, in the read-only info picker.
+func (c *cmds) devices() error {
+	ctx, cancel := c.ctx()
+	defer cancel()
+	resp, err := c.r.mx.GetDevicesInfo(ctx)
+	if err != nil {
+		return err
+	}
+	ds := slices.Clone(resp.Devices)
+	slices.SortFunc(ds, func(a, b mautrix.RespDeviceInfo) int { return cmp.Compare(b.LastSeenTS, a.LastSeenTS) })
+	var entries []string
+	for _, d := range ds {
+		line := d.DeviceID.String() + "  " + d.DisplayName + "  last seen " + time.UnixMilli(d.LastSeenTS).Format("2006-01-02 15:04")
+		if d.DeviceID == c.r.mx.DeviceID {
+			line += "  (this device)"
+		}
+		entries = append(entries, line)
+	}
+	c.r.emit(ui.ListMsg{Title: "devices", Entries: entries})
 	return nil
 }

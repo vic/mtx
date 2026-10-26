@@ -319,3 +319,21 @@ func TestHelpKeyColumnNarrow(t *testing.T) {
 		}
 	}
 }
+
+// TestMediaTag: a media tag is found and its icon is drawn on the row.
+func TestMediaTag(t *testing.T) {
+	kind, end, ok := mediaTag("[image encrypted] a.png")
+	if !ok || kind != "image" || end != 17 {
+		t.Fatalf("image tag: %q %d %v", kind, end, ok)
+	}
+	if _, _, ok := mediaTag("[x] y"); ok {
+		t.Fatal("[x] is not a media line")
+	}
+	if _, _, ok := mediaTag("plain"); ok {
+		t.Fatal("plain text is not a media line")
+	}
+	row := strings.Join(wrapLine(model.Line{Nick: "bob", Text: "[image] cat.png"}, 40), "\n")
+	if !strings.Contains(ansi.Strip(row), "🖼") {
+		t.Fatalf("no image icon on the row: %q", ansi.Strip(row))
+	}
+}

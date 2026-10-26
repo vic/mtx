@@ -15,6 +15,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"mtx/internal/model"
 )
@@ -1876,5 +1877,47 @@ func TestImagePopup(t *testing.T) {
 	a = next.(App)
 	if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "view: no message with an ID here" {
 		t.Fatalf("no view note: %+v", a.toasts)
+	}
+}
+
+// clickRow is the screen row and column of the first line whose text holds want, in the lines pane.
+func clickRow(t *testing.T, a App, want string) (int, int) {
+	t.Helper()
+	for y, row := range strings.Split(ansi.Strip(a.screen()), "\n") {
+		if x := strings.Index(row, want); x >= 0 {
+			return y, lipgloss.Width(row[:x])
+		}
+	}
+	t.Fatalf("no row with %q:\n%s", want, ansi.Strip(a.screen()))
+	return 0, 0
+}
+
+// TestClickImageViews: a click on an image line runs /view for it; a click on plain text still mentions.
+func TestClickImageViews(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "[image] cat.png", ID: "$img"}})
+	a = next.(App)
+	y, x := clickRow(t, a, "cat.png")
+	_, cmd := a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	cm, ok := cmd().(CmdMsg)
+	if !ok || cm.Cmd.Name() != model.CmdView || !slices.Equal(cm.Cmd.Args(), []string{"$img"}) {
+		t.Fatalf("click on the image line: %#v", cmd())
+	}
+}
+
+// TestClickPlainMentions: a click on a plain line still starts a mention of its sender.
+func TestClickPlainMentions(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.w, a.h = 120, 30
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "just words", ID: "$p"}})
+	a = next.(App)
+	y, x := clickRow(t, a, "just words")
+	next, _ = a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	a = next.(App)
+	if a.mode != Insert || !strings.Contains(a.in.Value(), "@bob") {
+		t.Fatalf("mode %v input %q", a.mode, a.in.Value())
 	}
 }

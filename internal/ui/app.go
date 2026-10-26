@@ -2339,6 +2339,15 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 		if url := urlAt(row, m.X-chanW-3); url != "" { // a link opens in the browser
 			return a, openURL(url)
 		}
+		if kind, _, ok := mediaTag(l.Text); ok && l.ID != "" { // a media line: view the image, or open the file
+			cmd := "open"
+			if kind == "image" {
+				cmd = "view"
+			}
+			if c, err := model.ParseCmd("/" + cmd + " " + l.ID); err == nil {
+				return a, func() tea.Msg { return CmdMsg{c} }
+			}
+		}
 		if path, cmd, hit := clickTarget(row, m.X-chanW-3); hit { // the text starts after the border and a space
 			return a.openTarget(path, cmd)
 		}

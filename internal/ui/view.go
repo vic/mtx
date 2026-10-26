@@ -500,6 +500,9 @@ func wrapLine(l model.Line, width int) []string {
 	bw := max(width-lipgloss.Width(nk), 1)
 	var out []string
 	text := l.Text
+	if kind, end, ok := mediaTag(text); ok { // a media line: its icon stands out, the tag text stays
+		text = lipgloss.NewStyle().Foreground(pal.slots[3]).Bold(true).Render(mediaIcons[kind]+text[:end]) + text[end:]
+	}
 	if l.Reacts != "" {
 		text += "  [" + l.Reacts + "]"
 	}
@@ -1101,4 +1104,21 @@ func verifyBox(emojis string) string {
 func imgBox(s string) string {
 	rows := []string{title.Render("image  (any key closes)"), "", s}
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
+}
+
+// mediaIcons marks a media line's tag so it stands out (vic 2026-10-26).
+var mediaIcons = map[string]string{"image": "🖼 ", "video": "🎞 ", "audio": "🔊 ", "file": "📎 "}
+
+// mediaTag splits "[kind…] rest" into kind and the tag's end; ok is false when it is not a media line.
+func mediaTag(s string) (kind string, end int, ok bool) {
+	if !strings.HasPrefix(s, "[") {
+		return "", 0, false
+	}
+	end = strings.Index(s, "]")
+	if end < 0 {
+		return "", 0, false
+	}
+	kind, _, _ = strings.Cut(s[1:end], " ")
+	_, ok = mediaIcons[kind]
+	return kind, end + 1, ok
 }

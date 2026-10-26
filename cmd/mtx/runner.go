@@ -270,12 +270,9 @@ func (r *runner) refresh() error {
 		r.emit(ui.MembersMsg{Ch: name, Nicks: m.nicks, Levels: m.levels})
 		r.emit(ui.PinsMsg{Ch: name, IDs: m.pins})
 	}
-	for _, s := range spaces {
-		label := strings.TrimPrefix(roomLabel(s, ""), "#")
-		for _, c := range s.children {
-			if name, ok := r.nameOf(c); ok && tags[name] == "" && label != "" {
-				tags[name] = "space:" + label
-			}
+	for room, g := range spaceGroups(spaces) {
+		if name, ok := r.nameOf(room); ok && tags[name] == "" {
+			tags[name] = g
 		}
 	}
 	r.emit(tags)
@@ -786,4 +783,52 @@ func (r *runner) myReact(target id.EventID, key string) id.EventID {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.reactBy[target][key][r.mx.UserID]
+}
+
+// spaceGroups names the space group of each room inside a space: "space:<name>", or for a space inside a
+// space "space:<parent> › <child>". A room reached from two spaces takes the first by name.
+func spaceGroups(spaces map[id.RoomID]roomMeta) map[id.RoomID]string {
+	label := func(room id.RoomID) string { return strings.TrimPrefix(roomLabel(spaces[room], ""), "#") }
+	child := map[id.RoomID]bool{}
+	for _, s := range spaces {
+		for _, c := range s.children {
+			if _, ok := spaces[c]; ok {
+				child[c] = true
+			}
+		}
+	}
+	var roots, rest []id.RoomID // spaces inside no other space first; a cycle has none, so it comes after
+	for room := range spaces {
+		if child[room] {
+			rest = append(rest, room)
+		} else {
+			roots = append(roots, room)
+		}
+	}
+	byLabel := func(a, b id.RoomID) int { return strings.Compare(label(a), label(b)) }
+	slices.SortFunc(roots, byLabel)
+	slices.SortFunc(rest, byLabel)
+	out := map[id.RoomID]string{}
+	seen := map[id.RoomID]bool{}
+	var walk func(room id.RoomID, path string)
+	walk = func(room id.RoomID, path string) {
+		seen[room] = true
+		for _, c := range spaces[room].children {
+			if _, isSpace := spaces[c]; isSpace {
+				if !seen[c] {
+					walk(c, path+" › "+label(c))
+				}
+				continue
+			}
+			if _, ok := out[c]; !ok {
+				out[c] = "space:" + path
+			}
+		}
+	}
+	for _, root := range append(roots, rest...) {
+		if !seen[root] {
+			walk(root, label(root))
+		}
+	}
+	return out
 }

@@ -186,3 +186,16 @@ func TestRoomTag(t *testing.T) {
 	require.Equal(t, "favourite", roomTag("favourite", true))
 	require.Equal(t, "", roomTag("", false))
 }
+
+// TestSpaceGroups: a room in a space is "space:<name>", a room in a space inside a space is named by the
+// path; a cycle between spaces ends.
+func TestSpaceGroups(t *testing.T) {
+	spaces := map[id.RoomID]roomMeta{
+		"!s1:x": {room: "!s1:x", name: "A", space: true, children: []id.RoomID{"!s2:x", "!r1:x"}},
+		"!s2:x": {room: "!s2:x", name: "B", space: true, children: []id.RoomID{"!r2:x", "!s1:x"}},
+	}
+	got := spaceGroups(spaces)
+	require.Equal(t, "space:a", got["!r1:x"])
+	require.Equal(t, "space:a › b", got["!r2:x"])
+	require.Len(t, got, 2)
+}

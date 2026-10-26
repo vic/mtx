@@ -344,3 +344,10 @@ func TestDevicesParse(t *testing.T) {
 		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
 	}
 }
+
+func TestGotoParse(t *testing.T) {
+	c, err := ParseCmd("/goto 2026-10-21 09:00")
+	if err != nil || c.Name() != CmdGoto || !slices.Equal(c.Args(), []string{"2026-10-21 09:00"}) {
+		t.Fatalf("got %q %q %v", c.Name(), c.Args(), err)
+	}
+}

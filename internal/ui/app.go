@@ -1054,6 +1054,9 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 	if c.Name() == model.CmdForward { // the target is the selected line
 		return a.forward(c.Args()[0])
 	}
+	if c.Name() == model.CmdGoto {
+		return a.gotoDate(c.Args()[0]), nil
+	}
 	if c.Name() == model.CmdHelp { // the same screen as ? (vic 2026-10-23)
 		a.help = true
 		return a, nil
@@ -1670,6 +1673,37 @@ func (a App) nextUnreadChan(fwd bool) App {
 		}
 	}
 	return a.toast("no unread chats", false)
+}
+
+// gotoDate selects the first shown line at or after when (a date, a date and time, a time today, or "yesterday").
+func (a App) gotoDate(s string) App {
+	now := a.now()
+	var t time.Time
+	var err error
+	switch {
+	case s == "yesterday":
+		y := now.AddDate(0, 0, -1)
+		t = time.Date(y.Year(), y.Month(), y.Day(), 0, 0, 0, 0, now.Location())
+	case len(s) == 5:
+		var hm time.Time
+		if hm, err = time.ParseInLocation("15:04", s, now.Location()); err == nil {
+			t = time.Date(now.Year(), now.Month(), now.Day(), hm.Hour(), hm.Minute(), 0, 0, now.Location())
+		}
+	case len(s) == 10:
+		t, err = time.ParseInLocation("2006-01-02", s, now.Location())
+	default:
+		t, err = time.ParseInLocation("2006-01-02 15:04", s, now.Location())
+	}
+	if err != nil {
+		return a.toast("goto: want 2006-01-02, 2006-01-02 15:04, 15:04 or yesterday", true)
+	}
+	for i, l := range a.lines(a.m.Current()) {
+		if !l.At.Before(t) {
+			a.hit = i
+			return a.showHit()
+		}
+	}
+	return a.toast("goto: no loaded message after "+s, false)
 }
 
 // jumpUnread selects the first shown line after my read marker and scrolls to it.
@@ -2598,7 +2632,7 @@ func emojiMenu() []menuItem {
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
-		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
+		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},

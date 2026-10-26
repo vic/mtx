@@ -1245,3 +1245,34 @@ func TestDMGroup(t *testing.T) {
 		t.Fatalf("rows %q", rows)
 	}
 }
+
+// TestGotoDate: :goto selects the first loaded line at or after the given date or time.
+func TestGotoDate(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	for _, l := range []model.Line{
+		{Nick: "bob", Text: "old", ID: "$1", At: time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)},
+		{Nick: "bob", Text: "mid", ID: "$2", At: time.Date(2026, 10, 21, 9, 0, 0, 0, time.UTC)},
+		{Nick: "bob", Text: "new", ID: "$3", At: time.Date(2026, 10, 22, 8, 0, 0, 0, time.UTC)},
+	} {
+		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	for _, tc := range []struct {
+		cmd  string
+		want int
+	}{
+		{":goto 2026-10-21", 1},
+		{":goto yesterday", 1},
+		{":goto 07:00", 2},
+	} {
+		b, _ := a.runCmd(tc.cmd)
+		if got := b.(App).hit; got != tc.want {
+			t.Errorf("%s: hit %d want %d", tc.cmd, got, tc.want)
+		}
+	}
+	b, _ := a.runCmd(":goto nonsense")
+	if n := len(b.(App).toasts); n == 0 || !b.(App).toasts[n-1].err {
+		t.Errorf("nonsense: no error toast")
+	}
+}

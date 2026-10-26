@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -15,6 +17,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
 	"maunium.net/go/mautrix/mockserver"
 )
 
@@ -100,4 +103,61 @@ func TestSetAvatarNotImage(t *testing.T) {
 	err := r.setAvatar(path)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not an image")
+}
+
+// TestEncryptedMediaRoundTrip: an upload to an encrypted room sends the bytes encrypted, with a file (not
+// url) in the message, and fetchMedia decrypts them back to the plaintext.
+func TestEncryptedMediaRoundTrip(t *testing.T) {
+	ts := mockserver.Create(t)
+	var mu sync.Mutex
+	var stored []byte
+	var sent []byte
+	ts.Router.HandleFunc("POST /_matrix/media/v3/upload", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		stored = b
+		mu.Unlock()
+		fmt.Fprint(w, `{"content_uri":"mxc://mock.test/enc1"}`)
+	})
+	download := func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		_, _ = w.Write(stored)
+	}
+	ts.Router.HandleFunc("GET /_matrix/client/v1/media/download/{server}/{id}", download)
+	ts.Router.HandleFunc("GET /_matrix/media/v3/download/{server}/{id}", download)
+	ts.Router.HandleFunc("PUT /_matrix/client/v3/rooms/{room}/send/{type}/{txn}", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		sent = b
+		mu.Unlock()
+		fmt.Fprint(w, `{"event_id":"$m1"}`)
+	})
+	cli, err := mautrix.NewClient(ts.Server.URL, "@alice:mock.test", "tok")
+	require.NoError(t, err)
+	ctx := context.Background()
+	store := mautrix.NewMemoryStateStore()
+	require.NoError(t, store.SetEncryptionEvent(ctx, testRoom, &event.EncryptionEventContent{Algorithm: id.AlgorithmMegolmV1}))
+	cli.StateStore = store
+	r := newRunner(cli, func(tea.Msg) {})
+	r.register(testRoom, "#r")
+
+	plain := []byte(strings.Repeat("hello encrypted ", 4))
+	path := filepath.Join(t.TempDir(), "secret.txt")
+	require.NoError(t, os.WriteFile(path, plain, 0o600))
+	require.NoError(t, r.upload("#r", path))
+
+	mu.Lock()
+	require.NotEqual(t, plain, stored, "the upload must not carry the plaintext")
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal(sent, &msg))
+	mu.Unlock()
+	require.Contains(t, msg, "file")
+	require.NotContains(t, msg, "url")
+
+	var content event.MessageEventContent
+	require.NoError(t, json.Unmarshal(sent, &content))
+	got, err := r.fetchMedia(ctx, &content)
+	require.NoError(t, err)
+	require.Equal(t, plain, got)
 }

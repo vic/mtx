@@ -155,7 +155,7 @@ func lineRow(rows []string, of []int, shown []model.Line, hit, i, n int, lead st
 		return lineRowUncached(rows, of, shown, hit, i, n, lead, code, q)
 	}
 	l := shown[of[i]]
-	k := styledKey{row: rows[i], nick: l.Nick, dim: l.Dim, kind: l.Kind, hit: of[i] == hit, code: code[i], q: q, n: n, lead: lead}
+	k := styledKey{row: rows[i], nick: l.Nick, dim: l.Dim, hit: of[i] == hit, code: code[i], q: q, n: n, lead: lead}
 	styled.mu.Lock()
 	s, ok := styled.m[k]
 	styled.mu.Unlock()
@@ -176,7 +176,6 @@ func lineRow(rows []string, of []int, shown []model.Line, hit, i, n int, lead st
 type styledKey struct {
 	row, nick, q, lead string
 	dim, hit, code     bool
-	kind               model.LineKind
 	n                  int
 }
 
@@ -197,7 +196,7 @@ func lineRowUncached(rows []string, of []int, shown []model.Line, hit, i, n int,
 		return fit(cell, "", n)
 	}
 	l, r := shown[of[i]], rows[i]
-	plain := l.Dim || l.Kind == model.Tool
+	plain := l.Dim
 	st := cell
 	if plain {
 		st = faint

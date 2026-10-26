@@ -122,7 +122,7 @@ func TestWheelScrollsAndNickPane(t *testing.T) {
 func TestToggles(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	for _, l := range []model.Line{{Nick: "me", Text: "hi"}, {Nick: "a", Text: "thinking out loud", Kind: model.Transcript}, {Nick: "a", Text: "* Bash: ls", Kind: model.Tool}} {
+	for _, l := range []model.Line{{Nick: "me", Text: "hi"}, {Nick: "a", Text: "thinking out loud"}, {Nick: "a", Text: "* Bash: ls"}} {
 		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
 		a = next.(App)
 	}
@@ -133,27 +133,27 @@ func TestToggles(t *testing.T) {
 		}
 		return strings.Join(s, "|")
 	}
-	if got := shown(); got != "hi|thinking out loud" { // default: tools hidden
+	if got := shown(); got != "hi|thinking out loud|* Bash: ls" { // default: all chat lines
 		t.Fatalf("default %q", got)
 	}
 	a, _ = press(t, a, "t") // t is the thread toggle now: tool lines stay hidden
-	if got := shown(); got != "hi|thinking out loud" || a.tools {
-		t.Fatalf("t %q tools %v", got, a.tools)
+	if got := shown(); got != "hi|thinking out loud|* Bash: ls" {
+		t.Fatalf("t %q", got)
 	}
 	a, _ = press(t, a, "M")
-	if got := shown(); got != "hi" || strings.Contains(a.screen(), "thinking out loud") {
+	if got := shown(); got != "hi|thinking out loud|* Bash: ls" { // session channels: mentions only filters rooms
 		t.Fatalf("m %q", got)
 	}
 	a, _ = press(t, a, "g", "t") // NEG: gt still switches channel, does not toggle
-	if cur(a) != "#b" || a.tools {
-		t.Fatalf("gt: %s tools %v", cur(a), a.tools)
+	if cur(a) != "#b" {
+		t.Fatalf("gt: %s", cur(a))
 	}
 }
 
 func TestColorsKeepFrameSize(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	for _, l := range []model.Line{{Nick: "carol", Text: strings.Repeat("wrap me ", 30)}, {Nick: "alice", Text: "hi"}, {Nick: "bob", Text: "* Bash: ls", Kind: model.Tool, Dim: true}} {
+	for _, l := range []model.Line{{Nick: "carol", Text: strings.Repeat("wrap me ", 30)}, {Nick: "alice", Text: "hi"}, {Nick: "bob", Text: "* Bash: ls", Dim: true}} {
 		next, _ := a.Update(LineMsg{Ch: "#a", L: l})
 		a = next.(App)
 	}

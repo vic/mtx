@@ -18,21 +18,11 @@ type Member struct {
 // ErrNotRoom means the channel is a session channel, which has no members.
 var ErrNotRoom = errors.New("model: channel is not a room")
 
-// LineKind is where a line came from; the UI can hide all but Chat.
-type LineKind uint8
-
-const (
-	Chat       LineKind = iota // user lines, peer replies, room lines, notes
-	Transcript                 // session text read from its transcript
-	Tool                       // tool_use and tool errors from the transcript
-)
-
 // Line is one scrollback entry.
 type Line struct {
 	At         time.Time
 	Nick, Text string
 	Dim        bool
-	Kind       LineKind
 	ID         string // producer's event ID (a reply target); not shown
 	Thread     string // thread root event ID of this message; "" = main chat
 	Reacts     string // reaction summary shown after the text ("👍2 ❤️1"); "" none

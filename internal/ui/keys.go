@@ -34,7 +34,6 @@ const (
 	Send
 	Complete
 	Help
-	ToggleTools
 	ToggleMentions
 	ThreadNext
 	FocusPane

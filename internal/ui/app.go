@@ -197,7 +197,6 @@ type App struct {
 	files       []string                                          // pickFiles: the session's files, from git ls-files (filesMsg)
 	psel        int                                               // picker selection, an index in pickList
 	comp        completion                                        // tab completion state of the INSERT line
-	tools       bool                                              // t: show tool lines
 	mentions    bool                                              // m: show only direct lines (see shows)
 	typing      map[string][]string                               // channel -> nicks typing now (TypingMsg); a room's nick pane marks them
 	reply       func(ch string, to model.Line, text string) error // A + send: a reply to a line with an ID; nil = plain send with a quote
@@ -684,8 +683,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a = a.scroll(act)
 	case ThreadNext:
 		a = a.nextThread()
-	case ToggleTools, ToggleMentions:
-		a.tools = a.tools != (act.Kind == ToggleTools)
+	case ToggleMentions:
 		a.mentions = a.mentions != (act.Kind == ToggleMentions)
 		a.hit, a.offs = -1, nil // positions index the shown lines, which changed
 	case Help:
@@ -1135,16 +1133,13 @@ func (a App) shows(k model.ChanKind, l model.Line) bool {
 	if len(a.speakers) > 0 && !slices.Contains(a.speakers, l.Nick) {
 		return false
 	}
-	if !a.tools && l.Kind == model.Tool {
-		return false
-	}
 	if !a.mentions {
 		return true
 	}
 	if k == model.RoomChan {
 		return l.Nick == a.user || mentionsUser(l.Text, a.user)
 	}
-	return l.Kind == model.Chat
+	return true
 }
 
 // mentionsUser reports whether text has @user as a whole mention.
@@ -2111,7 +2106,6 @@ func (a App) wrap() wrapFunc {
 type rowKey struct {
 	at                             int64
 	nick, text, id, thread, reacts string
-	kind                           model.LineKind
 	dim, stamped                   bool
 	width                          int
 }
@@ -2127,7 +2121,7 @@ const rowCacheMax = 50000 // rows; the cache is cleared when it is full
 func (c *rowCache) memo(base wrapFunc, stamped bool) wrapFunc {
 	return func(l model.Line, width int) []string {
 		k := rowKey{at: l.At.UnixNano(), nick: l.Nick, text: l.Text, id: l.ID, thread: l.Thread,
-			kind: l.Kind, dim: l.Dim, stamped: stamped, width: width, reacts: l.Reacts}
+			dim: l.Dim, stamped: stamped, width: width, reacts: l.Reacts}
 		c.mu.Lock()
 		rs, ok := c.m[k]
 		c.mu.Unlock()
@@ -2193,7 +2187,7 @@ type linesCache struct {
 type linesKey struct {
 	ch, grep, user, thread, speakers string
 	kind                             model.ChanKind
-	tools, mentions                  bool
+	mentions                         bool
 	ver                              uint64
 	n                                int
 }
@@ -2201,7 +2195,7 @@ type linesKey struct {
 // lines are the lines of c that the view shows (filters and thread applied), cached until they change.
 func (a App) lines(c model.Channel) []model.Line {
 	k := linesKey{ch: c.Name, grep: a.grep, user: a.user, thread: a.thread, speakers: strings.Join(a.speakers, "\x00"),
-		kind: c.Kind, tools: a.tools, mentions: a.mentions, ver: c.Lines.Version(), n: c.Lines.Len()}
+		kind: c.Kind, mentions: a.mentions, ver: c.Lines.Version(), n: c.Lines.Len()}
 	if a.lc != nil && a.lc.key == k {
 		return a.lc.lines
 	}
@@ -2231,7 +2225,7 @@ type sideKey struct {
 	pinsVer                             int
 	focus                               paneFocus
 	fsel, mainUnread                    int
-	tools, mentions                     bool
+	mentions                            bool
 	tagsVer                             int
 	heads                               []model.Thread
 }
@@ -2239,7 +2233,7 @@ type sideKey struct {
 func (k sideKey) same(o sideKey) bool {
 	return k.ver == o.ver && k.pinsVer == o.pinsVer && k.cur == o.cur && k.fq == o.fq && k.thread == o.thread && k.user == o.user &&
 		k.grep == o.grep && k.typing == o.typing && k.focus == o.focus && k.fsel == o.fsel &&
-		k.mainUnread == o.mainUnread && k.tools == o.tools && k.mentions == o.mentions && slices.Equal(k.heads, o.heads) &&
+		k.mainUnread == o.mainUnread && k.mentions == o.mentions && slices.Equal(k.heads, o.heads) &&
 		k.tagsVer == o.tagsVer
 }
 
@@ -2248,7 +2242,7 @@ func (a App) sides() sidePanes {
 	cur := a.m.Current().Name
 	heads := a.threads[cur]
 	k := sideKey{ver: a.m.Version(), pinsVer: a.pinsVer, cur: cur, fq: a.fq, thread: a.thread, user: a.user, grep: a.grep,
-		typing: a.in.Value(), focus: a.focus, fsel: a.fsel, mainUnread: a.mainUnread[cur], tools: a.tools,
+		typing: a.in.Value(), focus: a.focus, fsel: a.fsel, mainUnread: a.mainUnread[cur],
 		mentions: a.mentions, heads: slices.Clone(heads), tagsVer: a.tagsVer}
 	p, hit := sidePanes{}, false
 	if a.sc != nil && len(a.info) == 0 && a.sc.key.same(k) {

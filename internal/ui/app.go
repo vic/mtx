@@ -421,8 +421,16 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case InputsMsg:
 		a.hist = maps.Clone(msg)
 	case HistoryLinesMsg:
+		before := len(a.lines(a.m.Current()))
 		if m, err := a.m.AddHistoryLines(msg.Ch, msg.L); err == nil {
 			a.m = m.SortRecent()
+		}
+		added := 0
+		if msg.Ch == a.m.Current().Name {
+			added = len(a.lines(a.m.Current())) - before
+			if added > 0 && a.hit >= 0 { // the selected line keeps its place after the prepend
+				a.hit += added
+			}
 		}
 		a = a.applyPending(msg.Ch)
 		if msg.Ch == a.m.Current().Name {
@@ -430,7 +438,16 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if k := a.retryMotion; k != "" && msg.Ch == a.m.Current().Name {
 			a.retryMotion = ""
-			a = a.bracket(false, k)
+			switch {
+			case added == 0:
+				a = a.toast("no more", false)
+			case k == "line":
+				a = a.lineStep(false)
+			case k == "scroll":
+				a = a.scroll(Action{Kind: Scroll, N: -1})
+			default:
+				a = a.bracket(false, k)
+			}
 		}
 	case LineMsg:
 		if msg.Old {
@@ -1298,7 +1315,11 @@ func (a App) scroll(act Action) App {
 	ch := a.m.Current().Name
 	switch act.Kind {
 	case Scroll:
-		return a.setOff(ch, a.off()-act.N)
+		b := a.setOff(ch, a.off()-act.N)
+		if act.N < 0 && b.off() == a.off() { // at the top of the loaded lines
+			return a.older("scroll")
+		}
+		return b
 	case HalfPage:
 		return a.setOff(ch, a.off()-act.N*max(a.page()/2, 1))
 	case Top:
@@ -1755,10 +1776,8 @@ func (a App) bracket(fwd bool, key string) App {
 			return a.loadPin(id)
 		}
 	}
-	if !fwd && a.loadOlder != nil && key != "]" && key != "[" { // nothing loaded that way: ask for an older page, then try again
-		a.retryMotion = key
-		a.loadOlder(a.m.Current().Name)
-		return a.toast("loading older messages…", false)
+	if !fwd {
+		return a.older(key)
 	}
 	return a.toast("no more", false)
 }
@@ -2143,6 +2162,9 @@ func (a App) turn(fwd bool) App {
 			return a.showHit()
 		}
 	}
+	if !fwd {
+		return a.older("[")
+	}
 	return a
 }
 
@@ -2370,7 +2392,10 @@ func (a App) lineStep(down bool) App {
 	case down:
 		a.hit++
 	default:
-		a.hit = max(a.hit-1, 0)
+		if a.hit == 0 {
+			return a.older("line")
+		}
+		a.hit--
 	}
 	w := textWidth(a.w, a.h)
 	after := rowCount(ls[a.hit:], w, a.wrap())   // rows from the cursor line's top to the newest
@@ -3170,4 +3195,16 @@ func (a App) verifyStep(msg VerifyMsg) App {
 		return a.toast("verification cancelled: "+msg.Reason, true)
 	}
 	return a
+}
+
+// older asks for one older page and remembers the motion to retry when it arrives.
+func (a App) older(key string) App {
+	if a.loadOlder == nil {
+		return a.toast("no more", false)
+	}
+	if a.retryMotion == "" { // one page at a time
+		a.loadOlder(a.m.Current().Name)
+	}
+	a.retryMotion = key
+	return a.toast("loading older messages…", false)
 }

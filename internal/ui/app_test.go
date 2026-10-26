@@ -1710,3 +1710,85 @@ func TestVerifyFlow(t *testing.T) {
 		t.Fatalf("done: sas %q toasts %d", a.verifySAS, len(a.toasts))
 	}
 }
+
+// TestOlderMotions: a motion at the oldest loaded line asks for one older page, retries it when the page
+// arrives, and stops at the start of the room.
+func TestOlderMotions(t *testing.T) {
+	keys := map[string][]string{"K": {"K"}, "up": {"up"}, "k": {"k"}, "[[": {"[", "["}}
+	for name, seq := range keys {
+		t.Run(name, func(t *testing.T) {
+			var log []sent
+			a := newApp(t, &log, nil)
+			a.w, a.h = 120, 30
+			for i, id := range []string{"$1", "$2"} {
+				next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "line " + id, ID: id, At: time.Date(2026, 10, 22, 9, i, 0, 0, time.UTC)}})
+				a = next.(App)
+			}
+			asked := 0
+			a = a.WithOlderLoad(func(string) { asked++ })
+			a.hit = 0
+			press1 := func(a App) App {
+				if name == "k" { // scroll up until the top of the loaded lines is reached
+					for range 50 {
+						a, _ = press(t, a, "k")
+					}
+					return a
+				}
+				a, _ = press(t, a, seq...)
+				return a
+			}
+			a = press1(a)
+			if asked != 1 || a.retryMotion == "" {
+				t.Fatalf("first press: asked %d retry %q", asked, a.retryMotion)
+			}
+			a = press1(a)
+			if asked != 1 {
+				t.Fatalf("second press asked again: %d", asked)
+			}
+			next, _ := a.Update(HistoryLinesMsg{Ch: "#a", L: []model.Line{
+				{Nick: "ana", Text: "old1", ID: "$o1", At: time.Date(2026, 10, 22, 8, 0, 0, 0, time.UTC)},
+				{Nick: "ana", Text: "old2", ID: "$o2", At: time.Date(2026, 10, 22, 8, 1, 0, 0, time.UTC)},
+			}})
+			a = next.(App)
+			if a.retryMotion != "" && name != "k" { // a scroll retry may ask for the next page
+				t.Fatalf("retry still pending after the page: %q", a.retryMotion)
+			}
+			if name != "k" {
+				if got := a.lines(a.m.Current()); a.hit < 0 || a.hit >= len(got) || !strings.HasPrefix(got[a.hit].ID, "$o") {
+					t.Fatalf("selection %d not moved onto the older page", a.hit)
+				}
+			}
+		})
+	}
+
+	t.Run("empty page stops", func(t *testing.T) {
+		var log []sent
+		a := newApp(t, &log, nil)
+		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "only", ID: "$1", At: time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC)}})
+		a = next.(App)
+		asked := 0
+		a = a.WithOlderLoad(func(string) { asked++ })
+		a.hit = 0
+		a, _ = press(t, a, "K")
+		next, _ = a.Update(HistoryLinesMsg{Ch: "#a"})
+		a = next.(App)
+		if a.retryMotion != "" || asked != 1 {
+			t.Fatalf("empty page: retry %q asked %d", a.retryMotion, asked)
+		}
+		if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "no more" {
+			t.Fatalf("no 'no more' toast: %+v", a.toasts)
+		}
+	})
+
+	t.Run("no loader toasts no more", func(t *testing.T) {
+		var log []sent
+		a := newApp(t, &log, nil)
+		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "only", ID: "$1", At: time.Date(2026, 10, 22, 9, 0, 0, 0, time.UTC)}})
+		a = next.(App)
+		a.hit = 0
+		a, _ = press(t, a, "K")
+		if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "no more" {
+			t.Fatalf("no loader: %+v", a.toasts)
+		}
+	})
+}

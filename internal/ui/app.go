@@ -1792,7 +1792,6 @@ func (a App) cmdUsage() string {
 	return dimmed.Render("usage ") + strings.Join(us, dimmed.Render("  ·  ")) + hint
 }
 
-
 // filesMsg is the session's file list for the file finder.
 type filesMsg []string
 
@@ -2165,7 +2164,7 @@ func noArgs(word, u string) bool {
 // pickMatches is pickList over the picker's source; in the command palette, commands whose word starts
 // with the query come first (a description must not outrank the command it describes).
 func (a App) pickMatches() []pickMatch {
-	ms := a.pickMatches()
+	ms := pickList(a.pickSource(), a.pq.Value())
 	if a.pickWhat != pickCmds {
 		return ms
 	}

@@ -643,7 +643,7 @@ func TestPaletteListsCommands(t *testing.T) {
 		t.Fatalf("palette not open: pick %v what %v", a.pick, a.pickWhat)
 	}
 	a = typeText(t, a, "reac")
-	ms := a.matches()
+	ms := a.pickMatches()
 	if len(ms) == 0 || !strings.HasPrefix(ms[0].name, ":react") {
 		t.Fatalf("first match %v", ms)
 	}

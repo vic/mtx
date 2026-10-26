@@ -619,6 +619,28 @@ func TestColonTabCompletes(t *testing.T) {
 	}
 }
 
+// TestEmojiComplete: INSERT tab turns a :shortcode into its emoji.
+func TestEmojiComplete(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, "i")
+	a = typeText(t, a, "hi :thu")
+	a, _ = press(t, a, "tab")
+	if got := a.in.Value(); got != "hi 👍" {
+		t.Fatalf("value %q", got)
+	}
+}
+
+// TestEmojiMenu: space e 3 inserts the third emoji and opens INSERT.
+func TestEmojiMenu(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a, _ = press(t, a, "space", "e", "3")
+	if a.mode != Insert || !strings.HasSuffix(a.in.Value(), "😂") {
+		t.Fatalf("mode %v value %q", a.mode, a.in.Value())
+	}
+}
+
 // TestColonSuggests: the : line suggests the commands that match the word typed, with what they do.
 func TestColonSuggests(t *testing.T) {
 	var log []sent

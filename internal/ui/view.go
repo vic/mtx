@@ -632,6 +632,7 @@ var helpSections = []struct {
 		{"# @ % ^", "open a room, user, thread or pinned message (fuzzy)"},
 		{"space o p", "pinned messages of this room"},
 		{"space R j", "jump to the first unread message"},
+		{"space e 1-9", "insert an emoji"},
 		{"enter", "on a selected line: menu of everything you can do with it"},
 		{"e", "edit my selected message"},
 		{"d y", "delete my selected message"},
@@ -642,6 +643,7 @@ var helpSections = []struct {
 	{"INSERT", [][2]string{
 		{"enter", "send, then back to NORMAL"},
 		{"esc", "back to NORMAL; drops the reply, edit or quote (up down still switch channel)"},
+		{":name tab", "emoji by shortcode (:smi -> 😄)"},
 	}},
 	{"COMMANDS", [][2]string{
 		{":join &room", "join a room by its alias on our server"},

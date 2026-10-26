@@ -598,7 +598,7 @@ func TestSameAgentNameInTwoSessions(t *testing.T) {
 		next, _ := a.Update(AgentsMsg{Ch: ch, Agents: []model.Agent{{Nick: "driver-1"}}})
 		a = next.(App)
 	}
-	if got := candidates("@driver", a.chanNames(), a.nickPool()); strings.Join(got, ",") != "@driver-1,@driver-1@a,@driver-1@b" {
+	if got := candidates("@driver", a.chanNames(), a.nickPool(), false); strings.Join(got, ",") != "@driver-1,@driver-1@a,@driver-1@b" {
 		t.Fatalf("completion %q", got) // own plain first; other sessions only qualified
 	}
 	a, _ = press(t, a, "space", "o", "u")

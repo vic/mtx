@@ -566,6 +566,11 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a = a.nextThread()
 			case it.do == "jumpunread":
 				a = a.jumpUnread()
+			case strings.HasPrefix(it.do, "emoji:"):
+				a.mode = Insert
+				a.in.SetValue(a.in.Value() + strings.TrimPrefix(it.do, "emoji:"))
+				a.in.MoveToEnd()
+				a.in.Focus()
 			case strings.HasSuffix(it.do, " "):
 				a = a.openPrompt(promptCmd)
 				a.in.SetValue(strings.TrimPrefix(it.do, ":"))
@@ -653,7 +658,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return a.switchChan(act), nil
 		}
 		if act.Kind == Complete {
-			v, comp := a.comp.step(a.in.Value(), a.chanNames(), a.nickPool())
+			v, comp := a.comp.step(a.in.Value(), a.chanNames(), a.nickPool(), true)
 			a.in.SetValue(v)
 			a.in.MoveToEnd()
 			a.comp = comp
@@ -782,7 +787,7 @@ func (a App) promptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a, _ = a.closePrompt()
 	case "tab":
 		if a.prompt == promptCmd {
-			v, comp := a.comp.step(":"+a.in.Value(), a.chanNames(), a.nickPool())
+			v, comp := a.comp.step(":"+a.in.Value(), a.chanNames(), a.nickPool(), false)
 			a.in.SetValue(strings.TrimPrefix(v, ":"))
 			a.in.MoveToEnd()
 			a.comp = comp
@@ -1473,7 +1478,7 @@ func (a App) suggest() []string {
 	if a.mode != Insert || a.prompt != 0 {
 		return nil
 	}
-	cs := candidates(a.in.Value(), a.chanNames(), a.nickPool())
+	cs := candidates(a.in.Value(), a.chanNames(), a.nickPool(), true)
 	if len(cs) == 0 {
 		return nil
 	}
@@ -1483,6 +1488,10 @@ func (a App) suggest() []string {
 		st := dimmed
 		if i == 0 {
 			st = cell.Bold(true)
+		}
+		if !strings.HasPrefix(c, word) { // an emoji for a :shortcode: no typed prefix to bold
+			parts = append(parts, st.Render(c))
+			continue
 		}
 		parts = append(parts, shortcut.Bold(true).Render(c[:len(word)])+st.Render(c[len(word):]))
 	}
@@ -2302,10 +2311,19 @@ func (a App) sides() sidePanes {
 // prompt for its argument).
 type menuItem struct{ key, label, do string }
 
+// emojiMenu is the first nine emojis, each on its digit key: the emoji menu.
+func emojiMenu() []menuItem {
+	var out []menuItem
+	for i, e := range emojis[:9] {
+		out = append(out, menuItem{strconv.Itoa(i + 1), e.e + " " + e.name, "emoji:" + e.e})
+	}
+	return out
+}
+
 // menus are the leader menus: space opens "space"; m in it opens "room".
 var menus = map[string][]menuItem{
 	"space": {{"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
-		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
+		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
 		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "sponsor", ":sponsor"},
 		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}},
 	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}},
@@ -2319,6 +2337,7 @@ var menus = map[string][]menuItem{
 		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"g", "open media/link", "key:gx"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
 	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
 	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}},
+	"emoji":   emojiMenu(),
 }
 
 // jumpKeys are the f labels, home row first; jumpTargets are the shown lines they name, top to bottom.

@@ -1795,7 +1795,7 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			_, isChan := a.chanByName(ms[a.psel].name)               // a channel first: a thread label never shadows it
 			if h, ok := a.threadAt(ms[a.psel].name); ok && !isChan { // a thread: the chat pane shows it
 				a = a.selectThread(h.Root)
-			} else if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok && !(isChan && a.pickWhat == pickRecent) { // a DM row of the recent picker is a chat: focus it
+			} else if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok && !isChan { // a DM row is a chat: focus it
 				a.mode = Insert
 				a.in.SetValue(a.in.Value() + "@" + nick + " ")
 				a.in.MoveToEnd()

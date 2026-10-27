@@ -214,26 +214,22 @@ func TestRecentPickerEnterOnChatRowFocusesIt(t *testing.T) {
 	}
 }
 
-// characterization: ctrl+o DM row inserts a mention today; fix needs Vic's call
-func TestChanPickerEnterOnDMInsertsMention(t *testing.T) {
+// TestChanPickerEnterOnDMFocusesIt (mtx-z2h): ctrl+o Enter on a "@nick" room row focuses that DM, like any chat row.
+func TestChanPickerEnterOnDMFocusesIt(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(RoomsMsg{"@nick"})
 	a = next.(App)
-	before, mru := cur(a), slices.Clone(a.mru)
 	a = a.openPick(pickChans)
 	a = typeText(t, a, "@nick")
 	a, _ = press(t, a, "enter")
-	if a.in.Value() != "@nick " {
-		t.Fatalf("input %q want %q", a.in.Value(), "@nick ")
+	if cur(a) != "@nick" {
+		t.Fatalf("focus %q want @nick", cur(a))
 	}
-	if a.mode != Insert {
-		t.Fatalf("mode %v want Insert", a.mode)
+	if len(a.mru) == 0 || a.mru[0] != "@nick" {
+		t.Fatalf("mru %q want @nick first", a.mru)
 	}
-	if cur(a) != before {
-		t.Fatalf("focus %q want %q unchanged", cur(a), before)
-	}
-	if !slices.Equal(a.mru, mru) {
-		t.Fatalf("mru %q want %q unchanged", a.mru, mru)
+	if a.in.Value() != "" || a.mode == Insert {
+		t.Fatalf("input %q mode %v: no mention insert", a.in.Value(), a.mode)
 	}
 }

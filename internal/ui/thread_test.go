@@ -397,3 +397,46 @@ func TestThreadPickersEmptyNoPanic(t *testing.T) {
 	}
 	a, _ = press(t, a, "enter")
 }
+
+// TestThreadsRecentFirstEdges: nil and empty stay empty, equal times keep input order (duplicates stay),
+// zero times sort last, and the input slice is not reordered.
+func TestThreadsRecentFirstEdges(t *testing.T) {
+	if got := threadsRecentFirst(nil); len(got) != 0 {
+		t.Fatalf("nil -> %v", got)
+	}
+	if got := threadsRecentFirst([]model.Thread{}); len(got) != 0 {
+		t.Fatalf("empty -> %v", got)
+	}
+	at := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	zero := model.Thread{Root: "$zero", Nick: "z", Text: "none"}
+	x := model.Thread{Root: "$x", Nick: "x", Text: "tie", At: at}
+	y := model.Thread{Root: "$y", Nick: "y", Text: "tie", At: at}
+	dup := x
+	newest := model.Thread{Root: "$n", Nick: "n", Text: "new", At: at.Add(time.Hour)}
+	in := []model.Thread{zero, x, y, dup, newest}
+	got := threadsRecentFirst(in)
+	want := []string{"$n", "$x", "$y", "$x", "$zero"}
+	if len(got) != len(want) {
+		t.Fatalf("len %d want %d", len(got), len(want))
+	}
+	for i, r := range want {
+		if got[i].Root != r {
+			t.Fatalf("row %d root %q want %q", i, got[i].Root, r)
+		}
+	}
+	if in[0].Root != "$zero" || in[4].Root != "$n" {
+		t.Fatalf("input reordered: %v", in)
+	}
+}
+
+// TestRecentPickerUnknownChannelNoThreads: a current channel with no thread entry lists chats only.
+func TestRecentPickerUnknownChannelNoThreads(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	old, news, mid := threadsShuffled()
+	a.threads = map[string][]model.Thread{"#other-unknown": {old, news, mid}}
+	a = a.openPick(pickRecent)
+	if got, want := len(a.pickSource()), len(a.chanNames()); got != want {
+		t.Fatalf("rows %d want %d chats only", got, want)
+	}
+}

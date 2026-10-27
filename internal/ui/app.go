@@ -176,6 +176,8 @@ const (
 // sending goes through the injected send func.
 type App struct {
 	m             model.Model
+	mru           []string // channel names, most recently focused first (the recent picker lists them so)
+	tmru          []string // thread roots, most recently opened first (the recent picker lists them so)
 	mode          EditMode
 	pending       string
 	in            input                 // multi-line input: shift+enter adds a line, enter sends
@@ -1068,6 +1070,10 @@ func (a App) focusName(name string) App {
 	from := a.m.Current().Name
 	for i, c := range a.m.All() {
 		if c.Name == name && name != from {
+			if !slices.Contains(a.mru, from) { // the channel I leave counts as visited
+				a = a.touched(from)
+			}
+			a = a.touched(name)
 			a.m, _ = a.m.Focus(i)                   // i is in range: it comes from Channels
 			a.hit, a.speakers, a.grep = -1, nil, "" // the speaker and grep filters belong to the channel they were set in
 			a.thread = ""                           // a channel opens on its main thread
@@ -1554,6 +1560,47 @@ func (a App) openPick(k pickKind) App {
 	return a
 }
 
+// touched puts name first in the most-recently-used list.
+func (a App) touched(name string) App {
+	a.mru = append([]string{name}, slices.DeleteFunc(slices.Clone(a.mru), func(n string) bool { return n == name })...)
+	return a
+}
+
+// recentChans is the channel names most recently focused first, then the rest in list order.
+func (a App) recentChans() []string {
+	all := a.chanNames()
+	var out []string
+	for _, n := range a.mru {
+		if slices.Contains(all, n) {
+			out = append(out, n)
+		}
+	}
+	for _, n := range all {
+		if !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// recentThreads is the heads opened most recently first, then the rest newest first.
+func (a App) recentThreads(heads []model.Thread) []model.Thread {
+	out := threadsRecentFirst(heads)
+	visit := func(h model.Thread) int { return slices.Index(a.tmru, h.Root) }
+	slices.SortStableFunc(out, func(x, y model.Thread) int {
+		switch vx, vy := visit(x), visit(y); {
+		case vx >= 0 && vy >= 0:
+			return vx - vy
+		case vx >= 0:
+			return -1
+		case vy >= 0:
+			return 1
+		}
+		return 0
+	})
+	return out
+}
+
 // threadsRecentFirst is the heads newest first by their newest reply; the popups list them so.
 func threadsRecentFirst(heads []model.Thread) []model.Thread {
 	out := slices.Clone(heads)
@@ -1567,8 +1614,8 @@ func (a App) pickSource() []string {
 	var out []string
 	switch a.pickWhat {
 	case pickRecent:
-		out = a.chanNames()
-		for _, h := range threadsRecentFirst(a.threads[a.m.Current().Name]) {
+		out = a.recentChans()
+		for _, h := range a.recentThreads(a.threads[a.m.Current().Name]) {
 			out = append(out, threadLabel(h))
 		}
 	case pickChans:
@@ -1748,7 +1795,7 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			_, isChan := a.chanByName(ms[a.psel].name)               // a channel first: a thread label never shadows it
 			if h, ok := a.threadAt(ms[a.psel].name); ok && !isChan { // a thread: the chat pane shows it
 				a = a.selectThread(h.Root)
-			} else if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok {
+			} else if nick, ok := strings.CutPrefix(ms[a.psel].name, "@"); ok && !(isChan && a.pickWhat == pickRecent) { // a DM row of the recent picker is a chat: focus it
 				a.mode = Insert
 				a.in.SetValue(a.in.Value() + "@" + nick + " ")
 				a.in.MoveToEnd()

@@ -675,7 +675,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if u := firstURL(l.Text); u != "" {
 					return a, openURL(u)
 				}
-				return a.runCmd(":open")
+				return a.runCmd(cmdOpen)
 			}
 		}
 		return a, nil
@@ -848,11 +848,11 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	}
-	if a.pending == "" {
-		switch k {
-		case "/":
+	if pa, ok := normalPreKeys[k]; ok && a.pending == "" { // "/" and "esc" are taken here, before Key
+		switch pa.Kind {
+		case PickLines:
 			return a.openPick(pickLines), nil
-		case "esc": // NORMAL esc clears the selected line, the search highlights, the input text and the reply
+		case ClearLine: // NORMAL esc clears the selected line, the search highlights, the input text and the reply
 			a.hit, a.quote, a.query = -1, nil, ""
 			a.in.Reset()
 			return a, nil
@@ -871,7 +871,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.jumpUnread(), nil
 	case GotoDate:
 		a = a.openPrompt(promptCmd)
-		a.in.SetValue("goto ")
+		a.in.SetValue(cmdGoto + " ")
 		a.in.MoveToEnd()
 		return a, nil
 	case Quit:
@@ -905,9 +905,9 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if _, ok := a.ownTarget(); !ok {
 			return a.toast("delete: select one of my messages", true), nil
 		}
-		return a.runCmd(":redact") // D: the shift is the confirmation
+		return a.runCmd(cmdRedact) // D: the shift is the confirmation
 	case OpenLine:
-		return a.runCmd(":open")
+		return a.runCmd(cmdOpen)
 	case Zen:
 		zen = !zen
 		a.offs = nil // row counts change with the width
@@ -3238,6 +3238,59 @@ func normalMenu() []menuItem {
 	return append(out,
 		menuItem{"g", "g…", "menu:g"}, menuItem{"]", "next…", "menu:]"}, menuItem{"[", "prev…", "menu:["},
 		menuItem{":", "command", "key::"}, menuItem{"space", "menus", "menu:space"})
+}
+
+// Command names, from the model's command names the dispatcher compares and runs. normalCmdNames maps the
+// NORMAL actions to them for the hints.
+const (
+	cmdRedact = ":" + string(model.CmdRedact)
+	cmdOpen   = ":" + string(model.CmdOpen)
+	cmdGoto   = string(model.CmdGoto) // the prompt text is cmdGoto and a space
+	cmdQuit   = ":" + string(model.CmdQuit)
+	cmdHelp   = ":" + string(model.CmdHelp)
+)
+
+// namedActions are the which-key items that name a NORMAL action by its Kind.
+var namedActions = map[string]ActKind{"pick:chat": PickChan, "pick:thread": PickThread, "pick:recent": PickRecent,
+	"pick:user": PickUser, "pick:pins": PickPins, "thread": ThreadNext, "jumpunread": JumpUnread, "permalink": Permalink}
+
+// noNormalKey are the which-key items with no NORMAL key, by the start of their do string, so no hint.
+// "emoji:" items insert text.
+var noNormalKey = []string{"pick:edits", "stamps", "seenby", "forward", "emoji:"}
+
+// noNormal is whether the which-key item with do string do has no NORMAL key.
+func noNormal(do string) bool {
+	return slices.ContainsFunc(noNormalKey, func(p string) bool { return strings.HasPrefix(do, p) })
+}
+
+// normalCmdNames is the ":command" each NORMAL action runs, by the constant the dispatcher compares or runs it with.
+var normalCmdNames = map[ActKind]string{Delete: cmdRedact, OpenLine: cmdOpen, Quit: cmdQuit, Help: cmdHelp, GotoDate: ":" + cmdGoto}
+
+// normalCmd is the ":command" a NORMAL action runs, by the command's name; "" for the rest.
+func normalCmd(a Action) string {
+	return normalCmdNames[a.Kind]
+}
+
+// menuMatch accepts the NORMAL bindings that run the command of a which-key item: the action of its key for a
+// "key:" item, the same Kind for a named item, and the same ":command" for a ":" item.
+// ok is false for the items with no NORMAL key.
+func menuMatch(it menuItem) (match func(binding) bool, ok bool) {
+	if noNormal(it.do) {
+		return nil, false
+	}
+	if it.do == "react" {
+		return func(b binding) bool { return b.act.Kind == React }, true
+	}
+	if seq, isKey := strings.CutPrefix(it.do, "key:"); isKey {
+		want := replayKeys(keySeq(seq))
+		return func(b binding) bool { return b.act == want }, want != Action{}
+	}
+	if cmd, isCmd := strings.CutPrefix(it.do, ":"); isCmd {
+		want := ":" + strings.TrimSpace(cmd)
+		return func(b binding) bool { return normalCmd(b.act) == want }, true
+	}
+	kind, named := namedActions[it.do]
+	return func(b binding) bool { return b.act.Kind == kind }, named
 }
 
 func init() { menus["normal"] = normalMenu() }

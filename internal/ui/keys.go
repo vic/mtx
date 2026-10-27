@@ -77,6 +77,8 @@ const (
 	JumpUnread
 	GotoDate
 	Quit
+	PickLines
+	ClearLine
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -96,6 +98,94 @@ func bracketDir(p string) int {
 		return 1
 	}
 	return -1
+}
+
+// binding is one NORMAL key sequence and the action Key gives it.
+type binding struct {
+	keys []string
+	act  Action
+}
+
+// normalPreKeys are the NORMAL keys App.key takes before Key, with the action each one takes.
+var normalPreKeys = map[string]Action{"/": {Kind: PickLines}, "esc": {Kind: ClearLine}}
+
+// normalBindings are the NORMAL sequences of one key, and of a prefix key then one character.
+var normalBindings = buildNormalBindings()
+
+func buildNormalBindings() []binding {
+	var out []binding
+	for _, k := range normalKeys() {
+		act, _, pending := Key(Normal, "", k)
+		if pa, ok := normalPreKeys[k]; ok {
+			act, pending = pa, ""
+		}
+		if pending == "" && act.Kind != None {
+			out = append(out, binding{[]string{k}, act})
+		}
+		if pending == "" || (pending[0] >= '0' && pending[0] <= '9') { // a count is not a prefix
+			continue
+		}
+		for _, k2 := range normalKeys() {
+			if len(k2) != 1 {
+				continue
+			}
+			if act2, _, p2 := Key(Normal, pending, k2); p2 == "" && act2.Kind != None {
+				out = append(out, binding{[]string{k, k2}, act2})
+			}
+		}
+	}
+	return out
+}
+
+// bindingKeys are the NORMAL sequences that match accepts, in key order, as the hint shows them.
+func bindingKeys(match func(binding) bool) []string {
+	var out []string
+	for _, b := range normalBindings {
+		if match(b) {
+			out = append(out, bindingText(b.keys))
+		}
+	}
+	return out
+}
+
+// bindingText is a NORMAL sequence as a hint shows it: one-character keys run together ("gg"), named keys
+// are space separated ("ctrl+w w").
+func bindingText(keys []string) string {
+	for _, k := range keys {
+		if len(k) != 1 {
+			return strings.Join(keys, " ")
+		}
+	}
+	return strings.Join(keys, "")
+}
+
+// replayKeys is the action the dispatcher takes for the NORMAL sequence keys: the zero Action if it binds nothing.
+func replayKeys(keys []string) Action {
+	var act Action
+	pending := ""
+	for _, k := range keys {
+		if pa, ok := normalPreKeys[k]; ok && pending == "" {
+			act = pa
+			continue
+		}
+		act, _, pending = Key(Normal, pending, k)
+	}
+	if pending != "" {
+		return Action{}
+	}
+	return act
+}
+
+// normalKeys are the single keys Key can bind in NORMAL: the named keys, printable ASCII and ctrl+a to ctrl+z.
+func normalKeys() []string {
+	out := []string{"space", "tab", "up", "down", "esc"}
+	for c := '!'; c <= '~'; c++ {
+		out = append(out, string(c))
+	}
+	for c := 'a'; c <= 'z'; c++ {
+		out = append(out, "ctrl+"+string(c))
+	}
+	return out
 }
 
 // Key maps key k (bubbletea KeyMsg.String() form) in mode m with the pending

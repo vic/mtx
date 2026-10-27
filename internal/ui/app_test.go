@@ -1530,6 +1530,346 @@ func TestMenuBoxColumns(t *testing.T) {
 	}
 }
 
+// TestWhichKeyShowsDirectKey: every which-key entry with a direct NORMAL key shows that key dimmed after its label.
+func TestWhichKeyShowsDirectKey(t *testing.T) {
+	want := map[string]string{"pick:chat": "# ctrl+o", "pick:thread": "%", "pick:recent": "'", "pick:user": "@", "pick:pins": "^", "thread": "t", "jumpunread": "u", "permalink": "Y"}
+	hinted := 0
+	for name, items := range menus {
+		for _, it := range items {
+			hint := menuHint(it)
+			if hint == "" {
+				continue
+			}
+			hinted++
+			if w, ok := want[it.do]; ok && hint != w {
+				t.Fatalf("%s %q hints %q want %q", name, it.do, hint, w)
+			}
+			if seq, ok := strings.CutPrefix(it.do, "key:"); ok && !slices.Contains(strings.Fields(hint), seq) {
+				t.Fatalf("%s %q hints %q, not its key %q", name, it.do, hint, seq)
+			}
+			if box := menuBox(name, []menuItem{it}, 40); !strings.Contains(box, dimmed.Render("  "+hint)) {
+				t.Fatalf("%s %q: hint %q not dimmed in %q", name, it.do, hint, ansi.Strip(box))
+			}
+		}
+	}
+	if hinted == 0 {
+		t.Fatal("no which-key entry has a hint")
+	}
+}
+
+// TestWhichKeyNoDirectKeyNoHint: an entry that runs no direct key shows no hint; its row is only the key and label.
+func TestWhichKeyNoDirectKeyNoHint(t *testing.T) {
+	if h := menuHint(menuItem{"s", "admin", "menu:admin"}); h != "" {
+		t.Fatalf("submenu entry hints %q", h)
+	}
+	checked := 0
+	for name, items := range menus {
+		for _, it := range items {
+			if menuHint(it) != "" {
+				continue
+			}
+			checked++
+			var row string
+			for _, l := range strings.Split(ansi.Strip(menuBox(name, []menuItem{it}, 40)), "\n") {
+				if strings.Contains(l, it.label) {
+					row = l
+				}
+			}
+			if row == "" {
+				t.Fatalf("%s %q: label %q not in its box", name, it.do, it.label)
+			}
+			rest := row[strings.Index(row, it.label)+len(it.label):]
+			if strings.Trim(rest, " │") != "" {
+				t.Fatalf("%s %q: text after label %q is %q", name, it.do, it.label, rest)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no which-key entry without a hint")
+	}
+}
+
+// TestWhichKeyHintMatchesNormalTable: every NORMAL binding whose action a which-key entry runs is in that entry's hint.
+func TestWhichKeyHintMatchesNormalTable(t *testing.T) {
+	checked := 0
+	for name, items := range menus {
+		for _, it := range items {
+			match, ok := menuMatch(it)
+			if !ok {
+				continue
+			}
+			for _, b := range normalBindings {
+				if !match(b) {
+					continue
+				}
+				checked++
+				if !strings.Contains(" "+menuHint(it)+" ", " "+bindingText(b.keys)+" ") {
+					t.Fatalf("%s %q: NORMAL %q runs its action but is not in hint %q", name, it.do, bindingText(b.keys), menuHint(it))
+				}
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no NORMAL binding reaches a which-key entry")
+	}
+}
+
+// TestWhichKeyCommandHint: a ":cmd" entry shows exactly the NORMAL keys whose action is that command; none when there are none.
+func TestWhichKeyCommandHint(t *testing.T) {
+	checked := 0
+	for name, items := range menus {
+		for _, it := range items {
+			cmd, isCmd := strings.CutPrefix(it.do, ":")
+			if !isCmd {
+				continue
+			}
+			checked++
+			want := []string{}
+			for _, b := range normalBindings {
+				if normalCmd(b.act) == ":"+strings.TrimSpace(cmd) {
+					want = append(want, bindingText(b.keys))
+				}
+			}
+			if got := strings.Fields(menuHint(it)); !slices.Equal(got, want) {
+				t.Fatalf("%s %q hints %q want %q", name, it.do, got, want)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no ':cmd' which-key entry")
+	}
+	if h := menuHint(menuItem{"w", "whois", ":whois "}); h != "" { // negative: NORMAL has no :whois
+		t.Fatalf(":whois with no NORMAL key hints %q", h)
+	}
+}
+
+// TestNormalCommandsListed: every ":command" a NORMAL key runs has a which-key ":" entry in the menus, so its key shows there.
+func TestNormalCommandsListed(t *testing.T) {
+	listed := map[string]bool{}
+	for _, items := range menus {
+		for _, it := range items {
+			if cmd, isCmd := strings.CutPrefix(it.do, ":"); isCmd {
+				listed[":"+strings.TrimSpace(cmd)] = true
+			}
+		}
+	}
+	checked := 0
+	for _, b := range normalBindings {
+		cmd := normalCmd(b.act)
+		if cmd == "" {
+			continue
+		}
+		checked++
+		if !listed[cmd] {
+			t.Fatalf("NORMAL %q runs %q, which no which-key ':' entry names", bindingText(b.keys), cmd)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no NORMAL key runs a command")
+	}
+}
+
+// TestWhichKeyReactHintEditsNone: react shows every NORMAL key of kind React; pick:edits shows none.
+func TestWhichKeyReactHintEditsNone(t *testing.T) {
+	seen := map[string]bool{}
+	for name, items := range menus {
+		for _, it := range items {
+			switch it.do {
+			case "react":
+				seen[it.do] = true
+				var want []string
+				for _, b := range normalBindings {
+					if b.act.Kind == React {
+						want = append(want, bindingText(b.keys))
+					}
+				}
+				if len(want) == 0 {
+					t.Fatalf("%s %q: NORMAL has no React binding", name, it.do)
+				}
+				if got := strings.Fields(menuHint(it)); !slices.Equal(got, want) {
+					t.Fatalf("%s %q hints %q want %q", name, it.do, got, want)
+				}
+			case "pick:edits": // negative: NORMAL has no key for edit history
+				seen[it.do] = true
+				if h := menuHint(it); h != "" {
+					t.Fatalf("%s %q hints %q, want none", name, it.do, h)
+				}
+			}
+		}
+	}
+	if !seen["react"] || !seen["pick:edits"] {
+		t.Fatal("react or pick:edits entry missing")
+	}
+}
+
+// TestWhichKeyTwoKeyWhole: a two-key entry shows its full sequence, not its first key alone.
+func TestWhichKeyTwoKeyWhole(t *testing.T) {
+	checked := 0
+	for name, items := range menus {
+		for _, it := range items {
+			seq, isKey := strings.CutPrefix(it.do, "key:")
+			if !isKey || len(seq) != 2 {
+				continue
+			}
+			checked++
+			hint := strings.Fields(menuHint(it))
+			if !slices.Contains(hint, seq) {
+				t.Fatalf("%s %q hints %q, not the full sequence %q", name, it.do, hint, seq)
+			}
+			if slices.Contains(hint, seq[:1]) { // negative: the first key alone is not the binding
+				t.Fatalf("%s %q shows the first key %q alone in %q", name, it.do, seq[:1], hint)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no two-key which-key entry")
+	}
+}
+
+// TestWhichKeyNamedItemsMapped: every which-key item that names an action is in menuMatch or noNormalKey.
+func TestWhichKeyNamedItemsMapped(t *testing.T) {
+	checked := 0
+	for name, items := range menus {
+		for _, it := range items {
+			if strings.HasPrefix(it.do, "emoji:") { // inserts text: must be on the no-binding list, and show no hint
+				checked++
+				if !noNormal(it.do) {
+					t.Fatalf("%s %q inserts text but is not on the no-binding list", name, it.do)
+				}
+				if h := menuHint(it); h != "" {
+					t.Fatalf("%s %q inserts text but hints %q", name, it.do, h)
+				}
+				continue
+			}
+			if strings.HasPrefix(it.do, "key:") || strings.HasPrefix(it.do, ":") || strings.HasPrefix(it.do, "menu:") {
+				continue
+			}
+			checked++
+			if _, ok := menuMatch(it); !ok && !slices.Contains(noNormalKey, it.do) {
+				t.Fatalf("%s %q: named item is in neither menuMatch nor noNormalKey", name, it.do)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no named which-key item")
+	}
+}
+
+// TestNormalCmdNamesInMenus: every command normalCmdNames names is the name of a ":" item in some menu.
+func TestNormalCmdNamesInMenus(t *testing.T) {
+	listed := map[string]bool{}
+	for _, items := range menus {
+		for _, it := range items {
+			if cmd, isCmd := strings.CutPrefix(it.do, ":"); isCmd {
+				listed[":"+strings.TrimSpace(cmd)] = true
+			}
+		}
+	}
+	for act, cmd := range normalCmdNames {
+		if !listed[cmd] {
+			t.Fatalf("action %v runs %q, which no which-key ':' entry names", act, cmd)
+		}
+	}
+	if len(normalCmdNames) == 0 {
+		t.Fatal("no NORMAL command names")
+	}
+}
+
+// TestWhichKeyHintsRightAligned: in a which-key box every hint ends in one column, flush against the right padding;
+// a row with no hint has no text after its label.
+func TestWhichKeyHintsRightAligned(t *testing.T) {
+	items := []menuItem{{"c", "pick channel", "pick:chat"}, {"p", "pinned messages", "pick:pins"}, {"x", "no hint", "menu:admin"}}
+	lines := strings.Split(ansi.Strip(menuBox("test", items, 40)), "\n")
+	rowOf := func(label string) string {
+		for _, l := range lines {
+			if strings.Contains(l, label) {
+				return l
+			}
+		}
+		t.Fatalf("label %q not in the box", label)
+		return ""
+	}
+	ends := map[int]bool{}
+	hinted := 0
+	for _, it := range items {
+		row := rowOf(it.label)
+		hint := menuHint(it)
+		if hint == "" { // negative: no hint, so nothing after the label but padding and the border
+			if rest := row[strings.Index(row, it.label)+len(it.label):]; strings.Trim(rest, " │") != "" {
+				t.Fatalf("%q has no hint but text %q follows its label", it.label, rest)
+			}
+			continue
+		}
+		hinted++
+		i := strings.Index(row, hint)
+		if i < 0 {
+			t.Fatalf("hint %q missing from row %q", hint, row)
+		}
+		ends[lipgloss.Width(row[:i+len(hint)])] = true
+		if rest := row[i+len(hint):]; rest != " │" { // flush right: one padding space, then the border
+			t.Fatalf("hint %q is not flush right: %q follows it in %q", hint, rest, row)
+		}
+	}
+	if hinted == 0 {
+		t.Fatal("no hinted row")
+	}
+	if len(ends) != 1 {
+		t.Fatalf("hints end in %d columns, want 1", len(ends))
+	}
+}
+
+// TestWhichKeyHintsRightAlignedAcrossColumns: a box split into columns right-aligns the hints of each column; one
+// column gives one hint edge, two columns two.
+func TestWhichKeyHintsRightAlignedAcrossColumns(t *testing.T) {
+	items := []menuItem{
+		{"c", "pick channel", "pick:chat"}, {"p", "pinned messages", "pick:pins"}, {"u", "first unread", "jumpunread"},
+		{"t", "toggle thread", "thread"}, {"p", "pick person", "pick:user"}, {"r", "recent chats", "pick:recent"},
+	}
+	edges := func(maxRows int) map[int]int { // hint end column -> how many hints end there
+		lines := strings.Split(ansi.Strip(menuBox("test", items, maxRows)), "\n")
+		out := map[int]int{}
+		for _, it := range items {
+			hint := menuHint(it)
+			if hint == "" {
+				t.Fatalf("%q has no hint", it.label)
+			}
+			var row string
+			for _, l := range lines {
+				if strings.Contains(l, it.label) {
+					row = l
+					break
+				}
+			}
+			if row == "" {
+				t.Fatalf("label %q not in the box", it.label)
+			}
+			at := strings.Index(row, it.label) + len(it.label)
+			i := strings.Index(row[at:], hint)
+			if i < 0 {
+				t.Fatalf("hint %q missing after %q in %q", hint, it.label, row)
+			}
+			end := at + i + len(hint)
+			if end >= len(row) || row[end] != ' ' {
+				t.Fatalf("hint %q is not followed by a gap in %q", hint, row)
+			}
+			out[lipgloss.Width(row[:end])]++
+		}
+		return out
+	}
+	two := edges(6) // 3 items a column: two columns
+	if len(two) != 2 {
+		t.Fatalf("two columns give %d hint edges, want 2: %v", len(two), two)
+	}
+	for end, n := range two {
+		if n != 3 {
+			t.Fatalf("hint edge at column %d has %d hints, want 3", end, n)
+		}
+	}
+	if one := edges(40); len(one) != 1 { // negative: one column, one edge
+		t.Fatalf("one column gives %d hint edges, want 1: %v", len(one), one)
+	}
+}
+
 // TestPickerFollowsSelection: a picker taller than its box shows the selection, not only the first rows.
 func TestPickerFollowsSelection(t *testing.T) {
 	ms := make([]pickMatch, 100)

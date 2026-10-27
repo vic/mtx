@@ -1134,21 +1134,44 @@ func presenceStyle(mark string) string {
 	return mark
 }
 
+// menuHint is the direct NORMAL keys of a which-key item, space separated: every NORMAL sequence that runs
+// the item's command. "" when it has none.
+func menuHint(it menuItem) string {
+	match, ok := menuMatch(it)
+	if !ok {
+		return ""
+	}
+	return strings.Join(bindingKeys(match), " ")
+}
+
 // menuBox is an open which-key menu as a bordered box: the menu name, then one "key  label" row per item.
+// An item's direct NORMAL keys are in muted style at the right edge of the box, all ending in one column.
 // Items that would make the box taller than maxRows (the screen) go into side-by-side columns.
 func menuBox(name string, items []menuItem, maxRows int) string {
 	per := max(maxRows-3, 1) // the title and the border take three rows
+	hints := make([]string, len(items))
+	w := 0 // the widest row of the whole box, in every column: label, and for a hinted row a gap and its hint
+	for i, it := range items {
+		hints[i] = menuHint(it)
+		width := lipgloss.Width(it.key + "  " + it.label)
+		if hints[i] != "" {
+			width += 2 + lipgloss.Width(hints[i])
+		}
+		w = max(w, width)
+	}
 	var cols []string
 	for i := 0; i < len(items); i += per {
 		end := min(i+per, len(items))
-		w := 0
-		for _, it := range items[i:end] {
-			w = max(w, lipgloss.Width(it.key+"  "+it.label))
-		}
 		var rows []string
-		for _, it := range items[i:end] {
-			plain := it.key + "  " + it.label
-			rows = append(rows, shortcut.Bold(true).Render(it.key)+"  "+it.label+strings.Repeat(" ", w-lipgloss.Width(plain)))
+		for j := i; j < end; j++ {
+			label := items[j].key + "  " + items[j].label
+			left := shortcut.Bold(true).Render(items[j].key) + "  " + items[j].label
+			if hints[j] == "" {
+				rows = append(rows, left+strings.Repeat(" ", w-lipgloss.Width(label)))
+				continue
+			}
+			gap := w - lipgloss.Width(label) - lipgloss.Width(hints[j]) - 2 // the two-space gap is part of the dim span
+			rows = append(rows, left+strings.Repeat(" ", gap)+dimmed.Render("  "+hints[j]))
 		}
 		cols = append(cols, strings.Join(rows, "\n"))
 	}

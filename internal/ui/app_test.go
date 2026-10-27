@@ -2106,21 +2106,54 @@ func TestThreadStepSameLabel(t *testing.T) {
 	}
 }
 
-// TestHelpCoversMenuKeys: every NORMAL key that runs a menu command or a channel-pane step appears in the ? help.
-func TestHelpCoversMenuKeys(t *testing.T) {
-	var all string // every key and description of the help as one text
+// helpWords is the words the help rows document, and the rows as one text. A key text "r 1-9" documents r1 to r9.
+func helpWords(rows [][2]string) (map[string]bool, string) {
+	var all string
 	words := map[string]bool{}
-	for _, s := range helpSections {
-		for _, k := range s.keys {
-			for _, f := range strings.Fields(k[0]) {
-				words[f] = true
+	for _, k := range rows {
+		fs := strings.Fields(k[0])
+		for i, f := range fs {
+			words[f] = true
+			if lo, hi, ok := strings.Cut(f, "-"); ok && i > 0 && len(lo) == 1 && len(hi) == 1 && lo[0] >= '0' && lo[0] <= hi[0] && hi[0] <= '9' {
+				for d := lo[0]; d <= hi[0]; d++ {
+					words[fs[i-1]+string(d)] = true
+				}
 			}
-			for _, f := range strings.Fields(k[1]) {
-				words[strings.Trim(f, "(),")] = true
-			}
-			all += " " + k[0] + " " + k[1]
+		}
+		for _, f := range strings.Fields(k[1]) {
+			words[strings.Trim(f, "(),")] = true
+		}
+		all += " " + k[0] + " " + k[1]
+	}
+	return words, all
+}
+
+// TestHelpRangeRowCoversKeys: the row "r 1-9" covers r1 to r9 and nothing outside it (negative control for TestHelpCoversMenuKeys).
+func TestHelpRangeRowCoversKeys(t *testing.T) {
+	words, _ := helpWords([][2]string{{"r 1-9", "react"}})
+	for _, k := range []string{"r1", "r5", "r9"} {
+		if !words[k] {
+			t.Errorf("%s not covered by the row r 1-9", k)
 		}
 	}
+	for _, k := range []string{"r0", "r10", "x1"} {
+		if words[k] {
+			t.Errorf("%s wrongly covered by the row r 1-9", k)
+		}
+	}
+	words, _ = helpWords([][2]string{{"r", "react"}}) // no range row: r1 is not documented
+	if words["r1"] {
+		t.Error("r1 covered without a range row")
+	}
+}
+
+// TestHelpCoversMenuKeys: every NORMAL key that runs a menu command or a channel-pane step appears in the ? help.
+func TestHelpCoversMenuKeys(t *testing.T) {
+	var rows [][2]string
+	for _, s := range helpSections {
+		rows = append(rows, s.keys...)
+	}
+	words, all := helpWords(rows)
 	checked := 0
 	for _, b := range normalBindings {
 		key := bindingText(b.keys)

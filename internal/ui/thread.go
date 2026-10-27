@@ -88,7 +88,7 @@ func (a App) selectThread(root string) App {
 	}
 	if root != "" {
 		a.lastThread = root
-		a.tmru = append([]string{root}, slices.DeleteFunc(slices.Clone(a.tmru), func(r string) bool { return r == root })...)
+		a = a.touched(visit{a.m.Current().Name, root})
 	}
 	if h, ok := a.headOf(root); ok {
 		if a.seenLive == nil {

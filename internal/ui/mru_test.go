@@ -68,12 +68,12 @@ func TestRecentPickerBackToFirst(t *testing.T) {
 func TestRecentChansNeverVisitedKeepListOrder(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a.mru = []string{"#c"}
-	if got, want := a.recentChans(), []string{"#c", "#a", "#b"}; !slices.Equal(got, want) {
+	a.visits = []visit{{ch: "#c"}}
+	if got, want := recentChans(a), []string{"#c", "#a", "#b"}; !slices.Equal(got, want) {
 		t.Fatalf("recentChans %q want %q", got, want)
 	}
-	a.mru = nil
-	if got, want := a.recentChans(), a.chanNames(); !slices.Equal(got, want) {
+	a.visits = nil
+	if got, want := recentChans(a), a.chanNames(); !slices.Equal(got, want) {
 		t.Fatalf("recentChans %q want list order %q", got, want)
 	}
 }
@@ -84,12 +84,12 @@ func TestRecentChansDropsRemovedRoom(t *testing.T) {
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(RoomsMsg{"&x", "&y"})
 	a = next.(App).focusName("&x")
-	if !slices.Contains(a.recentChans(), "&x") || a.recentChans()[0] != "&x" {
-		t.Fatalf("recent %q want &x first", a.recentChans())
+	if !slices.Contains(recentChans(a), "&x") || recentChans(a)[0] != "&x" {
+		t.Fatalf("recent %q want &x first", recentChans(a))
 	}
 	next, _ = a.Update(RoomsMsg{"&y"})
 	a = next.(App)
-	got := a.recentChans()
+	got := recentChans(a)
 	if slices.Contains(got, "&x") {
 		t.Fatalf("recent %q still lists removed &x", got)
 	}
@@ -98,11 +98,24 @@ func TestRecentChansDropsRemovedRoom(t *testing.T) {
 	}
 }
 
+// recentChans is the chat rows of the recent picker as names, in order.
+func recentChans(a App) []string {
+	var out []string
+	for _, v := range a.recentRows() {
+		if v.root == "" {
+			out = append(out, v.ch)
+		}
+	}
+	return out
+}
+
 // recentThreadRoots is the thread rows of the recent picker as roots, in order.
 func recentThreadRoots(a App) []string {
 	var out []string
-	for _, h := range a.recentThreads(a.threads[a.m.Current().Name]) {
-		out = append(out, h.Root)
+	for _, v := range a.recentRows() {
+		if v.root != "" {
+			out = append(out, v.root)
+		}
 	}
 	return out
 }
@@ -121,7 +134,8 @@ func TestRecentThreadsMRU(t *testing.T) {
 	}
 	rows := a.openPick(pickRecent).pickSource()
 	chats := len(a.chanNames())
-	if len(rows) != chats+3 || rows[chats] != threadLabel(mid) || rows[chats+1] != threadLabel(old) || rows[chats+2] != threadLabel(news) {
+	// Vic (mtx-yrr): one list; the opened threads lead the never-visited chats, the unopened thread follows them
+	if len(rows) != chats+3 || rows[0] != threadLabel(mid) || rows[1] != threadLabel(old) || rows[chats+2] != threadLabel(news) {
 		t.Fatalf("picker rows %q", rows)
 	}
 }
@@ -160,11 +174,11 @@ func TestRecentChansDMFirst(t *testing.T) {
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(RoomsMsg{"&dm"})
 	a = next.(App)
-	if a.recentChans()[0] == "&dm" {
-		t.Fatalf("recent %q: &dm unvisited must not lead", a.recentChans())
+	if recentChans(a)[0] == "&dm" {
+		t.Fatalf("recent %q: &dm unvisited must not lead", recentChans(a))
 	}
 	a = a.focusName("&dm")
-	got := a.recentChans()
+	got := recentChans(a)
 	if got[0] != "&dm" || len(got) != len(a.chanNames()) {
 		t.Fatalf("recent %q want &dm first and %d rows", got, len(a.chanNames()))
 	}
@@ -185,8 +199,8 @@ func TestRecentPickerEnterOnDMFocusesIt(t *testing.T) {
 	if cur(a) != "@nick" {
 		t.Fatalf("focus %q want @nick", cur(a))
 	}
-	if len(a.mru) == 0 || a.mru[0] != "@nick" {
-		t.Fatalf("mru %q want @nick first", a.mru)
+	if len(a.visits) == 0 || a.visits[0] != (visit{ch: "@nick"}) {
+		t.Fatalf("visits %v want @nick first", a.visits)
 	}
 	if strings.Contains(a.in.Value(), "@nick ") {
 		t.Fatalf("input %q holds a mention", a.in.Value())
@@ -206,8 +220,8 @@ func TestRecentPickerEnterOnChatRowFocusesIt(t *testing.T) {
 	if cur(a) != "#c" {
 		t.Fatalf("focus %q want #c", cur(a))
 	}
-	if len(a.mru) == 0 || a.mru[0] != "#c" {
-		t.Fatalf("mru %q want #c first", a.mru)
+	if len(a.visits) == 0 || a.visits[0] != (visit{ch: "#c"}) {
+		t.Fatalf("visits %v want #c first", a.visits)
 	}
 	if a.in.Value() != "" || a.mode == Insert {
 		t.Fatalf("input %q mode %v: a chat row must not write the input", a.in.Value(), a.mode)
@@ -226,8 +240,8 @@ func TestChanPickerEnterOnDMFocusesIt(t *testing.T) {
 	if cur(a) != "@nick" {
 		t.Fatalf("focus %q want @nick", cur(a))
 	}
-	if len(a.mru) == 0 || a.mru[0] != "@nick" {
-		t.Fatalf("mru %q want @nick first", a.mru)
+	if len(a.visits) == 0 || a.visits[0] != (visit{ch: "@nick"}) {
+		t.Fatalf("visits %v want @nick first", a.visits)
 	}
 	if a.in.Value() != "" || a.mode == Insert {
 		t.Fatalf("input %q mode %v: no mention insert", a.in.Value(), a.mode)

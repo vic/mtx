@@ -176,8 +176,7 @@ const (
 // sending goes through the injected send func.
 type App struct {
 	m             model.Model
-	mru           []string // channel names, most recently focused first (the recent picker lists them so)
-	tmru          []string // thread roots, most recently opened first (the recent picker lists them so)
+	visits        []visit // chats and threads opened, most recent first (the recent picker lists them so)
 	mode          EditMode
 	pending       string
 	in            input                 // multi-line input: shift+enter adds a line, enter sends
@@ -1070,10 +1069,10 @@ func (a App) focusName(name string) App {
 	from := a.m.Current().Name
 	for i, c := range a.m.All() {
 		if c.Name == name && name != from {
-			if !slices.Contains(a.mru, from) { // the channel I leave counts as visited
-				a = a.touched(from)
+			if !slices.Contains(a.visits, visit{ch: from}) { // the channel I leave counts as visited, as the oldest visit
+				a.visits = append(slices.Clone(a.visits), visit{ch: from})
 			}
-			a = a.touched(name)
+			a = a.touched(visit{ch: name})
 			a.m, _ = a.m.Focus(i)                   // i is in range: it comes from Channels
 			a.hit, a.speakers, a.grep = -1, nil, "" // the speaker and grep filters belong to the channel they were set in
 			a.thread = ""                           // a channel opens on its main thread
@@ -1560,45 +1559,50 @@ func (a App) openPick(k pickKind) App {
 	return a
 }
 
-// touched puts name first in the most-recently-used list.
-func (a App) touched(name string) App {
-	a.mru = append([]string{name}, slices.DeleteFunc(slices.Clone(a.mru), func(n string) bool { return n == name })...)
+// visit is a row the recent picker lists: the chat ch (root == "") or the thread root of ch.
+type visit struct{ ch, root string }
+
+// touched puts v first in the most-recently-used list.
+func (a App) touched(v visit) App {
+	a.visits = append([]visit{v}, slices.DeleteFunc(slices.Clone(a.visits), func(w visit) bool { return w == v })...)
 	return a
 }
 
-// recentChans is the channel names most recently focused first, then the rest in list order.
-func (a App) recentChans() []string {
-	all := a.chanNames()
-	var out []string
-	for _, n := range a.mru {
-		if slices.Contains(all, n) {
-			out = append(out, n)
+// recentRows is what the recent picker lists: the visited rows most recent first (a gone chat or thread
+// is skipped), then the chats never visited in list order, then this channel's threads newest reply first.
+func (a App) recentRows() []visit {
+	var out []visit
+	for _, v := range a.visits {
+		if _, ok := a.visitLabel(v); ok {
+			out = append(out, v)
 		}
 	}
-	for _, n := range all {
-		if !slices.Contains(out, n) {
-			out = append(out, n)
+	add := func(v visit) {
+		if !slices.Contains(out, v) {
+			out = append(out, v)
 		}
+	}
+	for _, n := range a.chanNames() {
+		add(visit{ch: n})
+	}
+	cur := a.m.Current().Name
+	for _, h := range threadsRecentFirst(a.threads[cur]) {
+		add(visit{cur, h.Root})
 	}
 	return out
 }
 
-// recentThreads is the heads opened most recently first, then the rest newest first.
-func (a App) recentThreads(heads []model.Thread) []model.Thread {
-	out := threadsRecentFirst(heads)
-	visit := func(h model.Thread) int { return slices.Index(a.tmru, h.Root) }
-	slices.SortStableFunc(out, func(x, y model.Thread) int {
-		switch vx, vy := visit(x), visit(y); {
-		case vx >= 0 && vy >= 0:
-			return vx - vy
-		case vx >= 0:
-			return -1
-		case vy >= 0:
-			return 1
+// visitLabel is the picker row of v; false when its chat or thread no longer exists.
+func (a App) visitLabel(v visit) (string, bool) {
+	if v.root == "" {
+		return v.ch, slices.Contains(a.chanNames(), v.ch)
+	}
+	for _, h := range a.threads[v.ch] {
+		if h.Root == v.root && slices.Contains(a.chanNames(), v.ch) {
+			return threadLabel(h), true
 		}
-		return 0
-	})
-	return out
+	}
+	return "", false
 }
 
 // threadsRecentFirst is the heads newest first by their newest reply; the popups list them so.
@@ -1614,9 +1618,9 @@ func (a App) pickSource() []string {
 	var out []string
 	switch a.pickWhat {
 	case pickRecent:
-		out = a.recentChans()
-		for _, h := range a.recentThreads(a.threads[a.m.Current().Name]) {
-			out = append(out, threadLabel(h))
+		for _, v := range a.recentRows() {
+			l, _ := a.visitLabel(v)
+			out = append(out, l)
 		}
 	case pickChans:
 		out = a.chanNames()
@@ -1791,6 +1795,12 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if a.psel < len(ms) && a.pickWhat == pickLines {
 			a.hit, a.query = ms[a.psel].idx, a.pq.Value() // n / N go on from here
 			a = a.showHit()
+		} else if rows := a.recentRows(); a.pickWhat == pickRecent && a.psel < len(ms) && ms[a.psel].idx < len(rows) { // the rows decode by place, not by label: a thread of another channel opens in its own channel
+			v := rows[ms[a.psel].idx]
+			a = a.focusName(v.ch)
+			if v.root != "" {
+				a = a.selectThread(v.root)
+			}
 		} else if a.psel < len(ms) {
 			_, isChan := a.chanByName(ms[a.psel].name)               // a channel first: a thread label never shadows it
 			if h, ok := a.threadAt(ms[a.psel].name); ok && !isChan { // a thread: the chat pane shows it

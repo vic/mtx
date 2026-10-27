@@ -194,7 +194,7 @@ func threadState(root string) string {
 }
 
 // threadStampW is the width of a thread row's left column: time, then unread count.
-const threadStampW = 25 // time 11, then unread 4, replies 5, mine 1, and a space after each
+const threadStampW = 21 // time 11, a space, then unread 3, replies 4, mine 1, and a space
 
 // threadSummary is a head's columns after its time, fixed width: unread (●3), replies (💬22), then "@"
 // when I took part. A head with nothing unread, no replies, or not mine leaves those cells blank.
@@ -211,7 +211,7 @@ func threadSummary(h model.Thread, unread int) string {
 	if h.Mine {
 		m = alert.Render("@")
 	}
-	return fit(cell, u, 4) + " " + fit(cell, r, 5) + " " + m + " "
+	return fit(cell, u, 3) + fit(cell, r, 4) + m + " "
 }
 
 // threadStamp is the left column of a thread row: the newest reply's time, then the summary columns.

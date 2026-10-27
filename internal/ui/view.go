@@ -963,7 +963,7 @@ var readMarkOn, pinMarkOn, blankOn string
 
 // frameRule is a horizontal frame line of width w with text in it: "─ text ───".
 func frameRule(text string, w int) string {
-	s := "─ " + text + " "
+	s := ansi.Truncate("─ "+text, max(w-1, 0), "…") + " " // text longer than the rule is cut
 	return s + strings.Repeat("─", max(w-lipgloss.Width(s), 0))
 }
 

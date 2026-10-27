@@ -91,7 +91,7 @@ func TestStatusMatrixRoom(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := Status(m, "NORMAL", nil, t0)
-	if got.Left != "#den · 2 members · 0/min · !x:s" || got.Red {
+	if got.Left != "#den · 2 members · 0/min" || got.Red {
 		t.Fatalf("got %+v", got)
 	}
 }
@@ -110,13 +110,13 @@ func TestStatus(t *testing.T) {
 		want Modeline
 	}{
 		{"session channel", roomModel(t), 0, "NORMAL", map[int]SessionInfo{1: {Status: "busy", PermMode: def}},
-			Modeline{Mode: "NORMAL", Left: "#a busy", Right: "5 unread 15:04"}},
+			Modeline{Mode: "NORMAL", Left: "#a busy", Right: "15:04"}},
 		{"unknown session info", roomModel(t), 0, "NORMAL", nil,
-			Modeline{Mode: "NORMAL", Left: "#a ?", Right: "5 unread 15:04"}},
+			Modeline{Mode: "NORMAL", Left: "#a ?", Right: "15:04"}},
 		{"room lines/min", roomModel(t, rate...), 1, "NORMAL", map[int]SessionInfo{2: {Status: "idle", PermMode: byp}, 3: {Status: "idle", PermMode: def}},
-			Modeline{Mode: "NORMAL", Left: "&review 2 members 2/min", Right: "2 unread 15:04"}},
+			Modeline{Mode: "NORMAL", Left: "&review 2 members 2/min", Right: "15:04"}},
 		{"no channels", mustNew(t), 0, "NORMAL", nil,
-			Modeline{Mode: "NORMAL", Right: "0 unread 15:04"}},
+			Modeline{Mode: "NORMAL", Right: "15:04"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

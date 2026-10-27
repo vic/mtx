@@ -21,20 +21,16 @@ type Modeline struct {
 const rateWindow = time.Minute
 
 // Status builds the modeline for the focused channel. mode is the edit mode label. A session
-// channel shows its registry status (info[PID]); a Matrix room shows its members, rate and ID.
+// channel shows its registry status (info[PID]); a Matrix room shows its members and rate.
 // lines/min counts only the lines still in the ring, so it undercounts above its cap.
-// Unread totals every channel; now is injected so the function stays pure.
+// now is injected so the function stays pure.
 func Status(m Model, mode string, info map[int]SessionInfo, now time.Time) Modeline {
-	unread := 0
-	for _, c := range m.chans {
-		unread += c.Unread
-	}
-	ml := Modeline{Mode: mode, Right: fmt.Sprintf("%d unread %s", unread, now.Format("15:04"))}
+	ml := Modeline{Mode: mode, Right: now.Format("15:04")}
 	c := m.Current()
 	switch {
 	case c.Name == "":
 	case c.Kind == RoomChan && c.ID != "": // a Matrix room
-		ml.Left = fmt.Sprintf("%s · %d members · %d/min · %s", c.Name, len(c.Members), roomRate(c, now), c.ID)
+		ml.Left = fmt.Sprintf("%s · %d members · %d/min", c.Name, len(c.Members), roomRate(c, now))
 	case c.Kind == RoomChan:
 		ml.Left = fmt.Sprintf("%s %d members %d/min", c.Name, len(c.Members), roomRate(c, now))
 	default:

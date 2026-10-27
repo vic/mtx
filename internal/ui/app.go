@@ -1301,7 +1301,14 @@ func (a App) screen() string {
 // chatScreen is the scrollback, input and modeline, with the completion and toasts floating over them.
 func (a App) chatScreen() string {
 	label, input, hint := a.inputLine()
-	screen := render(a.m, model.Status(a.m, label, a.info, a.now()), input, a.w, a.h, a.off(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
+	ml := model.Status(a.m, label, a.info, a.now())
+	if n := len(a.pins[a.m.Current().Name]); n > 0 && a.m.Current().Kind == model.RoomChan { // room stats on the frame border
+		ml.Left += " · " + strconv.Itoa(n) + " pins"
+		if t := a.lastPinText(); t != "" {
+			ml.Left += ": " + t
+		}
+	}
+	screen := render(a.m, ml, input, a.w, a.h, a.off(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
 	modeline := a.h - len(inputRows(input, a.w, a.h)) - 1
 	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest()) // floats above the prompt: the layout does not move
 	screen = overlayToasts(screen, a.w, modeline-1, a.toasts)     // cards sit just above the modeline
@@ -2319,6 +2326,11 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // click handles a left click in wide mode: a channel row switches to that channel,
 // a nick row starts an insert line mentioning it (vic 2026-10-23). Row 0 is the pane title.
 func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
+	if rows, sep := a.threadRows(); wide(a.w, a.h) && m.X >= chanW+2 && m.X < a.w-nickW-2 && len(a.pins[a.m.Current().Name]) > 0 {
+		if (rows == 0 && m.Y == 0) || (sep == 1 && m.Y == rows+1) { // the frame title with the pins: go to the newest pin
+			return a.jumpToPin(len(a.pins[a.m.Current().Name]) - 1), nil
+		}
+	}
 	if !wide(a.w, a.h) || m.Y < 1 {
 		return a, nil
 	}
@@ -3302,4 +3314,20 @@ func (a App) matches() []pickMatch {
 		return exactList(a.pickSource(), a.pq.Value())
 	}
 	return pickList(a.pickSource(), a.pq.Value())
+}
+
+// lastPinText is the first line of the newest pinned message of the current channel, "" when it is not loaded.
+func (a App) lastPinText() string {
+	cur := a.m.Current()
+	ids := a.pins[cur.Name]
+	if len(ids) == 0 {
+		return ""
+	}
+	for _, l := range a.lines(cur) {
+		if l.ID == ids[len(ids)-1] {
+			first, _, _ := strings.Cut(strings.TrimLeft(l.Text, "\r\n"), "\n")
+			return strings.TrimRight(first, "\r")
+		}
+	}
+	return ""
 }

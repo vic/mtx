@@ -2030,3 +2030,26 @@ func TestAppOpenLineOpensTextURL(t *testing.T) {
 		t.Fatal("l sent /open for a line without media")
 	}
 }
+
+func TestAppClickPinTitleGoesToPin(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	a = next.(App)
+	for _, l := range []model.Line{{Nick: "bob", Text: "first", ID: "$1"}, {Nick: "ann", Text: "second", ID: "$2"}} {
+		next, _ = a.Update(LineMsg{Ch: "#a", L: l})
+		a = next.(App)
+	}
+	next, _ = a.Update(PinsMsg{Ch: "#a", IDs: []string{"$1"}})
+	a = next.(App)
+	next, _ = a.Update(tea.MouseClickMsg{X: chanW + 5, Y: 0, Button: tea.MouseLeft})
+	if got := next.(App).hit; got != 0 {
+		t.Fatalf("hit %d, want 0 (the pinned line)", got)
+	}
+}
+
+func TestFrameRuleTruncates(t *testing.T) {
+	if got := lipgloss.Width(frameRule(strings.Repeat("x", 100), 30)); got != 30 {
+		t.Fatalf("rule width %d, want 30", got)
+	}
+}

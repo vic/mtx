@@ -39,7 +39,7 @@ func viewModel(t *testing.T) model.Model {
 	return m.WithSessions([]model.Session{{PID: 1, Name: "vix-05"}, {PID: 2, Name: "ren"}}) // dnx3 is gone
 }
 
-var ml = model.Modeline{Mode: "NORMAL", Left: "#vix-05 idle default", Right: "2 unread 12:04"}
+var ml = model.Modeline{Mode: "NORMAL", Left: "#vix-05 idle default", Right: "12:04"}
 
 func TestViewGolden(t *testing.T) {
 	got := ansi.Strip(View(viewModel(t), ml, "hello", 80, 10, 0, -1)) + "\n" // colors are tested apart

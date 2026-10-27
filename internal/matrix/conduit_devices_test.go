@@ -65,7 +65,7 @@ func TestConduitMultiDevice(t *testing.T) {
 	require.NoError(t, err)
 	defer b2.Close()
 
-	room := encryptedRoom(t, ctx, alice, bobUser)
+	room := encryptedRoom(t, ctx, alice, b1)
 	got1, got2 := make(chan *event.Event, 64), make(chan *event.Event, 64)
 	stop1, done1 := collect(ctx, b1, got1)
 	defer func() { stop1(); <-done1 }()
@@ -110,7 +110,7 @@ func TestConduitLateDecrypt(t *testing.T) {
 	require.NoError(t, err)
 	defer dev1.Close()
 
-	room := encryptedRoom(t, ctx, alice, bobUser)
+	room := encryptedRoom(t, ctx, alice, dev1)
 	got1 := make(chan *event.Event, 64)
 	stop1, done1 := collect(ctx, dev1, got1)
 	defer func() { stop1(); <-done1 }()

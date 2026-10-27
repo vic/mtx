@@ -25,7 +25,7 @@ func TestConduitRestartKeepsSessions(t *testing.T) {
 	cfgB := conduitEnv(t, "B")
 	bob, err := New(ctx, cfgB)
 	require.NoError(t, err)
-	room := encryptedRoom(t, ctx, alice, cfgB.UserID)
+	room := encryptedRoom(t, ctx, alice, bob)
 
 	got := make(chan *event.Event, 64)
 	stop, done := collect(ctx, bob, got)
@@ -64,7 +64,7 @@ func TestConduitTypingAndMentionsAndKick(t *testing.T) {
 	bob, err := New(ctx, cfgB)
 	require.NoError(t, err)
 	defer bob.Close()
-	room := encryptedRoom(t, ctx, alice, cfgB.UserID)
+	room := encryptedRoom(t, ctx, alice, bob)
 
 	typing := make(chan []id.UserID, 8)
 	bob.OnTyping(func(r id.RoomID, users []id.UserID) {

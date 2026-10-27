@@ -33,7 +33,7 @@ func TestConduitRelationsAndRedaction(t *testing.T) {
 	bob, err := New(ctx, conduitEnv(t, "B"))
 	require.NoError(t, err)
 	defer bob.Close()
-	room := encryptedRoom(t, ctx, alice, bob.cli.UserID.String())
+	room := encryptedRoom(t, ctx, alice, bob)
 
 	got := make(chan *event.Event, 64)
 	stop, done := collect(ctx, bob, got)

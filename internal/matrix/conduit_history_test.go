@@ -35,6 +35,7 @@ func TestConduitHistoryOnJoin(t *testing.T) {
 	}
 	_, err = alice.MX().InviteUser(ctx, room.RoomID, &mautrix.ReqInviteUser{UserID: id.UserID(cfgB.UserID)})
 	require.NoError(t, err)
+	require.NoError(t, bob.Accept(ctx, room.RoomID))
 
 	got := make(chan struct {
 		body string
@@ -82,6 +83,7 @@ func TestConduitResumeNoReplay(t *testing.T) {
 	require.NoError(t, err)
 	room, err := alice.MX().CreateRoom(ctx, &mautrix.ReqCreateRoom{Preset: "private_chat", Invite: []id.UserID{id.UserID(cfgB.UserID)}})
 	require.NoError(t, err)
+	require.NoError(t, bob.Accept(ctx, room.RoomID))
 	_, err = alice.MX().SendText(ctx, room.RoomID, "old")
 	require.NoError(t, err)
 

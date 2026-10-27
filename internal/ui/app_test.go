@@ -1988,3 +1988,29 @@ func TestClickOtherLineMoves(t *testing.T) {
 		t.Fatalf("other line: hit %d mode %v quote %v", a.hit, a.mode, a.quote)
 	}
 }
+
+func TestAppLineStepScrollsThroughTallLine(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(tea.WindowSizeMsg{Width: 80, Height: 8}) // 4 pane rows
+	a = next.(App)
+	for _, s := range []string{"a", strings.Repeat("word ", 80), "z"} { // the middle line is taller than the pane
+		next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "n", Text: s}})
+		a = next.(App)
+	}
+	a, _ = press(t, a, "up", "k") // mark z, then the tall line: its bottom shows first
+	if a.hit != 1 {
+		t.Fatalf("hit %d, want 1", a.hit)
+	}
+	off := a.off()
+	a, _ = press(t, a, "up") // scrolls inside the line, the mark stays
+	if a.hit != 1 || a.off() != off+1 {
+		t.Fatalf("hit %d off %d -> %d, want hit 1 off +1", a.hit, off, a.off())
+	}
+	for i := 0; i < 20 && a.hit == 1; i++ {
+		a, _ = press(t, a, "up")
+	}
+	if a.hit != 0 {
+		t.Fatalf("k never left the tall line: hit %d", a.hit)
+	}
+}

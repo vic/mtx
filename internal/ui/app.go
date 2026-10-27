@@ -2440,6 +2440,20 @@ func (a App) mention(nick string) App {
 // starts at the newest line; down past the newest clears it.
 func (a App) lineStep(down bool) App {
 	ls := a.lines(a.m.Current())
+	w := textWidth(a.w, a.h)
+	ch := a.m.Current().Name
+	if a.hit >= 0 && a.hit < len(ls) { // a line taller than the pane: j and k scroll through it a row at a time
+		after := rowCount(ls[a.hit:], w, a.wrap())
+		rows := len(a.wrap()(ls[a.hit], w))
+		if rows > a.page() {
+			if down && a.off() > after-rows { // its bottom is below the pane
+				return a.setOff(ch, a.off()-1)
+			}
+			if !down && after > a.off()+a.page() { // its top is above the pane
+				return a.setOff(ch, a.off()+1)
+			}
+		}
+	}
 	switch {
 	case len(ls) == 0:
 		return a
@@ -2459,11 +2473,13 @@ func (a App) lineStep(down bool) App {
 		}
 		a.hit--
 	}
-	w := textWidth(a.w, a.h)
-	after := rowCount(ls[a.hit:], w, a.wrap())   // rows from the cursor line's top to the newest
-	below := after - len(a.wrap()(ls[a.hit], w)) // rows under the cursor line
-	off := min(a.off(), below)                   // its bottom row is on screen
-	off = max(off, after-a.page())               // and its top row
+	after := rowCount(ls[a.hit:], w, a.wrap())           // rows from the cursor line's top to the newest
+	below := after - len(a.wrap()(ls[a.hit], w))         // rows under the cursor line
+	off := min(a.off(), below)                           // its bottom row is on screen
+	off = max(off, after-a.page())                       // and its top row
+	if !down && len(a.wrap()(ls[a.hit], w)) > a.page() { // a tall line entered from below shows its bottom first
+		off = below
+	}
 	return a.setOff(a.m.Current().Name, off)
 }
 

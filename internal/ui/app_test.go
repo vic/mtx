@@ -639,7 +639,7 @@ func TestEmojiComplete(t *testing.T) {
 func TestEmojiMenu(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a, _ = press(t, a, "space", "e", "3")
+	a, _ = press(t, a, "space", "i", "3")
 	if a.mode != Insert || !strings.HasSuffix(a.in.Value(), "😂") {
 		t.Fatalf("mode %v value %q", a.mode, a.in.Value())
 	}
@@ -657,29 +657,29 @@ func TestColonSuggests(t *testing.T) {
 	}
 }
 
-// TestQuickReact: + opens the quick reaction row; a digit reacts to the cursor line with that emoji; any
+// TestQuickReact: r waits for a digit and lists the quick reactions; the digit reacts to the cursor line with that emoji; any
 // other key just closes the row.
 func TestQuickReact(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$1"}})
 	a = next.(App)
-	a, _ = press(t, a, "+")
-	if !a.reactRow || !strings.Contains(strings.Join(a.suggest(), ""), "👍") {
-		t.Fatalf("row not open: %v %q", a.reactRow, a.suggest())
+	a, _ = press(t, a, "r")
+	if a.pending != "r" || !strings.Contains(ansi.Strip(a.View().Content), "👍") {
+		t.Fatalf("r not pending: %q", a.pending)
 	}
 	a, cmd := press(t, a, "1")
 	cm, ok := cmd().(CmdMsg)
-	if !ok || cm.Cmd.Name() != model.CmdReact || a.reactRow {
-		t.Fatalf("react: %#v open %v", cmd(), a.reactRow)
+	if !ok || cm.Cmd.Name() != model.CmdReact || a.pending != "" {
+		t.Fatalf("react: %#v open %v", cmd(), a.pending)
 	}
 	if args := cm.Cmd.Args(); len(args) != 2 || args[0] != "👍" || args[1] != "$1" {
 		t.Fatalf("args %q", args)
 	}
-	a, _ = press(t, a, "+")
+	a, _ = press(t, a, "r")
 	a, cmd = press(t, a, "x")
-	if cmd != nil || a.reactRow {
-		t.Fatalf("x should only close the row: cmd %v open %v", cmd, a.reactRow)
+	if cmd != nil || a.pending != "" {
+		t.Fatalf("x should only close the row: cmd %v open %v", cmd, a.pending)
 	}
 }
 
@@ -692,18 +692,18 @@ func TestLeaderMenu(t *testing.T) {
 	rows := strings.Split(ansi.Strip(a.View().Content), "\n")
 	ri, ti := -1, -1
 	for i, r := range rows {
-		if strings.Contains(r, "r  react") {
+		if strings.Contains(r, "c  channel") {
 			ri = i
 		}
-		if strings.Contains(r, "t  thread") {
+		if strings.Contains(r, "t  threads") {
 			ti = i
 		}
 	}
 	if a.menu != "space" || ri < 0 || ti < 0 || ri == ti {
 		t.Fatalf("menu not open: %q %q", a.menu, a.suggest())
 	}
-	a, _ = press(t, a, "m")
-	if a.menu != "room" {
+	a, _ = press(t, a, "C")
+	if a.menu != "admin" {
 		t.Fatalf("nested menu %q", a.menu)
 	}
 	a, _ = press(t, a, "n")
@@ -719,8 +719,8 @@ func TestLeaderMenu(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("opening the menu must not run anything")
 	}
-	a, cmd = press(t, a, "m") // opens the room menu
-	a, cmd = press(t, a, "m") // mute
+	a, cmd = press(t, a, "c") // opens the channel menu
+	a, cmd = press(t, a, "M") // mute
 	cm, ok := cmd().(CmdMsg)
 	if !ok || cm.Cmd.Name() != model.CmdMute {
 		t.Fatalf("mute: %#v", cmd())
@@ -745,11 +745,11 @@ func TestSponsorDocsCommands(t *testing.T) {
 	}
 }
 
-// TestRecentPicker: m opens the recent picker (chats most recent first); typing and enter goes there.
+// TestRecentPicker: ' opens the recent picker (chats most recent first); typing and enter goes there.
 func TestRecentPicker(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a, _ = press(t, a, "m")
+	a, _ = press(t, a, "'")
 	if !a.pick || a.pickWhat != pickRecent {
 		t.Fatalf("picker not open: pick %v what %v", a.pick, a.pickWhat)
 	}
@@ -875,7 +875,7 @@ func TestJumpLine(t *testing.T) {
 	}
 }
 
-// TestLineVerbs: d asks, then y deletes my selected message; . repeats the last line command on the selected line.
+// TestLineVerbs: D deletes my selected message at once (the shift confirms); r1 reacts; . repeats it on another line.
 func TestLineVerbs(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
@@ -884,17 +884,17 @@ func TestLineVerbs(t *testing.T) {
 	next, _ = a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "theirs", ID: "$o"}})
 	a = next.(App)
 	a.hit = 0
-	a, _ = press(t, a, "d")
-	if !a.confirmDel {
-		t.Fatal("d did not ask")
+	a, cmd := press(t, a, "d")
+	if cmd != nil {
+		t.Fatal("d alone must do nothing")
 	}
-	a, cmd := press(t, a, "y")
+	a, cmd = press(t, a, "D")
 	cm, ok := cmd().(CmdMsg)
 	if !ok || cm.Cmd.Name() != model.CmdRedact || cm.Cmd.Args()[0] != "$m" {
 		t.Fatalf("redact: %#v", cmd())
 	}
 	a.hit = 0
-	a, _ = press(t, a, "+")
+	a, _ = press(t, a, "r")
 	a, _ = press(t, a, "1")
 	a.hit = 1
 	a, cmd = press(t, a, ".")
@@ -902,15 +902,14 @@ func TestLineVerbs(t *testing.T) {
 	if !ok || cm.Cmd.Name() != model.CmdReact || cm.Cmd.Args()[0] != "👍" || cm.Cmd.Args()[1] != "$o" {
 		t.Fatalf("repeat: %#v", cmd())
 	}
-	a.hit = 0
-	a, _ = press(t, a, "d")
-	a, cmd = press(t, a, "n")
-	if cmd != nil || a.confirmDel {
-		t.Fatalf("n should cancel: cmd %v confirm %v", cmd, a.confirmDel)
+	a, cmd = press(t, a, "r")
+	a, cmd = press(t, a, "r")
+	if cm, ok := cmd().(CmdMsg); !ok || cm.Cmd.Name() != model.CmdReact || cm.Cmd.Args()[0] != "👍" {
+		t.Fatalf("rr: %#v", cmd())
 	}
 }
 
-// TestOpenPickers: space o t lists only thread labels, space o u lists only @nicks, and ctrl+o lists no threads.
+// TestOpenPickers: space t p lists only thread labels, space p p lists only @nicks, and ctrl+o lists no threads.
 func TestOpenPickers(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
@@ -923,8 +922,8 @@ func TestOpenPickers(t *testing.T) {
 	}
 	a, _ = press(t, a, "esc")
 	a, _ = press(t, a, "space")
-	a, _ = press(t, a, "o")
 	a, _ = press(t, a, "t")
+	a, _ = press(t, a, "p")
 	if !a.pick || a.pickWhat != pickThreads {
 		t.Fatalf("open thread: pick %v what %v", a.pick, a.pickWhat)
 	}
@@ -935,8 +934,8 @@ func TestOpenPickers(t *testing.T) {
 	}
 	a, _ = press(t, a, "esc")
 	a, _ = press(t, a, "space")
-	a, _ = press(t, a, "o")
-	a, _ = press(t, a, "u")
+	a, _ = press(t, a, "p")
+	a, _ = press(t, a, "p")
 	if !a.pick || a.pickWhat != pickUsers {
 		t.Fatalf("open user: pick %v what %v", a.pick, a.pickWhat)
 	}
@@ -996,24 +995,24 @@ func TestEveryCommandInMenus(t *testing.T) {
 	}
 }
 
-// TestMsgMenu: h on a selected line opens the message menu; its keys replay the line verbs.
+// TestMsgMenu: m on a selected line opens the message menu; its keys replay the line verbs; D deletes.
 func TestMsgMenu(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "me", Text: "mine", ID: "$m"}})
 	a = next.(App)
-	a, _ = press(t, a, "h")
+	a, _ = press(t, a, "m")
 	if a.menu != "" {
-		t.Fatalf("h opened a menu with no selection: %q", a.menu)
+		t.Fatalf("m opened a menu with no selection: %q", a.menu)
 	}
 	a.hit = 0
-	a, _ = press(t, a, "h")
+	a, _ = press(t, a, "m")
 	if a.menu != "message" {
 		t.Fatalf("message menu %q", a.menu)
 	}
-	a, _ = press(t, a, "d")
-	if !a.confirmDel {
-		t.Fatal("d in the message menu did not ask to delete")
+	a, cmd := press(t, a, "D")
+	if cm, ok := cmd().(CmdMsg); !ok || cm.Cmd.Name() != model.CmdRedact {
+		t.Fatalf("D in the message menu: %#v", cmd())
 	}
 }
 
@@ -1028,7 +1027,7 @@ func TestPinnedPicker(t *testing.T) {
 	next, _ = a.Update(PinsMsg{Ch: "#a", IDs: []string{"$2"}})
 	a = next.(App)
 	a, _ = press(t, a, "space")
-	a, _ = press(t, a, "o")
+	a, _ = press(t, a, "c")
 	a, _ = press(t, a, "p")
 	if !a.pick || a.pickWhat != pickPins {
 		t.Fatalf("pinned picker: pick %v what %v", a.pick, a.pickWhat)
@@ -1137,7 +1136,7 @@ func TestEditHistory(t *testing.T) {
 		t.Fatalf("edits %v", got)
 	}
 	a.hit = 0
-	a, _ = press(t, a, "h", "h")
+	a, _ = press(t, a, "m", "h")
 	if a.pickWhat != pickEdits {
 		t.Fatalf("picker %v", a.pickWhat)
 	}
@@ -1315,7 +1314,7 @@ func TestSeenBy(t *testing.T) {
 		t.Fatalf("$3 seen %q", seen("$3"))
 	}
 	a.hit = 0
-	a, _ = press(t, a, "h", "R") // the message menu: seen by is R
+	a, _ = press(t, a, "m", "s") // the message menu: seen by is s
 	if a.pickWhat != pickInfo {
 		t.Fatalf("picker %v", a.pickWhat)
 	}
@@ -1429,7 +1428,7 @@ func TestEveryNormalKeyInMenus(t *testing.T) {
 			if act.Kind == None {
 				continue
 			}
-			if p != "g" && !strings.Contains("mplt@c", c) {
+			if p != "g" && !strings.Contains("mplt@u", c) {
 				continue // a bracket takes any key; only its motions are listed
 			}
 			if !hasKey(menus[p], c) {
@@ -1485,8 +1484,8 @@ func TestPresenceMark(t *testing.T) {
 func TestMenuBackspace(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
-	a, _ = press(t, a, "space", "m")
-	if a.menu != "room" {
+	a, _ = press(t, a, "space", "C")
+	if a.menu != "admin" {
 		t.Fatalf("menu %q", a.menu)
 	}
 	a, _ = press(t, a, "backspace")
@@ -1796,27 +1795,27 @@ func TestOlderMotions(t *testing.T) {
 	})
 }
 
-// TestSeenByKeys: seen by is space s, and R in the message menu; with no line selected it says so.
+// TestSeenByKeys: seen by is s in the message menu (m s, also from a fresh selection); with no line selected it says so.
 func TestSeenByKeys(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "bob", Text: "hi", ID: "$1"}})
 	a = next.(App)
 	a, _ = press(t, a, "up")
-	a, _ = press(t, a, "space", "s")
+	a, _ = press(t, a, "m", "s")
 	if !a.pick || a.pickWhat != pickInfo || a.listTitle != "seen by" {
-		t.Fatalf("space s: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
+		t.Fatalf("m s: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
 	}
 	a, _ = press(t, a, "esc")
-	a, _ = press(t, a, "up", "h", "R")
+	a, _ = press(t, a, "up", "m", "s")
 	if !a.pick || a.pickWhat != pickInfo || a.listTitle != "seen by" {
-		t.Fatalf("message menu R: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
+		t.Fatalf("message menu s: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
 	}
 	a, _ = press(t, a, "esc")
 	a.hit = -1
-	a, _ = press(t, a, "space", "s")
-	if n := len(a.toasts); n == 0 || a.toasts[n-1].text != "seen by: select a message first" {
-		t.Fatalf("no toast with no line: %+v", a.toasts)
+	a, _ = press(t, a, "m")
+	if a.menu != "" { // the message menu needs a selected line
+		t.Fatalf("m with no line opened %q", a.menu)
 	}
 }
 
@@ -2022,12 +2021,12 @@ func TestAppOpenLineOpensTextURL(t *testing.T) {
 	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{ID: "$1", Nick: "n", Text: "see https://example.org/x ok"}})
 	a = next.(App)
 	a, _ = press(t, a, "up")
-	_, cmd := press(t, a, "l")
+	_, cmd := press(t, a, "v")
 	if cmd == nil {
-		t.Fatal("l on a line with a URL returned no command")
+		t.Fatal("v on a line with a URL returned no command")
 	}
 	if _, isCmd := cmd().(CmdMsg); isCmd { // the media path: /open <id>
-		t.Fatal("l sent /open for a line without media")
+		t.Fatal("v sent /open for a line without media")
 	}
 }
 

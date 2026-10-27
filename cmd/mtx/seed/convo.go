@@ -64,7 +64,7 @@ var conversation = []scripted{
 	{who: "bob", text: "it only counts the people who joined since the last sync"},
 	{who: "carol", text: "i think the count is right, two of us joined late"},
 	{who: "dan", text: "yes, the seed invites are still pending for some of you"},
-	{who: "alice", text: "pending invites show in the invites menu, space i l if you want to check"},
+	{who: "alice", text: "pending invites show in the invites menu, space I I if you want to check"},
 	{who: "bob", text: "the image popup is great. any key closes it, no fuss"},
 	{who: "carol", text: "i keep pressing y on it by habit, lol"},
 	{who: "dan", text: "y and n are only for the verify box. the image box does not care"},
@@ -122,8 +122,8 @@ var threads = []scripted{
 	{who: "alice", text: "which theme is everyone on? i am on dracula", root: "theme"},
 	{who: "bob", text: "catppuccin mocha, the default one", in: "theme"},
 	{who: "carol", text: "nord for me, it is calm at night", in: "theme"},
-	{who: "dan", text: "base16 default dark for me. space T lets you try them all", in: "theme"},
-	{who: "alice", text: "i forgot space T exists. it is a good preview", in: "theme"},
+	{who: "dan", text: "base16 default dark for me. space v t lets you try them all", in: "theme"},
+	{who: "alice", text: "i forgot space v t exists. it is a good preview", in: "theme"},
 	{who: "carol", text: "the preview is live, so you can flick through without committing", in: "theme"},
 
 	{who: "dan", text: "nix build fails on aarch64 with the goolm tag, anyone?", root: "nix"},
@@ -259,7 +259,7 @@ var dms = []dmPair{
 		{who: "bob", text: "carol, can you check the menu text for the members key?"},
 		{who: "carol", text: "it says members under room. that is right"},
 		{who: "bob", text: "ok good. i was not sure it was under the room menu"},
-		{who: "carol", text: "it is space m w. the room menu has everything about the room"},
+		{who: "carol", text: "it is space c w. the channel menu has everything about the room"},
 		{who: "bob", text: "thanks. adding it to the keys page"},
 	}},
 }

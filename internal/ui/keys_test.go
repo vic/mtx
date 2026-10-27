@@ -63,3 +63,26 @@ func TestZenKey(t *testing.T) {
 		t.Fatalf("z is %v", act.Kind)
 	}
 }
+
+// TestV10Keys: the v10 key map (vic/keys-sprint.md) at the Key level.
+func TestV10Keys(t *testing.T) {
+	for _, c := range []struct {
+		pending, k string
+		want       Action
+	}{
+		{"", "h", Action{Kind: PrevChan}}, {"", "l", Action{Kind: NextChan}},
+		{"", "ctrl+n", Action{Kind: Bracket, N: 1, Key: "t"}}, {"", "ctrl+p", Action{Kind: Bracket, N: -1, Key: "t"}},
+		{"", "m", Action{Kind: MsgMenu}}, {"", "'", Action{Kind: PickRecent}}, {"", "v", Action{Kind: OpenLine}},
+		{"", "u", Action{Kind: JumpUnread}}, {"", "D", Action{Kind: Delete}}, {"", "d", Action{}}, {"", "enter", Action{}},
+		{"", "s", Action{}}, {"", "+", Action{}}, {"", "ctrl+e", Action{Scroll, 1, ""}},
+		{"r", "r", Action{Kind: React, N: 1}}, {"r", "3", Action{Kind: React, N: 3}}, {"r", "x", Action{}},
+		{"Z", "Z", Action{Kind: Quit}}, {"c", "c", Action{Kind: EditOwn}}, {"ctrl+w", "w", Action{Kind: FocusPane}},
+		{"g", "d", Action{Kind: GotoDate}}, {"g", "e", Action{Kind: Bottom}}, {"g", "f", Action{Kind: OpenLine}},
+		{"g", "w", Action{Kind: JumpLine}}, {"g", "i", Action{Kind: NewLine}},
+		{"]", "u", Action{Kind: Bracket, N: 1, Key: "u"}},
+	} {
+		if got, _, _ := Key(Normal, c.pending, c.k); got != c.want {
+			t.Errorf("%q then %q: %+v, want %+v", c.pending, c.k, got, c.want)
+		}
+	}
+}

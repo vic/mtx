@@ -238,7 +238,7 @@ type App struct {
 	tagsVer       int                                               // bumped by TagsMsg: the side pane cache key
 	typingFn      func(ch string)                                   // tells the room I am typing; must not block; nil = off
 	typedAt       time.Time                                         // last typing notice sent
-	reactRow      bool                                              // +: the quick reaction row is open; the next key picks
+	reactRow      bool                                              // R in the message menu: the quick reaction row is open; the next key picks
 	menu          string                                            // the open leader menu ("" none)
 	threadOpen    func(ch, root string)                             // loads a thread's history when it is opened; must not block; nil = off
 	listTitle     string                                            // the title of the read-only list picker (ListMsg)
@@ -255,7 +255,6 @@ type App struct {
 	jumpOpen      bool                                                  // F: the picked label opens its line's link or media
 	jumpChan      bool                                                  // gc: the labels pick a channel of the channel pane
 	jump          bool                                                  // f: line labels are shown; the next key picks a line
-	confirmDel    bool                                                  // d: waiting for y to delete the selected message
 	lastLineCmd   string                                                // the last :react command run on a line, for .
 	readBy        map[string]map[string]string                          // channel -> reader nick -> event ID they last read (ReadMsg)
 	readAt        map[string]time.Time                                  // per channel: newest line another member has read (ReadMsg)
@@ -681,13 +680,6 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	}
-	if a.confirmDel {
-		a.confirmDel = false
-		if k == "y" {
-			return a.runCmd(":redact")
-		}
-		return a.toast("delete cancelled", false), nil
-	}
 	if a.menu != "" {
 		if k == "backspace" { // back to the parent menu; from space, the normal menu with every key
 			if a.menu == "space" {
@@ -724,6 +716,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					return a.openPick(pickChans), nil
 				case "thread":
 					return a.openPick(pickThreads), nil
+				case "recent":
+					return a.openPick(pickRecent), nil
 				case "pins":
 					return a.openPick(pickPins), nil
 				case "edits":
@@ -735,6 +729,8 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return a.openPick(pickUsers), nil
 			case it.do == "thread":
 				a = a.nextThread()
+			case it.do == "stamps":
+				a.stamps, a.offs = !a.stamps, nil // row counts changed
 			case it.do == "seenby":
 				a = a.seenBy()
 			case it.do == "forward":
@@ -869,9 +865,17 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a = a.prepare(act.Kind)
 	}
 	switch act.Kind {
-	case ReactRow:
-		a.reactRow = true
+	case React:
+		return a.runCmd(":react " + quickReacts[act.N-1])
+	case JumpUnread:
+		return a.jumpUnread(), nil
+	case GotoDate:
+		a = a.openPrompt(promptCmd)
+		a.in.SetValue("goto ")
+		a.in.MoveToEnd()
 		return a, nil
+	case Quit:
+		return a, tea.Quit
 	case Leader:
 		a.menu = "space"
 		return a, nil
@@ -890,8 +894,6 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.hit, a.offs = -1, nil // positions index the shown lines, which changed
 	case Help:
 		a.help, a.helpOff = true, 0
-	case ToggleStamps:
-		a.stamps, a.offs = !a.stamps, nil // row counts changed
 	case Yank:
 		return a.yank()
 	case PickInvite:
@@ -903,8 +905,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if _, ok := a.ownTarget(); !ok {
 			return a.toast("delete: select one of my messages", true), nil
 		}
-		a.confirmDel = true
-		return a.toast("delete my selected message? y to confirm", true), nil
+		return a.runCmd(":redact") // D: the shift is the confirmation
 	case OpenLine:
 		return a.runCmd(":open")
 	case Zen:
@@ -1254,17 +1255,17 @@ func (a App) inputLine() (label, input, hint string) {
 		return "NICKS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "mention", "tab", "chat", "esc", "chat")
 	}
 	if a.hit >= 0 {
-		return "NORMAL", a.footer(), keyHint("a", "reply", "A", "quote", "e", "edit", "d", "delete", "+", "react", "T", "thread", "y", "yank", "l", "open", ".", "repeat", "esc", "unselect")
+		return "NORMAL", a.footer(), keyHint("m", "message", "a", "reply", "A", "quote", "e", "edit", "r", "react", "T", "thread", "y", "yank", "v", "open", ".", "repeat", "D", "delete", "esc", "unselect")
 	}
-	return "NORMAL", a.footer(), keyHint("SPC", "menu", "?", "help", ":", "command", "#", "rooms", "@", "users", "%", "threads", "^", "pins", "m", "recent", "i", "write", "a", "reply", "f", "jump", "+", "react", "h", "message", "↑↓", "line")
+	return "NORMAL", a.footer(), keyHint("SPC", "menu", "?", "help", ":", "command", "h l", "channel", "C-p C-n", "thread", "u", "unread", "#", "rooms", "@", "people", "%", "threads", "^", "pins", "'", "recent", "i", "write", "f", "find", "↑↓", "line")
 }
 
 // footer is the last row outside INSERT: more keys and the toggle states, since
 // there is no input to show (vic 2026-10-23).
 func (a App) footer() string {
 	// states first: on a narrow screen the keys fall off the end (they are in ? help)
-	return fit(cell, " "+keyHint("t", "thread:"+cmp.Or(threadState(a.thread), "main"), "M", "mentions:"+onOff(a.mentions), "s", "time:"+onOff(a.stamps),
-		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "C", "edit", "O", "thread reply", "z", "zen:"+onOff(zen), ":", "command"), max(a.w, 1)) // one row
+	return fit(cell, " "+keyHint("t", "thread:"+cmp.Or(threadState(a.thread), "main"), "M", "mentions:"+onOff(a.mentions), "SPC v s", "time:"+onOff(a.stamps),
+		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "e", "edit", "O", "thread reply", "z", "zen:"+onOff(zen), ":", "command"), max(a.w, 1)) // one row
 }
 
 // View is the full-screen frame; screen is its text.
@@ -1790,12 +1791,12 @@ func (a App) forward(to string) (App, tea.Cmd) {
 }
 
 // bracket moves the cursor to the next (fwd) or previous line matching key: ] speaker change, m mine,
-// @ mentions me, l link or media, p pinned; t opens the next or previous thread; c the next channel with unread.
+// @ mentions me, l link or media, p pinned; t opens the next or previous thread; u the next channel with unread.
 func (a App) bracket(fwd bool, key string) App {
 	switch key {
 	case "t":
 		return a.stepThread(fwd)
-	case "c":
+	case "u":
 		return a.nextUnreadChan(fwd)
 	case "]", "[":
 		return a.turn(fwd)
@@ -2923,43 +2924,68 @@ func emojiMenu() []menuItem {
 	return out
 }
 
-// menus are the leader menus: space opens "space"; m in it opens "room".
+// menus are the leader menus: space opens "space"; c in it opens "channel". m opens "message".
 var menus = map[string][]menuItem{
-	"space": {{"v", "view image", ":view"}, {"o", "open…", "menu:open"}, {"c", "chat…", "menu:chat"}, {"m", "room…", "menu:room"}, {"a", "account…", "menu:account"},
-		{"i", "invites…", "menu:invites"}, {"R", "read state…", "menu:read"}, {"/", "search server", ":search "}, {"G", "go to date", ":goto "}, {"T", "theme", ":theme"}, {"k", "keys…", "menu:keys"}, {"e", "emoji…", "menu:emoji"}, {"r", "react", "react"}, {"t", "thread", "thread"}, {"g", "open media", ":open"},
-		{"u", "upload", ":upload "}, {"y", "copy link", "permalink"}, {"x", "delete my msg", ":redact"}, {"s", "seen by", "seenby"}, {"S", "sponsor", ":sponsor"},
-		{"d", "docs", ":docs"}, {"?", "help", ":help"}, {"q", "quit", ":quit"}, {"⌫", "all NORMAL keys", "menu:normal"}},
-	"open": {{"c", "chat", "pick:chat"}, {"t", "thread", "pick:thread"}, {"u", "user", "pick:user"}, {"p", "pinned", "pick:pins"}, {"e", "explore public rooms", ":explore"}},
-	"chat": {{"j", "join", ":join "}, {"c", "create", ":create "}, {"m", "message user", ":msg "}, {"d", "direct message", "pick:user"}, {"D", "dm (type a user)", ":dm "}, {"e", "emote (/me)", ":me "}},
-	"room": {{"m", "mute", ":mute"}, {"u", "unmute", ":unmute"}, {"b", "ban", ":ban "}, {"B", "unban", ":unban "}, {"o", "op (power)", ":op "}, {"j", "join rule", ":joinrule "}, {"h", "history visibility", ":history "}, {"a", "alias", ":alias "}, {"v", "room avatar", ":roomavatar "}, {"n", "rename", ":name "}, {"t", "topic", ":topic "},
-		{"i", "invite", ":invite "}, {"k", "kick", ":kick "}, {"w", "members", ":names"}, {"f", "favourite", ":tag fav"},
-		{"d", "low priority", ":tag low"}, {"0", "untag", ":tag none"}, {"l", "leave", ":part"}, {"x", "close", ":close"}},
-	"account": {{"n", "nick", ":nick "}, {"a", "avatar", ":avatar "}, {"v", "verify this device", ":verify"}, {"r", "recover keys", ":recover "}, {"i", "ignore", ":ignore "},
-		{"u", "unignore", ":unignore "}, {"w", "whois", ":whois "}, {"d", "devices", ":devices"}},
-	"message": {{"v", "view image", ":view"}, {"r", "react", "react"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"},
-		{"d", "delete", "key:d"}, {"T", "thread", "key:T"}, {"y", "yank text", "key:y"}, {"Y", "copy link", "key:Y"}, {"l", "open media/link", "key:l"}, {"o", "go to replied", "key:gr"}, {"w", "forward", "forward"}, {"h", "edit history", "pick:edits"}, {"L", "link preview", ":preview"}, {"R", "read by", "seenby"}, {"p", "pin", ":pin"}, {"P", "unpin", ":unpin"}},
-	"invites": {{"l", "list", ":invites"}, {"a", "accept", ":accept"}, {"r", "reject", ":reject"}},
-	"read":    {{"r", "mark read", ":read"}, {"u", "mark unread", ":unread"}, {"j", "jump to first unread", "jumpunread"}, {"o", "load older messages", ":older"}},
-	"emoji":   emojiMenu(),
-	"keys":    {{"m", "move…", "menu:move"}, {"v", "view…", "menu:view"}, {"g", "go/prefix g…", "menu:g"}, {"]", "next…", "menu:]"}, {"[", "prev…", "menu:["}},
-	"move": {{"j", "down line", "key:j"}, {"k", "up line", "key:k"}, {"up", "up line", "key:up"}, {"down", "down line", "key:down"},
-		{"ctrl+d", "half page down", "key:ctrl+d"}, {"ctrl+u", "half page up", "key:ctrl+u"}, {"G", "bottom", "key:G"},
-		{"J", "next speaker", "key:J"}, {"K", "prev speaker", "key:K"}, {"f", "jump to a line", "key:f"}, {"F", "jump: open its link", "key:F"},
-		{"m", "recent chats", "key:m"}, {"ctrl+n", "next line", "key:ctrl+n"}, {"ctrl+p", "prev line", "key:ctrl+p"}, {"tab", "next pane", "key:tab"}},
-	"view": {{"z", "zen (chat only)", "key:z"}, {"s", "stamps", "key:s"}, {"M", "mentions only", "key:M"}, {"?", "help", "key:?"}, {"#", "open chat", "key:#"},
-		{"@", "open user", "key:@"}, {"%", "open thread", "key:%"}, {"^", "pinned", "key:^"}, {"ctrl+g", "grep", "key:ctrl+g"},
-		{"S", "speakers", "key:S"}, {"$", "shell", "key:$"}, {"!", "capture", "key:!"}, {":", "command", "key::"},
-		{"h", "message menu", "key:h"}, {"+", "react row", "key:+"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"},
-		{"C", "edit last", "key:C"}, {"e", "edit", "key:e"}, {"d", "delete", "key:d"}, {"y", "yank", "key:y"}, {"Y", "copy link", "key:Y"},
-		{"o", "open", "key:o"}, {"O", "open (other)", "key:O"}, {"t", "next thread", "key:t"}, {"T", "thread", "key:T"},
-		{"i", "insert", "key:i"}, {"I", "invite", "key:I"}, {"ctrl+o", "open chat", "key:ctrl+o"}, {"ctrl+f", "file block", "key:ctrl+f"},
-		{"ctrl+t", "file", "key:ctrl+t"}, {".", "repeat", "key:."}},
-	"g": {{"g", "top", "key:gg"}, {"t", "next chat", "key:gt"}, {"T", "prev chat", "key:gT"}, {"x", "open media/link", "key:gx"},
-		{"r", "go to replied", "key:gr"}, {"c", "jump to channel", "key:gc"}},
+	"space": {{"space", "recent", "pick:recent"}, {"/", "search server", ":search "}, {":", "command", "key::"}, {"?", "all keys", "menu:normal"},
+		{"m", "message…", "key:m"}, {"c", "channel…", "menu:channel"}, {"C", "room admin…", "menu:admin"}, {"p", "people…", "menu:people"},
+		{"t", "threads…", "menu:threads"}, {"u", "unread…", "menu:unread"}, {"s", "search…", "menu:search"}, {"f", "files…", "menu:files"},
+		{"i", "insert…", "menu:insert"}, {"v", "toggles…", "menu:toggles"}, {"I", "invites…", "menu:invites"}, {"a", "account…", "menu:account"},
+		{"h", "help…", "menu:help"}, {"q", "quit…", "menu:quit"}},
+	"channel": {{"c", "pick channel", "pick:chat"}, {"[", "prev channel", "key:h"}, {"]", "next channel", "key:l"}, {"w", "who (members)", ":names"},
+		{"p", "pinned messages", "pick:pins"}, {"e", "explore public", ":explore"}, {"J", "join", ":join "}, {"N", "new channel", ":create "},
+		{"I", "invite person", ":invite "}, {"M", "mute", ":mute"}, {"U", "unmute", ":unmute"}, {"F", "favourite", ":tag fav"},
+		{"L", "low priority", ":tag low"}, {"T", "untag", ":tag none"}, {"P", "part (leave)", ":part"}, {"X", "close (leave + forget)", ":close"}},
+	"admin": {{"t", "topic", ":topic "}, {"n", "name", ":name "}, {"a", "alias", ":alias "}, {"v", "avatar", ":roomavatar "},
+		{"j", "join rule", ":joinrule "}, {"h", "history visibility", ":history "}, {"O", "op (power level)", ":op "}, {"K", "kick", ":kick "},
+		{"B", "ban", ":ban "}, {"U", "unban", ":unban "}},
+	"people": {{"p", "pick person: DM", "pick:user"}, {"w", "whois", ":whois "}, {"d", "DM by name", ":dm "}, {"m", "message person", ":msg "},
+		{"I", "ignore", ":ignore "}, {"U", "unignore", ":unignore "}},
+	"threads": {{"t", "toggle main / last", "thread"}, {"p", "pick thread", "pick:thread"}, {"[", "prev thread", "key:ctrl+p"},
+		{"]", "next thread", "key:ctrl+n"}, {"n", "new thread", "key:T"}},
+	"unread":  {{"u", "first unread", "jumpunread"}, {"o", "load older", ":older"}, {"R", "mark read", ":read"}, {"U", "mark unread", ":unread"}},
+	"search":  {{"s", "server", ":search "}, {"/", "loaded lines", "key:/"}, {"g", "grep", "key:ctrl+g"}, {"w", "one speaker", "key:S"}, {"d", "date", ":goto "}},
+	"files":   {{"f", "insert path", "key:ctrl+t"}, {"b", "insert file block", "key:ctrl+f"}, {"U", "upload", ":upload "}},
+	"insert":  append(emojiMenu(), menuItem{"m", "emote (/me)", ":me "}, menuItem{"c", "shell capture", "key:!"}),
+	"toggles": {{"v", "zen", "key:z"}, {"s", "stamps", "stamps"}, {"m", "mentions only", "key:M"}, {"t", "theme", ":theme"}},
+	"invites": {{"I", "list", ":invites"}, {"A", "accept", ":accept"}, {"R", "reject", ":reject"}},
+	"account": {{"a", "devices", ":devices"}, {"N", "nick", ":nick "}, {"A", "avatar", ":avatar "}, {"V", "verify device", ":verify"}, {"R", "recover keys", ":recover "}},
+	"help":    {{"h", "help", ":help"}, {"k", "all keys", "menu:normal"}, {"d", "docs", ":docs"}, {"s", "sponsor", ":sponsor"}},
+	"quit":    {{"q", "quit", ":quit"}},
+	"message": {{"m", "reply", "key:a"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"e", "edit", "key:e"}, {"t", "thread on it", "key:T"},
+		{"v", "view/open", ":open"}, {"i", "image popup", ":view"}, {"p", "link preview", ":preview"}, {"y", "yank text", "key:y"}, {"Y", "yank link", "key:Y"},
+		{"g", "go to replied", "key:gr"}, {"h", "edit history", "pick:edits"}, {"s", "seen by", "seenby"}, {"R", "react", "react"},
+		{".", "repeat", "key:."}, {"P", "pin", ":pin"}, {"U", "unpin", ":unpin"}, {"F", "forward", "forward"}, {"D", "delete", ":redact"}},
+	"move": {{"j", "down line", "key:j"}, {"k", "up line", "key:k"}, {"up", "up line", "key:up"}, {"down", "down line", "key:down"}, {"ctrl+d", "half page down", "key:ctrl+d"}, {"ctrl+u", "half page up", "key:ctrl+u"},
+		{"G", "bottom", "key:G"}, {"h", "prev channel", "key:h"}, {"l", "next channel", "key:l"}, {"ctrl+p", "prev thread", "key:ctrl+p"},
+		{"ctrl+n", "next thread", "key:ctrl+n"}, {"J", "next speaker", "key:J"}, {"K", "prev speaker", "key:K"}, {"u", "first unread", "key:u"},
+		{"f", "find a line", "key:f"}, {"F", "find + open", "key:F"}, {"'", "recent", "key:'"}, {"tab", "next pane", "key:tab"}},
+	"view": {{"i", "new message", "key:i"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"}, {"o", "reply in thread", "key:o"},
+		{"O", "thread reply quoted", "key:O"}, {"e", "edit mine", "key:e"}, {"C", "edit mine", "key:C"}, {"T", "start thread", "key:T"}, {"t", "toggle thread", "key:t"},
+		{"D", "delete mine", "key:D"}, {"y", "yank text", "key:y"}, {"Y", "yank link", "key:Y"}, {"r", "react…", "menu:r"}, {".", "repeat", "key:."},
+		{"v", "view/open", "key:v"}, {"m", "message menu", "key:m"}, {"#", "pick channel", "key:#"}, {"@", "pick person", "key:@"},
+		{"%", "pick thread", "key:%"}, {"^", "pick pin", "key:^"}, {"z", "zen", "key:z"}, {"M", "mentions only", "key:M"}, {"S", "one speaker", "key:S"},
+		{"I", "invite person", "key:I"}, {"ctrl+g", "grep", "key:ctrl+g"}, {"ctrl+o", "pick channel", "key:ctrl+o"}, {"ctrl+t", "file path", "key:ctrl+t"},
+		{"ctrl+f", "file block", "key:ctrl+f"}, {"$", "shell", "key:$"}, {"!", "capture", "key:!"}, {"?", "help", "key:?"}},
+	"g": {{"g", "top", "key:gg"}, {"e", "bottom", "key:ge"}, {"t", "next channel", "key:gt"}, {"T", "prev channel", "key:gT"}, {"x", "open", "key:gx"},
+		{"f", "open", "key:gf"}, {"w", "find a line", "key:gw"}, {"i", "new message", "key:gi"}, {"r", "go to replied", "key:gr"},
+		{"c", "jump to channel", "key:gc"}, {"d", "go to date", "key:gd"}},
 	"]": {{"]", "next speaker", "key:]]"}, {"m", "my next msg", "key:]m"}, {"@", "next mention", "key:]@"}, {"l", "next link", "key:]l"},
-		{"p", "next pin", "key:]p"}, {"t", "next thread", "key:]t"}, {"c", "next unread chat", "key:]c"}},
+		{"p", "next pin", "key:]p"}, {"t", "next thread", "key:]t"}, {"u", "next unread channel", "key:]u"}},
 	"[": {{"[", "prev speaker", "key:[["}, {"m", "my prev msg", "key:[m"}, {"@", "prev mention", "key:[@"}, {"l", "prev link", "key:[l"},
-		{"p", "prev pin", "key:[p"}, {"t", "prev thread", "key:[t"}, {"c", "prev unread chat", "key:[c"}},
+		{"p", "prev pin", "key:[p"}, {"t", "prev thread", "key:[t"}, {"u", "prev unread channel", "key:[u"}},
+	"r":      reactMenu(),
+	"Z":      {{"Z", "quit", "key:ZZ"}},
+	"c":      {{"c", "edit mine", "key:cc"}},
+	"ctrl+w": {{"w", "next pane", "key:tab"}},
+}
+
+// reactMenu is the r prefix: r1-9 quick reactions, rr the first.
+func reactMenu() []menuItem {
+	out := []menuItem{{"r", quickReacts[0], "key:rr"}}
+	for i, e := range quickReacts {
+		out = append(out, menuItem{strconv.Itoa(i + 1), e, "key:r" + strconv.Itoa(i+1)})
+	}
+	return out
 }
 
 // jumpKeys are the f labels, home row first; jumpTargets are the shown lines they name, top to bottom.
@@ -3136,7 +3162,7 @@ func keyMsg(s string) tea.KeyPressMsg {
 }
 
 // menuPrefixes are the prefix keys whose continuations the which-key popup lists while they wait.
-var menuPrefixes = []string{"g", "[", "]"}
+var menuPrefixes = []string{"g", "[", "]", "r"}
 
 // reactKeyAt is the reaction key under column col of a row of line l: on the summary's first row, or on
 // a row that continues the wrapped summary below it.

@@ -71,13 +71,13 @@ func TestHelpAndArrows(t *testing.T) {
 		if a.help || strings.Contains(checkFrame(t, a, sz[0], sz[1]), "Matrix client") {
 			t.Fatalf("%v: help still shown", sz)
 		}
-		a, _ = press(t, a, "ctrl+n")
+		a, _ = press(t, a, "l")
 		if cur(a) != "#b" {
-			t.Fatalf("ctrl+n: %s", cur(a))
+			t.Fatalf("l: %s", cur(a))
 		}
-		a, _ = press(t, a, "ctrl+p", "ctrl+p")
+		a, _ = press(t, a, "h", "h")
 		if cur(a) != "#c" { // wraps
-			t.Fatalf("ctrl+p ctrl+p: %s", cur(a))
+			t.Fatalf("h h: %s", cur(a))
 		}
 		a, _ = press(t, a, "i", "down", "up") // insert mode: arrows never type
 		if cur(a) != "#c" || a.in.Value() != "" {
@@ -248,7 +248,7 @@ func TestStampsToggle(t *testing.T) {
 	if strings.Contains(ansi.Strip(a.screen()), "09:07") {
 		t.Fatal("stamp shown while off")
 	}
-	a, _ = press(t, a, "s")
+	a, _ = press(t, a, "space", "v", "s")
 	v := checkFrame(t, a, 80, 24)
 	if !strings.Contains(ansi.Strip(v), "09:07 <bob>") || !strings.Contains(v, nickStyle("bob").Render("<bob>")) {
 		t.Fatalf("stamp or nick color missing:\n%s", ansi.Strip(v))
@@ -601,7 +601,7 @@ func TestSameAgentNameInTwoSessions(t *testing.T) {
 	if got := candidates("@driver", a.chanNames(), a.nickPool(), false); strings.Join(got, ",") != "@driver-1,@driver-1@a,@driver-1@b" {
 		t.Fatalf("completion %q", got) // own plain first; other sessions only qualified
 	}
-	a, _ = press(t, a, "space", "o", "u")
+	a, _ = press(t, a, "space", "p", "p")
 	var at []string
 	for _, s := range a.pickSource() {
 		if strings.HasPrefix(s, "@driver") {

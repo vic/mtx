@@ -41,7 +41,7 @@ const (
 	PrevTurn
 	LineUp
 	LineDown
-	ToggleStamps
+
 	PickChan
 	PickFile
 	FileBlock
@@ -56,7 +56,7 @@ const (
 	ReplyThread
 	ReplyThreadQuoted
 	ThreadStart
-	ReactRow
+
 	Leader
 	PickRecent
 	JumpLine
@@ -73,6 +73,10 @@ const (
 	JumpReply
 	Bracket
 	Zen
+	React
+	JumpUnread
+	GotoDate
+	Quit
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -128,16 +132,18 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		switch k {
 		case "space":
 			return Action{Kind: Leader}, Normal, ""
-		case "e":
+		case "e", "C":
 			return Action{Kind: EditOwn}, Insert, ""
-		case "d":
+		case "D":
 			return Action{Kind: Delete}, Normal, ""
 		case ".":
 			return Action{Kind: Repeat}, Normal, ""
 		case "Y":
 			return Action{Kind: Permalink}, Normal, ""
-		case "h":
+		case "m":
 			return Action{Kind: MsgMenu}, Normal, ""
+		case "'":
+			return Action{Kind: PickRecent}, Normal, ""
 		case "#":
 			return Action{Kind: PickChan}, Normal, ""
 		case "@":
@@ -146,23 +152,19 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: PickThread}, Normal, ""
 		case "^":
 			return Action{Kind: PickPins}, Normal, ""
-		case "+":
-			return Action{Kind: ReactRow}, Normal, ""
 		case "i":
 			return Action{Kind: NewLine}, Insert, ""
 		case "a":
 			return Action{Kind: ReplyOwn}, Insert, ""
 		case "A":
 			return Action{Kind: ReplyOwnQuoted}, Insert, ""
-		case "C":
-			return Action{Kind: EditOwn}, Insert, ""
 		case "o":
 			return Action{Kind: ReplyThread}, Insert, ""
 		case "O":
 			return Action{Kind: ReplyThreadQuoted}, Insert, ""
-		case "j":
+		case "j", "ctrl+e":
 			return Action{Scroll, 1, ""}, Normal, ""
-		case "k":
+		case "k", "ctrl+y":
 			return Action{Scroll, -1, ""}, Normal, ""
 		case "ctrl+d":
 			return Action{HalfPage, 1, ""}, Normal, ""
@@ -172,7 +174,7 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: Bottom}, Normal, ""
 		case "ctrl+o":
 			return Action{Kind: PickChan}, Normal, ""
-		case "l":
+		case "v":
 			return Action{Kind: OpenLine}, Normal, ""
 		case "ctrl+f":
 			return Action{Kind: FileBlock}, Normal, ""
@@ -188,32 +190,34 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: LineUp}, Normal, ""
 		case "down":
 			return Action{Kind: LineDown}, Normal, ""
-		case "ctrl+n":
+		case "l":
 			return Action{Kind: NextChan}, Normal, ""
-		case "ctrl+p":
+		case "h":
 			return Action{Kind: PrevChan}, Normal, ""
+		case "ctrl+n":
+			return Action{Kind: Bracket, N: 1, Key: "t"}, Normal, ""
+		case "ctrl+p":
+			return Action{Kind: Bracket, N: -1, Key: "t"}, Normal, ""
 		case "J":
 			return Action{Kind: NextTurn}, Normal, ""
 		case "K":
 			return Action{Kind: PrevTurn}, Normal, ""
 		case "tab":
 			return Action{Kind: FocusPane}, Normal, ""
-		case "s":
-			return Action{Kind: ToggleStamps}, Normal, ""
 		case "I":
 			return Action{Kind: PickInvite}, Normal, ""
 		case "t":
 			return Action{Kind: ThreadNext}, Normal, ""
+		case "u":
+			return Action{Kind: JumpUnread}, Normal, ""
 		case "z":
 			return Action{Kind: Zen}, Normal, ""
 		case "f":
 			return Action{Kind: JumpLine}, Normal, ""
-		case "[", "]":
+		case "[", "]", "r", "Z", "c", "ctrl+w":
 			return Action{}, Normal, k
 		case "F":
 			return Action{Kind: JumpOpen}, Normal, ""
-		case "m":
-			return Action{Kind: PickRecent}, Normal, ""
 		case "M":
 			return Action{Kind: ToggleMentions}, Normal, ""
 		case "T":
@@ -230,8 +234,32 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{}, Normal, "g"
 		}
 	}
-	if pending == "[" || pending == "]" {
+	switch pending {
+	case "[", "]":
 		return Action{Kind: Bracket, N: bracketDir(pending), Key: k}, Normal, ""
+	case "r": // r1-9 reacts with quick reaction n, rr with the first (👍)
+		if n := int(k[0] - '0'); len(k) == 1 && n >= 1 && n <= 9 {
+			return Action{Kind: React, N: n}, Normal, ""
+		}
+		if k == "r" {
+			return Action{Kind: React, N: 1}, Normal, ""
+		}
+		return Action{}, Normal, ""
+	case "Z":
+		if k == "Z" {
+			return Action{Kind: Quit}, Normal, ""
+		}
+		return Action{}, Normal, ""
+	case "c":
+		if k == "c" {
+			return Action{Kind: EditOwn}, Insert, ""
+		}
+		return Action{}, Normal, ""
+	case "ctrl+w":
+		if k == "w" {
+			return Action{Kind: FocusPane}, Normal, ""
+		}
+		return Action{}, Normal, ""
 	}
 	digits, g := strings.CutSuffix(pending, "g")
 	switch {
@@ -246,7 +274,7 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		return Action{}, Normal, digits + "g"
 	case g && digits == "" && k == "g":
 		return Action{Kind: Top}, Normal, ""
-	case g && digits == "" && k == "x":
+	case g && digits == "" && (k == "x" || k == "f"):
 		return Action{Kind: OpenLine}, Normal, ""
 	case g && digits == "" && k == "t":
 		return Action{Kind: NextChan}, Normal, ""
@@ -254,6 +282,14 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		return Action{Kind: PrevChan}, Normal, ""
 	case g && digits == "" && k == "c":
 		return Action{Kind: JumpChan}, Normal, ""
+	case g && digits == "" && k == "e":
+		return Action{Kind: Bottom}, Normal, ""
+	case g && digits == "" && k == "w":
+		return Action{Kind: JumpLine}, Normal, ""
+	case g && digits == "" && k == "i":
+		return Action{Kind: NewLine}, Insert, ""
+	case g && digits == "" && k == "d":
+		return Action{Kind: GotoDate}, Normal, ""
 	case g && digits == "" && k == "r":
 		return Action{Kind: JumpReply}, Normal, ""
 	case g && digits != "" && k == "t":

@@ -158,7 +158,7 @@ func arity(n CmdName) (count int, raw, ok bool) {
 	return 0, false, false
 }
 
-// ParseCmd parses a command typed as `:word` (a `/` start is accepted too). `:q` is `quit`. A raw
+// ParseCmd parses a command typed as `:word` (a `/` start is accepted too). `:q` `:qa` are `quit`, `:h` is `help`, `:colorscheme` is `theme`. A raw
 // last arg (/msg body, /topic text) keeps its inner whitespace.
 func ParseCmd(line string) (Cmd, error) {
 	if !strings.HasPrefix(line, "/") && !strings.HasPrefix(line, ":") {
@@ -169,8 +169,12 @@ func ParseCmd(line string) (Cmd, error) {
 		word, rest = word[:i], word[i+1:]
 	}
 	switch word { // aliases
-	case "q":
+	case "q", "qa":
 		word = string(CmdQuit)
+	case "h":
+		word = string(CmdHelp)
+	case "colorscheme":
+		word = string(CmdTheme)
 	case "rm":
 		word = string(CmdClose) // remove a & room: endpoint, saved file and log
 	}

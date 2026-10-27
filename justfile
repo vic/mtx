@@ -22,9 +22,10 @@ conduit:
     #!/usr/bin/env bash
     set -euo pipefail
     conduit_bin=$(command -v conduit)
-    CONDUIT_CONFIG=.github/conduit.toml "$conduit_bin" > conduit.log 2>&1 &
+    db=$(mktemp -d)
+    CONDUIT_CONFIG=.github/conduit.toml CONDUIT_DATABASE_PATH="$db" "$conduit_bin" > conduit.log 2>&1 &
     pid=$!
-    trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+    trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; rm -rf "$db"' EXIT
     for i in $(seq 1 60); do
         timeout 2 curl -sf http://127.0.0.1:6167/_matrix/client/versions >/dev/null && break
         sleep 1

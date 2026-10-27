@@ -1,0 +1,17 @@
+name: Nix Build
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+jobs:
+  nix:
+    # Real-homeserver tests (build tag conduit). Conduit runs locally from .github/conduit.toml.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+      - name: Nix build
+        run: nix build
+      - name: Nix CI
+        run: nix develop --command just ci

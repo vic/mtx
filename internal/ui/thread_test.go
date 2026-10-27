@@ -320,3 +320,80 @@ func TestMainHidesReplies(t *testing.T) {
 		t.Fatalf("thread has %d lines", len(got))
 	}
 }
+
+// threadsShuffled are three heads stored oldest, newest, middle; the popups must list newest first.
+func threadsShuffled() (old, news, mid model.Thread) {
+	day := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	old = model.Thread{Root: "$old", Nick: "ann", Text: "oldest", Count: 1, At: day}
+	news = model.Thread{Root: "$new", Nick: "bob", Text: "newest", Count: 1, At: day.Add(2 * time.Hour)}
+	mid = model.Thread{Root: "$mid", Nick: "cy", Text: "middle", Count: 1, At: day.Add(time.Hour)}
+	return old, news, mid
+}
+
+// TestThreadPickerNewestFirst: the thread picker (space t p) lists the newest head first; enter selects it.
+func TestThreadPickerNewestFirst(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	old, news, mid := threadsShuffled()
+	a.threads = map[string][]model.Thread{"#a": {old, news, mid}}
+	a = a.openPick(pickThreads)
+	want := []model.Thread{news, mid, old}
+	src := a.pickSource()
+	if len(src) != len(want) {
+		t.Fatalf("rows %q", src)
+	}
+	for i, h := range want {
+		if !strings.HasSuffix(src[i], threadLabel(h)) {
+			t.Fatalf("row %d %q want %q", i, src[i], threadLabel(h))
+		}
+	}
+	a, _ = press(t, a, "enter")
+	if a.thread != "$new" {
+		t.Fatalf("thread %q want $new: enter takes the top row", a.thread)
+	}
+}
+
+// TestRecentPickerThreadsNewestFirst: the recent picker (') lists this channel's threads newest first, after the chats.
+func TestRecentPickerThreadsNewestFirst(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	old, news, mid := threadsShuffled()
+	a.threads = map[string][]model.Thread{"#a": {old, news, mid}}
+	a, _ = press(t, a, "'")
+	if !a.pick || a.pickWhat != pickRecent {
+		t.Fatalf("picker not open: pick %v what %v", a.pick, a.pickWhat)
+	}
+	src := a.pickSource()
+	chats := len(a.chanNames())
+	want := []model.Thread{news, mid, old}
+	if len(src) != chats+len(want) {
+		t.Fatalf("rows %q", src)
+	}
+	for i, h := range want {
+		if src[chats+i] != threadLabel(h) {
+			t.Fatalf("thread row %d %q want %q", i, src[chats+i], threadLabel(h))
+		}
+	}
+}
+
+// TestThreadPickersEmptyNoPanic: with no threads, both thread popups open with no thread rows, and enter does not panic.
+func TestThreadPickersEmptyNoPanic(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	a.threads = map[string][]model.Thread{"#a": {}}
+	a = a.openPick(pickThreads)
+	if n := len(a.pickSource()); n != 0 {
+		t.Fatalf("thread picker rows %d want 0", n)
+	}
+	a, _ = press(t, a, "enter")
+	if a.thread != "" {
+		t.Fatalf("thread %q want none", a.thread)
+	}
+	a = newApp(t, &log, nil)
+	a.threads = nil
+	a = a.openPick(pickRecent)
+	if n := len(a.pickSource()); n != len(a.chanNames()) {
+		t.Fatalf("recent picker rows %d want %d chats only", n, len(a.chanNames()))
+	}
+	a, _ = press(t, a, "enter")
+}

@@ -1542,6 +1542,13 @@ func (a App) openPick(k pickKind) App {
 	return a
 }
 
+// threadsRecentFirst is the heads newest first by their newest reply; the popups list them so.
+func threadsRecentFirst(heads []model.Thread) []model.Thread {
+	out := slices.Clone(heads)
+	slices.SortStableFunc(out, func(a, b model.Thread) int { return b.At.Compare(a.At) })
+	return out
+}
+
 // pickSource is what the picker searches: channels and @nicks, "<nick> text" per
 // shown line, or the distinct speakers of the current channel, newest first.
 func (a App) pickSource() []string {
@@ -1549,7 +1556,7 @@ func (a App) pickSource() []string {
 	switch a.pickWhat {
 	case pickRecent:
 		out = a.chanNames()
-		for _, h := range a.threads[a.m.Current().Name] {
+		for _, h := range threadsRecentFirst(a.threads[a.m.Current().Name]) {
 			out = append(out, threadLabel(h))
 		}
 	case pickChans:
@@ -1579,7 +1586,7 @@ func (a App) pickSource() []string {
 			out = append(out, pinLabel(a.lines(cur), id))
 		}
 	case pickThreads:
-		for _, h := range a.threads[a.m.Current().Name] {
+		for _, h := range threadsRecentFirst(a.threads[a.m.Current().Name]) {
 			out = append(out, ansi.Strip(threadStamp(h.At, h, a.unreadOf(h)))+threadLabel(h)) // plain text: the picker box matches it rune by rune // time, then the summary columns, as in the threads box
 		}
 	case pickUsers:
@@ -1643,7 +1650,7 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if a.pickWhat == pickThreads && msg.String() == "enter" && a.psel < len(ms) { // a head: by its place in the list
 		a.pick = false
-		heads := a.threads[a.m.Current().Name]
+		heads := threadsRecentFirst(a.threads[a.m.Current().Name])
 		if idx := ms[a.psel].idx; idx < len(heads) {
 			return a.selectThread(heads[idx].Root), nil
 		}

@@ -63,9 +63,11 @@ func (a App) unreadAll() []int {
 	return out
 }
 
-// threadLabel is a head as the thread pane and the Ctrl+O picker list it.
+// threadLabel is a head as the thread pane and the Ctrl+O picker list it: its first line only, a
+// multiline head would break the picker row.
 func threadLabel(h model.Thread) string {
-	return h.Nick + ": " + h.Text
+	first, _, _ := strings.Cut(strings.TrimLeft(h.Text, "\r\n"), "\n")
+	return h.Nick + ": " + strings.TrimRight(first, "\r")
 }
 
 // threadAt is the head that label names in the current channel.

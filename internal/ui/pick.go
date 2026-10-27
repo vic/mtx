@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // pickMatch is one channel the picker shows: its name and the matched rune positions.
@@ -54,6 +55,14 @@ func pickList(names []string, q string) []pickMatch {
 }
 
 // pickBox is the picker box (channels or lines, titled what), drawn over the screen by overlayCentered.
+// pickW is the picker box width: three quarters of the threads pane in the wide layout, else half the screen.
+func pickW(w, h int) int {
+	if wide(w, h) {
+		return min(max((w-chanW-nickW-4)*3/4, 40), w)
+	}
+	return min(max(w/2, 40), w)
+}
+
 func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, marks []string) string {
 	rows := []string{title.Render(what) + " " + prompt.Render(">") + " " + q, ""}
 	start, end := pickWindow(len(ms), sel, max(h-6, 1))
@@ -67,8 +76,8 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 			mark, st = "◆", cell.Bold(true)
 		}
 		var b strings.Builder
-		rs := []rune(m.name)
-		rs = rs[:min(len(rs), max(min(max(w/2, 40), w)-6, 1))] // one row in the box
+		// one row in the box: cut by cells (wide runes count 2), with a column to spare for the mark
+		rs := []rune(ansi.Truncate(m.name, max(pickW(w, h)-8, 1), "…"))
 		for k, r := range rs {
 			if slices.Contains(m.at, k) {
 				b.WriteString(shortcut.Bold(true).Render(string(r)))
@@ -98,7 +107,7 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 	}
 	rows = append(rows, "", keys)
 	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).
-		Padding(0, 1).Width(min(max(w/2, 40), w)).Render(strings.Join(rows, "\n"))
+		Padding(0, 1).Width(pickW(w, h)).Render(strings.Join(rows, "\n"))
 	return box
 }
 

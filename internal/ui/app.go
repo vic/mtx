@@ -2961,11 +2961,12 @@ func (a App) permalink() (tea.Model, tea.Cmd) {
 	return a.toast("copied "+link, false), tea.SetClipboard(link)
 }
 
-// pinLabel is a pinned message's picker row: its "<nick> text" if the line is loaded, else its ID.
+// pinLabel is a pinned message's picker row: its "<nick> first line" if the line is loaded, else its ID.
 func pinLabel(ls []model.Line, id string) string {
 	for _, l := range ls {
 		if l.ID == id {
-			return "<" + l.Nick + "> " + strings.ReplaceAll(l.Text, "\n", " ")
+			first, _, _ := strings.Cut(strings.TrimLeft(l.Text, "\r\n"), "\n")
+			return "<" + l.Nick + "> " + strings.TrimRight(first, "\r")
 		}
 	}
 	return "(not loaded) " + id

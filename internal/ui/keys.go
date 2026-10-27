@@ -136,7 +136,7 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 			return Action{Kind: Repeat}, Normal, ""
 		case "Y":
 			return Action{Kind: Permalink}, Normal, ""
-		case "enter":
+		case "h":
 			return Action{Kind: MsgMenu}, Normal, ""
 		case "#":
 			return Action{Kind: PickChan}, Normal, ""

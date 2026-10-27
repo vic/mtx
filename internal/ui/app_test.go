@@ -996,18 +996,18 @@ func TestEveryCommandInMenus(t *testing.T) {
 	}
 }
 
-// TestMsgMenu: enter on a selected line opens the message menu; its keys replay the line verbs.
+// TestMsgMenu: h on a selected line opens the message menu; its keys replay the line verbs.
 func TestMsgMenu(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{Nick: "me", Text: "mine", ID: "$m"}})
 	a = next.(App)
-	a, _ = press(t, a, "enter")
+	a, _ = press(t, a, "h")
 	if a.menu != "" {
-		t.Fatalf("enter opened a menu with no selection: %q", a.menu)
+		t.Fatalf("h opened a menu with no selection: %q", a.menu)
 	}
 	a.hit = 0
-	a, _ = press(t, a, "enter")
+	a, _ = press(t, a, "h")
 	if a.menu != "message" {
 		t.Fatalf("message menu %q", a.menu)
 	}
@@ -1137,7 +1137,7 @@ func TestEditHistory(t *testing.T) {
 		t.Fatalf("edits %v", got)
 	}
 	a.hit = 0
-	a, _ = press(t, a, "enter", "h")
+	a, _ = press(t, a, "h", "h")
 	if a.pickWhat != pickEdits {
 		t.Fatalf("picker %v", a.pickWhat)
 	}
@@ -1315,7 +1315,7 @@ func TestSeenBy(t *testing.T) {
 		t.Fatalf("$3 seen %q", seen("$3"))
 	}
 	a.hit = 0
-	a, _ = press(t, a, "enter", "R") // the message menu: seen by is R
+	a, _ = press(t, a, "h", "R") // the message menu: seen by is R
 	if a.pickWhat != pickInfo {
 		t.Fatalf("picker %v", a.pickWhat)
 	}
@@ -1808,7 +1808,7 @@ func TestSeenByKeys(t *testing.T) {
 		t.Fatalf("space s: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
 	}
 	a, _ = press(t, a, "esc")
-	a, _ = press(t, a, "up", "enter", "R")
+	a, _ = press(t, a, "up", "h", "R")
 	if !a.pick || a.pickWhat != pickInfo || a.listTitle != "seen by" {
 		t.Fatalf("message menu R: pick %v kind %v title %q", a.pick, a.pickWhat, a.listTitle)
 	}

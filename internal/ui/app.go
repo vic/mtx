@@ -1256,7 +1256,7 @@ func (a App) inputLine() (label, input, hint string) {
 	if a.hit >= 0 {
 		return "NORMAL", a.footer(), keyHint("a", "reply", "A", "quote", "e", "edit", "d", "delete", "+", "react", "T", "thread", "y", "yank", "l", "open", ".", "repeat", "esc", "unselect")
 	}
-	return "NORMAL", a.footer(), keyHint("SPC", "menu", "?", "help", ":", "command", "#", "rooms", "@", "users", "%", "threads", "^", "pins", "m", "recent", "i", "write", "a", "reply", "f", "jump", "+", "react", "enter", "message", "↑↓", "line")
+	return "NORMAL", a.footer(), keyHint("SPC", "menu", "?", "help", ":", "command", "#", "rooms", "@", "users", "%", "threads", "^", "pins", "m", "recent", "i", "write", "a", "reply", "f", "jump", "+", "react", "h", "message", "↑↓", "line")
 }
 
 // footer is the last row outside INSERT: more keys and the toggle states, since
@@ -2949,7 +2949,7 @@ var menus = map[string][]menuItem{
 	"view": {{"z", "zen (chat only)", "key:z"}, {"s", "stamps", "key:s"}, {"M", "mentions only", "key:M"}, {"?", "help", "key:?"}, {"#", "open chat", "key:#"},
 		{"@", "open user", "key:@"}, {"%", "open thread", "key:%"}, {"^", "pinned", "key:^"}, {"ctrl+g", "grep", "key:ctrl+g"},
 		{"S", "speakers", "key:S"}, {"$", "shell", "key:$"}, {"!", "capture", "key:!"}, {":", "command", "key::"},
-		{"enter", "message menu", "key:enter"}, {"+", "react row", "key:+"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"},
+		{"h", "message menu", "key:h"}, {"+", "react row", "key:+"}, {"a", "reply", "key:a"}, {"A", "reply quoted", "key:A"},
 		{"C", "edit last", "key:C"}, {"e", "edit", "key:e"}, {"d", "delete", "key:d"}, {"y", "yank", "key:y"}, {"Y", "copy link", "key:Y"},
 		{"o", "open", "key:o"}, {"O", "open (other)", "key:O"}, {"t", "next thread", "key:t"}, {"T", "thread", "key:T"},
 		{"i", "insert", "key:i"}, {"I", "invite", "key:I"}, {"ctrl+o", "open chat", "key:ctrl+o"}, {"ctrl+f", "file block", "key:ctrl+f"},

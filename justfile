@@ -48,6 +48,20 @@ conduit:
 
 # Regenerate the keys page and every demo gif. Needs conduit running and MTX_SEED_REG_TOKEN set.
 gifs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    conduit_bin=$(command -v conduit)
+    db=$(mktemp -d)
+    CONDUIT_CONFIG=.github/conduit.toml CONDUIT_DATABASE_PATH="$db" "$conduit_bin" > conduit.log 2>&1 &
+    pid=$!
+    trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; rm -rf "$db"' EXIT
+    for i in $(seq 1 60); do
+        timeout 2 curl -sf http://127.0.0.1:6167/_matrix/client/versions >/dev/null && break
+        sleep 1
+    done
+    timeout 2 curl -sf http://127.0.0.1:6167/_matrix/client/versions >/dev/null
+    export MTX_CONDUIT_HOMESERVER=http://127.0.0.1:6167
+    export MTX_SEED_REG_TOKEN=$(grep -E '^registration_token' .github/conduit.toml | sed -E 's/^[^"]*"([^"]*)".*/\1/')
     docs/tapes/make.sh
 
 # Regenerate only the keys page.

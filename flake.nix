@@ -24,6 +24,9 @@
             pkgs.gcc
             pkgs.just
             pkgs.matrix-conduit
+            pkgs.vhs
+            pkgs.ffmpeg
+            pkgs.ttyd
           ];
         };
       });

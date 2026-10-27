@@ -66,17 +66,24 @@ func pickW(w, h int) int {
 // jumpW is the width of the jump-key gutter at the left of every picker row.
 const jumpW = 2
 
-// jumpKey is the gutter of row i of the filtered list: its jump digit (1-9, then 0) for the first ten, else blank.
-func jumpKey(i int) string {
-	if i >= 10 {
+// pickRows is the window [start, end) of the n matches that a picker of height h shows with the selection sel in it;
+// the box draws it and the jump keys read it, so they agree.
+func pickRows(n, sel, h int) (start, end int) {
+	return pickWindow(n, sel, max(h-6, 1))
+}
+
+// jumpKey is the gutter of the p-th drawn row (0 = the first one on screen): its jump digit (1-9, then 0) in the key-shortcut style for
+// the first ten, else blank.
+func jumpKey(p int) string {
+	if p >= 10 {
 		return strings.Repeat(" ", jumpW)
 	}
-	return dimmed.Render(string(rune('0'+(i+1)%10))) + " "
+	return shortcut.Bold(true).Render(string(rune('0'+(p+1)%10))) + " "
 }
 
 func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, marks []string) string {
 	rows := []string{title.Render(what) + " " + prompt.Render(">") + " " + q, ""}
-	start, end := pickWindow(len(ms), sel, max(h-6, 1))
+	start, end := pickRows(len(ms), sel, h)
 	if start > 0 {
 		rows = append(rows, dimmed.Render(fmt.Sprintf("↑ %d more", start)))
 	}
@@ -104,7 +111,7 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 			}
 			check += " "
 		}
-		rows = append(rows, jumpKey(i)+title.Render(mark)+" "+check+b.String())
+		rows = append(rows, jumpKey(i-start)+title.Render(mark)+" "+check+b.String())
 	}
 	if end < len(ms) {
 		rows = append(rows, dimmed.Render(fmt.Sprintf("↓ %d more", len(ms)-end)))

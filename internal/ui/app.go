@@ -765,9 +765,10 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.paneKey(msg)
 	}
 	if a.pick {
-		if s := msg.String(); len(s) == 1 && s[0] >= '0' && s[0] <= '9' && a.pickWhat != pickGrep { // a digit is a jump key, never query text: row 1-9 or 0 (the tenth) of the filtered list, then what Enter does
-			d := (int(s[0]-'0') + 9) % 10
-			if d >= len(a.matches()) {
+		if s := msg.String(); len(s) == 1 && s[0] >= '0' && s[0] <= '9' && a.pickWhat != pickGrep { // a digit is a jump key, never query text: row 1-9 or 0 (the tenth) of the drawn rows, then what Enter does
+			start, end := pickRows(len(a.matches()), a.psel, a.h) // the digits follow the drawn window: 1 is its first row
+			d := start + (int(s[0]-'0')+9)%10
+			if d >= end {
 				return a, nil
 			}
 			a.psel = d

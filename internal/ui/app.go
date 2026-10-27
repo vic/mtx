@@ -837,7 +837,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case act.Kind == HistPrev || act.Kind == HistNext:
 			a = a.histStep(act.Kind == HistPrev)
 			return a, nil
-		case act.Kind == NextChan || act.Kind == PrevChan:
+		case act.Kind == PaneNext || act.Kind == PanePrev:
 			return a.switchChan(act), nil
 		}
 		if act.Kind == Complete {
@@ -973,7 +973,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a = a.turn(act.Kind == NextTurn)
 	case FocusPane:
 		a.focus, a.fq, a.fsel = focusChans, "", max(slices.Index(a.chanRows(), a.m.Current().Name), 0) // start on the current channel
-	case NextChan, PrevChan, GotoChan:
+	case PaneNext, PanePrev, GotoChan:
 		a = a.switchChan(act)
 	}
 	return a, nil
@@ -1028,27 +1028,39 @@ func (a App) promptKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a App) switchChan(act Action) App {
-	cs := a.m.Channels()
-	cur := -1
-	for i, c := range cs {
-		if c.Name == a.m.Current().Name {
-			cur = i
+	if act.Kind == GotoChan { // {n}gt: the n-th channel in the channel pane's order, 1-based
+		names := a.paneNames()
+		to := act.N - 1
+		if to < 0 || to >= len(names) {
+			return a
+		}
+		return a.focusName(names[to])
+	}
+	return a.paneChan(act)
+}
+
+// paneNames are the channels in the channel pane's order: its rows without the group labels.
+func (a App) paneNames() []string {
+	var names []string
+	for _, n := range a.chanRows() {
+		if !strings.HasPrefix(n, nickLabel) {
+			names = append(names, n)
 		}
 	}
-	to := act.N - 1 // GotoChan is 1-based
-	switch act.Kind {
-	case NextChan:
-		to = cur + 1
-	case PrevChan:
-		to = cur - 1
-	}
-	if len(cs) > 0 && act.Kind != GotoChan {
-		to = (to + len(cs)) % len(cs)
-	}
-	if to < 0 || to >= len(cs) {
+	return names
+}
+
+// paneChan steps to the next or previous channel in the channel pane's order, with wrap.
+func (a App) paneChan(act Action) App {
+	names := a.paneNames()
+	if len(names) == 0 {
 		return a
 	}
-	return a.focusName(cs[to].Name)
+	to := slices.Index(names, a.m.Current().Name) + 1
+	if act.Kind == PanePrev {
+		to = slices.Index(names, a.m.Current().Name) - 1
+	}
+	return a.focusName(names[(to+len(names))%len(names)])
 }
 
 // focusName makes channel name current.
@@ -1829,6 +1841,11 @@ func (a App) bracket(fwd bool, key string) App {
 		return a.stepThread(fwd)
 	case "u":
 		return a.nextUnreadChan(fwd)
+	case "c": // ]c and [c: the channel pane's next and previous channel, as h and l
+		if fwd {
+			return a.paneChan(Action{Kind: PaneNext})
+		}
+		return a.paneChan(Action{Kind: PanePrev})
 	case "]", "[":
 		return a.turn(fwd)
 	}
@@ -1875,21 +1892,32 @@ func (a App) bracket(fwd bool, key string) App {
 
 // stepThread opens the next (fwd) or previous thread head; past the last or first, the main chat.
 func (a App) stepThread(fwd bool) App {
-	heads := a.threads[a.m.Current().Name]
-	idx := -1
-	for i, h := range heads {
-		if h.Root == a.thread {
-			idx = i
-		}
+	rows := a.threadOrder()
+	cur := slices.IndexFunc(rows, func(r threadSlot) bool { return r.root == a.thread })
+	if cur < 0 { // the current thread is not in the pane's rows: nothing moves
+		return a
 	}
-	next := idx - 1
+	next := cur - 1
 	if fwd {
-		next = idx + 1
+		next = cur + 1
 	}
-	if next < 0 || next >= len(heads) {
-		return a.selectThread("")
+	if next < 0 || next >= len(rows) { // the ends stop: no wrap
+		return a
 	}
-	return a.selectThread(heads[next].Root)
+	return a.selectThread(rows[next].root)
+}
+
+// threadSlot is a thread in the threads pane's order: its root ("" for the main thread) and its label.
+type threadSlot struct{ root, label string }
+
+// threadOrder are the threads in the pane's order, unfiltered: the heads in stored order, then the main thread.
+func (a App) threadOrder() []threadSlot {
+	heads := a.threads[a.m.Current().Name]
+	slots := make([]threadSlot, 0, len(heads)+1)
+	for _, h := range heads {
+		slots = append(slots, threadSlot{h.Root, threadLabel(h)})
+	}
+	return append(slots, threadSlot{"", mainThreadLabel})
 }
 
 // nextUnreadChan focuses the next (fwd) or previous channel with unread messages, wrapping around.
@@ -2275,10 +2303,9 @@ const (
 func (a App) paneItems(f paneFocus) (show, names []string) {
 	if f == focusThreads {
 		names = nil // the heads, then the main thread last
-		for _, h := range a.threads[a.m.Current().Name] {
-			names = append(names, threadLabel(h))
+		for _, r := range a.threadOrder() {
+			names = append(names, r.label)
 		}
-		names = append(names, mainThreadLabel)
 		show = names
 	} else if f == focusChans {
 		names = a.chanRows()
@@ -3001,9 +3028,9 @@ var menus = map[string][]menuItem{
 		{"f", "open", "key:gf"}, {"w", "find a line", "key:gw"}, {"i", "new message", "key:gi"}, {"r", "go to replied", "key:gr"},
 		{"c", "jump to channel", "key:gc"}, {"d", "go to date", "key:gd"}},
 	"]": {{"]", "next speaker", "key:]]"}, {"m", "my next msg", "key:]m"}, {"@", "next mention", "key:]@"}, {"l", "next link", "key:]l"},
-		{"p", "next pin", "key:]p"}, {"t", "next thread", "key:]t"}, {"u", "next unread channel", "key:]u"}},
+		{"p", "next pin", "key:]p"}, {"t", "next thread", "key:]t"}, {"u", "next unread channel", "key:]u"}, {"c", "next channel", "key:]c"}},
 	"[": {{"[", "prev speaker", "key:[["}, {"m", "my prev msg", "key:[m"}, {"@", "prev mention", "key:[@"}, {"l", "prev link", "key:[l"},
-		{"p", "prev pin", "key:[p"}, {"t", "prev thread", "key:[t"}, {"u", "prev unread channel", "key:[u"}},
+		{"p", "prev pin", "key:[p"}, {"t", "prev thread", "key:[t"}, {"u", "prev unread channel", "key:[u"}, {"c", "prev channel", "key:[c"}},
 	"r":      reactMenu(),
 	"Z":      {{"Z", "quit", "key:ZZ"}},
 	"c":      {{"c", "edit mine", "key:cc"}},

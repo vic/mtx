@@ -21,8 +21,8 @@ func TestKey(t *testing.T) {
 		{"g pends", Normal, "", "g", Action{}, Normal, "g"},
 		{"gg top", Normal, "g", "g", Action{Top, 0, ""}, Normal, ""},
 		{"G bottom", Normal, "", "G", Action{Bottom, 0, ""}, Normal, ""},
-		{"gt next", Normal, "g", "t", Action{NextChan, 0, ""}, Normal, ""},
-		{"gT prev", Normal, "g", "T", Action{PrevChan, 0, ""}, Normal, ""},
+		{"gt next", Normal, "g", "t", Action{PaneNext, 0, ""}, Normal, ""},
+		{"gT prev", Normal, "g", "T", Action{PanePrev, 0, ""}, Normal, ""},
 		{"3 pends", Normal, "", "3", Action{}, Normal, "3"},
 		{"3g pends", Normal, "3", "g", Action{}, Normal, "3g"},
 		{"3gt goto", Normal, "3g", "t", Action{GotoChan, 3, ""}, Normal, ""},
@@ -70,7 +70,7 @@ func TestV10Keys(t *testing.T) {
 		pending, k string
 		want       Action
 	}{
-		{"", "h", Action{Kind: PrevChan}}, {"", "l", Action{Kind: NextChan}},
+		{"", "h", Action{Kind: PanePrev}}, {"", "l", Action{Kind: PaneNext}},
 		{"", "ctrl+n", Action{Kind: Bracket, N: 1, Key: "t"}}, {"", "ctrl+p", Action{Kind: Bracket, N: -1, Key: "t"}},
 		{"", "m", Action{Kind: MsgMenu}}, {"", "'", Action{Kind: PickRecent}}, {"", "v", Action{Kind: OpenLine}},
 		{"", "u", Action{Kind: JumpUnread}}, {"", "D", Action{Kind: Delete}}, {"", "d", Action{}}, {"", "enter", Action{}},

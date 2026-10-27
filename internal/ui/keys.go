@@ -23,10 +23,8 @@ const (
 	HalfPage
 	Top
 	Bottom
-	NextChan
 	HistPrev
 	HistNext
-	PrevChan
 	GotoChan
 	CmdLine
 	ShellLine
@@ -79,6 +77,8 @@ const (
 	Quit
 	PickLines
 	ClearLine
+	PaneNext
+	PanePrev
 )
 
 // maxCountDigits bounds the {n} in {n}gt.
@@ -281,9 +281,9 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 		case "down":
 			return Action{Kind: LineDown}, Normal, ""
 		case "l":
-			return Action{Kind: NextChan}, Normal, ""
+			return Action{Kind: PaneNext}, Normal, ""
 		case "h":
-			return Action{Kind: PrevChan}, Normal, ""
+			return Action{Kind: PanePrev}, Normal, ""
 		case "ctrl+n":
 			return Action{Kind: Bracket, N: 1, Key: "t"}, Normal, ""
 		case "ctrl+p":
@@ -367,9 +367,9 @@ func Key(m EditMode, pending, k string) (Action, EditMode, string) {
 	case g && digits == "" && (k == "x" || k == "f"):
 		return Action{Kind: OpenLine}, Normal, ""
 	case g && digits == "" && k == "t":
-		return Action{Kind: NextChan}, Normal, ""
+		return Action{Kind: PaneNext}, Normal, ""
 	case g && digits == "" && k == "T":
-		return Action{Kind: PrevChan}, Normal, ""
+		return Action{Kind: PanePrev}, Normal, ""
 	case g && digits == "" && k == "c":
 		return Action{Kind: JumpChan}, Normal, ""
 	case g && digits == "" && k == "e":

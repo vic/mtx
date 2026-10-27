@@ -1428,7 +1428,7 @@ func TestEveryNormalKeyInMenus(t *testing.T) {
 			if act.Kind == None {
 				continue
 			}
-			if p != "g" && !strings.Contains("mplt@u", c) {
+			if p != "g" && !strings.Contains("mplt@uc", c) {
 				continue // a bracket takes any key; only its motions are listed
 			}
 			if !hasKey(menus[p], c) {
@@ -1867,6 +1867,285 @@ func TestWhichKeyHintsRightAlignedAcrossColumns(t *testing.T) {
 	}
 	if one := edges(40); len(one) != 1 { // negative: one column, one edge
 		t.Fatalf("one column gives %d hint edges, want 1: %v", len(one), one)
+	}
+}
+
+// TestNextPrevChannelFollowsPaneOrder: l and h move through the channels in the order the channel pane shows them,
+// across groups; h is the reverse, and each walks off one end to the other.
+func TestNextPrevChannelFollowsPaneOrder(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(TagsMsg{"#b": "favourite"}) // the pane shows #b first, then the rooms #a and #c
+	a = next.(App)
+	var want []string
+	for _, r := range a.chanRows() {
+		if !strings.HasPrefix(r, nickLabel) {
+			want = append(want, r)
+		}
+	}
+	if len(want) != 3 {
+		t.Fatalf("pane channels %q", want)
+	}
+	var model []string
+	for _, c := range a.m.Channels() {
+		model = append(model, c.Name)
+	}
+	if slices.Equal(model, want) {
+		t.Fatalf("pane order %q equals model order: the test cannot tell them apart", want)
+	}
+	a = a.focusName(want[0])
+	var visited []string
+	for range want {
+		visited = append(visited, cur(a))
+		a, _ = press(t, a, "l")
+	}
+	if !slices.Equal(visited, want) {
+		t.Fatalf("l visited %q, pane order %q", visited, want)
+	}
+	if cur(a) != want[0] {
+		t.Fatalf("l past the last channel went to %q, want %q", cur(a), want[0])
+	}
+	a = a.focusName(want[len(want)-1])
+	var back []string
+	for range want {
+		back = append(back, cur(a))
+		a, _ = press(t, a, "h")
+	}
+	reversed := slices.Clone(want)
+	slices.Reverse(reversed)
+	if !slices.Equal(back, reversed) {
+		t.Fatalf("h visited %q, reverse pane order %q", back, reversed)
+	}
+	if cur(a) != want[len(want)-1] { // h past the first channel wraps to the last
+		t.Fatalf("h past the first channel went to %q, want %q", cur(a), want[len(want)-1])
+	}
+	walk := func(keys ...string) []string { // the channels visited, one press of keys each, from the current one
+		var out []string
+		for range want {
+			out = append(out, cur(a))
+			a, _ = press(t, a, keys...)
+		}
+		return out
+	}
+	a = a.focusName(want[0])
+	if got := walk("g", "t"); !slices.Equal(got, want) { // gt is the same forward walk as l
+		t.Fatalf("gt visited %q, pane order %q", got, want)
+	}
+	if cur(a) != want[0] {
+		t.Fatalf("gt past the last channel went to %q, want %q", cur(a), want[0])
+	}
+	a = a.focusName(want[len(want)-1])
+	if got := walk("g", "T"); !slices.Equal(got, reversed) { // gT is the same reverse walk as h
+		t.Fatalf("gT visited %q, reverse pane order %q", got, reversed)
+	}
+	if cur(a) != want[len(want)-1] {
+		t.Fatalf("gT past the first channel went to %q, want %q", cur(a), want[len(want)-1])
+	}
+}
+
+// TestBracketChannelFollowsPaneOrder: ]c and [c move through the channels in the order the channel pane shows them,
+// as h and l do: ]c forward and wrapping, [c in reverse and wrapping.
+func TestBracketChannelFollowsPaneOrder(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(TagsMsg{"#b": "favourite"}) // the pane shows #b first, then the rooms #a and #c
+	a = next.(App)
+	var want []string
+	for _, r := range a.chanRows() {
+		if !strings.HasPrefix(r, nickLabel) {
+			want = append(want, r)
+		}
+	}
+	if len(want) != 3 {
+		t.Fatalf("pane channels %q", want)
+	}
+	var model []string
+	for _, c := range a.m.Channels() {
+		model = append(model, c.Name)
+	}
+	if slices.Equal(model, want) {
+		t.Fatalf("pane order %q equals model order: the test cannot tell them apart", want)
+	}
+	reversed := slices.Clone(want)
+	slices.Reverse(reversed)
+	walk := func(keys ...string) []string { // the channels visited, one press of keys each, from the current one
+		var out []string
+		for range want {
+			out = append(out, cur(a))
+			a, _ = press(t, a, keys...)
+		}
+		return out
+	}
+	a = a.focusName(want[0])
+	if got := walk("]", "c"); !slices.Equal(got, want) {
+		t.Fatalf("]c visited %q, pane order %q", got, want)
+	}
+	if cur(a) != want[0] {
+		t.Fatalf("]c past the last channel went to %q, want %q", cur(a), want[0])
+	}
+	a = a.focusName(want[len(want)-1])
+	if got := walk("[", "c"); !slices.Equal(got, reversed) {
+		t.Fatalf("[c visited %q, reverse pane order %q", got, reversed)
+	}
+	if cur(a) != want[len(want)-1] {
+		t.Fatalf("[c past the first channel went to %q, want %q", cur(a), want[len(want)-1])
+	}
+}
+
+// TestGotoChannelFollowsPaneOrder: {n}gt selects the n-th channel the channel pane shows; past the last one it does nothing.
+func TestGotoChannelFollowsPaneOrder(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(TagsMsg{"#b": "favourite"}) // the pane shows #b first, then the rooms #a and #c
+	a = next.(App)
+	var want []string
+	for _, r := range a.chanRows() {
+		if !strings.HasPrefix(r, nickLabel) {
+			want = append(want, r)
+		}
+	}
+	if len(want) != 3 {
+		t.Fatalf("pane channels %q", want)
+	}
+	var model []string
+	for _, c := range a.m.Channels() {
+		model = append(model, c.Name)
+	}
+	if slices.Equal(model, want) {
+		t.Fatalf("pane order %q equals model order: the test cannot tell them apart", want)
+	}
+	for i := range want {
+		from := a.focusName(want[(i+1)%len(want)]) // start elsewhere, so the press must move
+		got, _ := press(t, from, strconv.Itoa(i+1), "g", "t")
+		if cur(got) != want[i] {
+			t.Fatalf("%dgt went to %q, pane channel %d is %q", i+1, cur(got), i+1, want[i])
+		}
+	}
+	out, _ := press(t, a.focusName(want[0]), "4", "g", "t") // past the last channel: no-op
+	if cur(out) != want[0] {
+		t.Fatalf("4gt past the last channel went to %q, want %q", cur(out), want[0])
+	}
+}
+
+// TestThreadStepFollowsPaneOrder: ]t and [t walk the threads pane rows in order, main thread last, and stop at the ends.
+func TestThreadStepFollowsPaneOrder(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	heads := []model.Thread{
+		{Root: "$t1", Nick: "ann", Text: "one", Count: 1},
+		{Root: "$t2", Nick: "bob", Text: "two", Count: 1},
+		{Root: "$t3", Nick: "cy", Text: "three", Count: 1},
+	}
+	a.threads = map[string][]model.Thread{"#a": heads}
+	rows, _ := a.paneItems(focusThreads)
+	if len(rows) != len(heads)+1 || rows[len(heads)] != mainThreadLabel {
+		t.Fatalf("pane rows %q, want the heads then the main thread", rows)
+	}
+	// at reports the pane row the chat is on: a head's index, or the main thread's last row.
+	at := func(a App) int {
+		if a.thread == "" {
+			return len(heads)
+		}
+		for i, h := range heads {
+			if h.Root == a.thread {
+				return i
+			}
+		}
+		return -1
+	}
+	a = a.selectThread(heads[0].Root)
+	for i := range rows { // ]t from each row goes to the next, and from the main thread it stays
+		if got := at(a); got != i {
+			t.Fatalf("]t walk: at row %d, want %d", got, i)
+		}
+		a, _ = press(t, a, "]", "t")
+	}
+	if got := at(a); got != len(rows)-1 {
+		t.Fatalf("]t past the main thread went to row %d, want %d", got, len(rows)-1)
+	}
+	a = a.selectThread("")
+	for i := len(rows) - 1; i >= 0; i-- { // [t from each row goes back, and from the first row it stays
+		if got := at(a); got != i {
+			t.Fatalf("[t walk: at row %d, want %d", got, i)
+		}
+		a, _ = press(t, a, "[", "t")
+	}
+	if got := at(a); got != 0 {
+		t.Fatalf("[t before the first head went to row %d, want 0", got)
+	}
+}
+
+// TestThreadStepSameLabel: two heads with the same nick and first line are each reached by [t and ]t by their own root.
+func TestThreadStepSameLabel(t *testing.T) {
+	var log []sent
+	a := newApp(t, &log, nil)
+	heads := []model.Thread{
+		{Root: "$x1", Nick: "ann", Text: "same", Count: 1},
+		{Root: "$x2", Nick: "ann", Text: "same", Count: 1},
+	}
+	if threadLabel(heads[0]) != threadLabel(heads[1]) {
+		t.Fatalf("labels %q and %q differ: the test needs one label", threadLabel(heads[0]), threadLabel(heads[1]))
+	}
+	a.threads = map[string][]model.Thread{"#a": heads}
+	a = a.selectThread("$x1")
+	a, _ = press(t, a, "]", "t")
+	if a.thread != "$x2" {
+		t.Fatalf("]t from $x1 went to %q, want $x2", a.thread)
+	}
+	a, _ = press(t, a, "]", "t")
+	if a.thread != "" {
+		t.Fatalf("]t from $x2 went to %q, want main", a.thread)
+	}
+	a, _ = press(t, a, "[", "t")
+	if a.thread != "$x2" {
+		t.Fatalf("[t from main went to %q, want $x2", a.thread)
+	}
+	a, _ = press(t, a, "[", "t")
+	if a.thread != "$x1" {
+		t.Fatalf("[t from $x2 went to %q, want $x1", a.thread)
+	}
+}
+
+// TestHelpCoversMenuKeys: every NORMAL key that runs a menu command or a channel-pane step appears in the ? help.
+func TestHelpCoversMenuKeys(t *testing.T) {
+	var all string // every key and description of the help as one text
+	words := map[string]bool{}
+	for _, s := range helpSections {
+		for _, k := range s.keys {
+			for _, f := range strings.Fields(k[0]) {
+				words[f] = true
+			}
+			for _, f := range strings.Fields(k[1]) {
+				words[strings.Trim(f, "(),")] = true
+			}
+			all += " " + k[0] + " " + k[1]
+		}
+	}
+	checked := 0
+	for _, b := range normalBindings {
+		key := bindingText(b.keys)
+		runs := b.act.Kind == PaneNext || b.act.Kind == PanePrev || b.act.Kind == GotoChan
+		for _, items := range menus {
+			for _, it := range items {
+				if m, ok := menuMatch(it); ok && m(b) {
+					runs = true
+				}
+			}
+		}
+		if !runs {
+			continue
+		}
+		checked++
+		found := words[key]
+		if strings.Contains(key, " ") {
+			found = strings.Contains(all, key)
+		}
+		if !found {
+			t.Errorf("NORMAL %q runs a menu or channel command but is not in the help", key)
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no NORMAL key runs a menu or channel command")
 	}
 }
 

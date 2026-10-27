@@ -669,6 +669,7 @@ var helpSections = []struct {
 		{"]l [l", "next / previous link or media"},
 		{"]p [p", "next / previous pinned message"},
 		{"]u [u", "next / previous channel with unread"},
+		{"]c [c", "next / previous channel in the pane order (also h l)"},
 		{"u", "jump to the first unread message"},
 		{"/", "search loaded lines: highlights matches, up/down picks the hit"},
 		{"f", "find: a letter on each visible line; type it to select that line (also gw)"},

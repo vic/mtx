@@ -579,8 +579,8 @@ func TestSpeakerFilter(t *testing.T) {
 	if got := strings.Join(a.pickSource(), ","); got != "(all),lib2,vic,lib1,me,a" { // speakers newest first, then the rest of the pane
 		t.Fatalf("speakers %q", got)
 	}
-	a = typeText(t, a, "lib1")
-	a, _ = press(t, a, "space", "enter") // marks lib1, enter applies
+	a = typeText(t, a, "lib")                    // digits are jump keys, not query text: lib2 and lib1 both match, lib1 is the second
+	a, _ = press(t, a, "down", "space", "enter") // marks lib1, enter applies
 	v := ansi.Strip(a.screen())
 	if !slices.Equal(a.speakers, []string{"lib1"}) || !strings.Contains(v, "from lib1") || strings.Contains(v, "from vic") || !strings.Contains(v, "speaker:lib1") {
 		t.Fatalf("filter %q:\n%s", a.speakers, v)

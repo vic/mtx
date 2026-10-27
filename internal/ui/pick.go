@@ -63,6 +63,17 @@ func pickW(w, h int) int {
 	return min(max(w/2, 40), w)
 }
 
+// jumpW is the width of the jump-key gutter at the left of every picker row.
+const jumpW = 2
+
+// jumpKey is the gutter of row i of the filtered list: its jump digit (1-9, then 0) for the first ten, else blank.
+func jumpKey(i int) string {
+	if i >= 10 {
+		return strings.Repeat(" ", jumpW)
+	}
+	return dimmed.Render(string(rune('0'+(i+1)%10))) + " "
+}
+
 func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, marks []string) string {
 	rows := []string{title.Render(what) + " " + prompt.Render(">") + " " + q, ""}
 	start, end := pickWindow(len(ms), sel, max(h-6, 1))
@@ -77,7 +88,7 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 		}
 		var b strings.Builder
 		// one row in the box: cut by cells (wide runes count 2), with a column to spare for the mark
-		rs := []rune(ansi.Truncate(m.name, max(pickW(w, h)-8, 1), "…"))
+		rs := []rune(ansi.Truncate(m.name, max(pickW(w, h)-8-jumpW, 1), "…"))
 		for k, r := range rs {
 			if slices.Contains(m.at, k) {
 				b.WriteString(shortcut.Bold(true).Render(string(r)))
@@ -93,7 +104,7 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 			}
 			check += " "
 		}
-		rows = append(rows, title.Render(mark)+" "+check+b.String())
+		rows = append(rows, jumpKey(i)+title.Render(mark)+" "+check+b.String())
 	}
 	if end < len(ms) {
 		rows = append(rows, dimmed.Render(fmt.Sprintf("↓ %d more", len(ms)-end)))

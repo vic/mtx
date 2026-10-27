@@ -765,6 +765,17 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return a.paneKey(msg)
 	}
 	if a.pick {
+		if s := msg.String(); len(s) == 1 && s[0] >= '0' && s[0] <= '9' && a.pickWhat != pickGrep { // a digit is a jump key, never query text: row 1-9 or 0 (the tenth) of the filtered list, then what Enter does
+			d := (int(s[0]-'0') + 9) % 10
+			if d >= len(a.matches()) {
+				return a, nil
+			}
+			a.psel = d
+			if a.pickWhat == pickThemes {
+				a = a.previewTheme()
+			}
+			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
+		}
 		if a.pickWhat == pickThemes {
 			return a.themeKey(msg)
 		}

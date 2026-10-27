@@ -2014,3 +2014,19 @@ func TestAppLineStepScrollsThroughTallLine(t *testing.T) {
 		t.Fatalf("k never left the tall line: hit %d", a.hit)
 	}
 }
+
+func TestAppOpenLineOpensTextURL(t *testing.T) {
+	t.Setenv("BROWSER", "true") // openURL runs `true <url>`: no browser starts
+	var log []sent
+	a := newApp(t, &log, nil)
+	next, _ := a.Update(LineMsg{Ch: "#a", L: model.Line{ID: "$1", Nick: "n", Text: "see https://example.org/x ok"}})
+	a = next.(App)
+	a, _ = press(t, a, "up")
+	_, cmd := press(t, a, "l")
+	if cmd == nil {
+		t.Fatal("l on a line with a URL returned no command")
+	}
+	if _, isCmd := cmd().(CmdMsg); isCmd { // the media path: /open <id>
+		t.Fatal("l sent /open for a line without media")
+	}
+}

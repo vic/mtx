@@ -1168,6 +1168,11 @@ func (a App) runCmd(line string) (tea.Model, tea.Cmd) {
 		if !ok {
 			return a.note("open: no message with an ID here"), nil
 		}
+		if _, _, media := mediaTag(l.Text); !media { // no media: open the link in the text
+			if url := firstURL(l.Text); url != "" {
+				return a, openURL(url)
+			}
+		}
 		line = "/open " + l.ID
 	}
 	c, err := model.ParseCmd(line)

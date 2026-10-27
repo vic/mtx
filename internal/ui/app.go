@@ -1226,46 +1226,70 @@ func (a App) toast(text string, err bool) App {
 func (a App) inputLine() (label, input, hint string) {
 	switch {
 	case a.prompt == promptCmd:
-		if u := a.cmdUsage(); u != "" {
+		if u := a.cmdUsage(); u != "" && !zen {
 			return "NORMAL", ": " + withCursor(a.in.Value(), a.in.Pos()), u
 		}
-		return "NORMAL", ": " + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "run", "C-t", "files", "C-f", "file block", "esc", "cancel")
+		return "NORMAL", ": " + withCursor(a.in.Value(), a.in.Pos()), hintKeys("enter", "run", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.prompt == promptCapture:
-		return "NORMAL", "! " + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "run, insert output", "C-t", "files", "C-f", "file block", "esc", "cancel")
+		return "NORMAL", "! " + withCursor(a.in.Value(), a.in.Pos()), hintKeys("enter", "run, insert output", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.prompt == promptShell:
-		return "NORMAL", "$ " + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "run locally", "C-t", "files", "C-f", "file block", "esc", "cancel")
+		return "NORMAL", "$ " + withCursor(a.in.Value(), a.in.Pos()), hintKeys("enter", "run locally", "C-t", "files", "C-f", "file block", "esc", "cancel")
 	case a.mode == Insert:
 		prompt := "> "
 		if a.quote != nil { // RE: while replying; the quote is dropped once the input is empty
 			prompt = "RE: "
 		}
 		if a.edit != nil { // C: the input is the edited text; enter saves it
-			return "EDIT", prompt + withCursor(a.in.Value(), a.in.Pos()), keyHint("enter", "save edit", "esc", "cancel")
+			return "EDIT", prompt + withCursor(a.in.Value(), a.in.Pos()), hintKeys("enter", "save edit", "esc", "cancel")
 		}
-		hint := keyHint("enter", "send", "@", "mention", "tab", "complete", "↑↓", "line", "C-t", "files", "C-f", "file block", "C-o", "pick", "esc", "normal")
+		hint := hintKeys("enter", "send", "@", "mention", "tab", "complete", "↑↓", "line", "C-t", "files", "C-f", "file block", "C-o", "pick", "esc", "normal")
 		if a.quote != nil { // the replied-to line is shown here, not in the input
-			hint = keyHint("re", "<"+a.quote.Nick+"> "+a.quote.Text) + "   " + hint
+			quote := keyHint("re", "<"+a.quote.Nick+"> "+a.quote.Text)
+			if hint == "" {
+				hint = quote
+			} else {
+				hint = quote + "   " + hint
+			}
 		}
 		return "INSERT", prompt + withCursor(a.in.Value(), a.in.Pos()), hint
 	case a.focus == focusChans:
-		return "CHANNELS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "join", "tab", "nicks", "esc", "chat")
+		return "CHANNELS", a.normalFooter(), hintKeys("type", "filter "+a.fq, "↑↓", "select", "enter", "join", "tab", "nicks", "esc", "chat")
 	case a.focus == focusThreads:
-		return "THREADS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "open thread", "tab", "chat", "esc", "chat")
+		return "THREADS", a.normalFooter(), hintKeys("type", "filter "+a.fq, "↑↓", "select", "enter", "open thread", "tab", "chat", "esc", "chat")
 	case a.focus == focusNicks:
-		return "NICKS", a.footer(), keyHint("type", "filter "+a.fq, "↑↓", "select", "enter", "mention", "tab", "chat", "esc", "chat")
+		return "NICKS", a.normalFooter(), hintKeys("type", "filter "+a.fq, "↑↓", "select", "enter", "mention", "tab", "chat", "esc", "chat")
 	}
 	if a.hit >= 0 {
-		return "NORMAL", a.footer(), keyHint("m", "message", "a", "reply", "A", "quote", "e", "edit", "r", "react", "T", "thread", "y", "yank", "v", "open", ".", "repeat", "D", "delete", "esc", "unselect")
+		return "NORMAL", a.normalFooter(), hintKeys("m", "message", "a", "reply", "A", "quote", "e", "edit", "r", "react", "T", "thread", "y", "yank", "v", "open", ".", "repeat", "D", "delete", "esc", "unselect")
+	}
+	if zen {
+		return "NORMAL", a.normalFooter(), ""
 	}
 	return "NORMAL", a.footer(), keyHint("SPC", "menu", "?", "help", ":", "command", "h l", "channel", "C-p C-n", "thread", "u", "unread", "#", "rooms", "@", "people", "%", "threads", "^", "pins", "'", "recent", "i", "write", "f", "find", "↑↓", "line")
+}
+
+// normalFooter is the input of a NORMAL-keyed row. zen puts SPC menu and ? help ahead of the footer, so the
+// sponsor overlay covers the states, not the keys.
+func (a App) normalFooter() string {
+	if zen {
+		return keyHint("SPC", "menu", "?", "help") + "   " + a.footer()
+	}
+	return a.footer()
 }
 
 // footer is the last row outside INSERT: more keys and the toggle states, since
 // there is no input to show (vic 2026-10-23).
 func (a App) footer() string {
 	// states first: on a narrow screen the keys fall off the end (they are in ? help)
-	return fit(cell, " "+keyHint("t", "thread:"+cmp.Or(threadState(a.thread), "main"), "M", "mentions:"+onOff(a.mentions), "SPC v s", "time:"+onOff(a.stamps),
-		"S", "speaker:"+cmp.Or(strings.Join(a.speakers, ","), "all"), "C-g", "grep:"+cmp.Or(a.grep, "off"), "/", "search", "J K", "turns", "e", "edit", "O", "thread reply", "z", "zen:"+onOff(zen), ":", "command"), max(a.w, 1)) // one row
+	thread := "thread:" + cmp.Or(threadState(a.thread), "main")
+	mentions := "mentions:" + onOff(a.mentions)
+	stamps := "time:" + onOff(a.stamps)
+	speakers := "speaker:" + cmp.Or(strings.Join(a.speakers, ","), "all")
+	grep := "grep:" + cmp.Or(a.grep, "off")
+	if zen { // zen's one row: z, then the state values, not the usage hints (vic 2026-10-27)
+		return keyHint("z", "zen:"+onOff(zen)) + "  " + dimmed.Render(strings.Join([]string{thread, mentions, stamps, speakers, grep}, "  "))
+	}
+	return fit(cell, " "+keyHint("t", thread, "M", mentions, "SPC v s", stamps, "S", speakers, "C-g", grep, "/", "search", "J K", "turns", "e", "edit", "O", "thread reply", "z", "zen:"+onOff(zen), ":", "command"), max(a.w, 1)) // one row
 }
 
 // View is the full-screen frame; screen is its text.

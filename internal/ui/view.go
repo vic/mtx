@@ -70,6 +70,20 @@ func keyHint(pairs ...string) string {
 	return strings.Join(parts, "  ")
 }
 
+// hintKeys is keyHint for the input line's hints: zen's one row keeps only SPC and ? (vic 2026-10-27).
+func hintKeys(pairs ...string) string {
+	if !zen {
+		return keyHint(pairs...)
+	}
+	var keep []string
+	for i := 0; i+1 < len(pairs); i += 2 {
+		if pairs[i] == "SPC" || pairs[i] == "?" {
+			keep = append(keep, pairs[i], pairs[i+1])
+		}
+	}
+	return keyHint(keep...)
+}
+
 // nickStyle gives each nick a stable color.
 func nickStyle(nick string) lipgloss.Style {
 	h := fnv.New32a()
@@ -125,6 +139,9 @@ func paneRows(w, h, in int) int {
 // inputRows is the input row text (with its prompt) wrapped to w columns: the last rows, at most a third of h,
 // so the end being typed stays visible.
 func inputRows(input string, w, h int) []string {
+	if zen { // zen's one row holds the input (zenInput)
+		return nil
+	}
 	rs := strings.Split(lipgloss.NewStyle().Width(max(w, 1)).Render(input), "\n")
 	k := max(h/3, 1)
 	if len(rs) > k { // the window ends at the cursor's row, so moving up scrolls up
@@ -393,26 +410,56 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		lst = alert
 	}
 	left += lst.Render(ml.Left)
+	right := dimmed.Render(ml.Right + " ")
+	if zen { // zen's one row: the input sits between the mode and the keys
+		keys := ""
+		if hint != "" {
+			keys = "   " + hint
+		}
+		left += inputPrompt(zenInput(input, w-lipgloss.Width(left+keys+right)))
+	}
 	if hint != "" { // keys for this mode, between the status and the clock (vic 2026-10-22)
 		left += "   " + hint
 	}
-	right := dimmed.Render(ml.Right + " ")
 	rows = append(rows, fit(cell, fit(cell, left, max(w-lipgloss.Width(right), 0))+right, w))
 	for _, r := range ir {
-		if after, ok := strings.CutPrefix(r, ">"); ok {
-			r = prompt.Render(">") + after
-		} else if after, ok := strings.CutPrefix(r, "RE:"); ok { // a reply prompt is the same color
-			r = prompt.Render("RE:") + after
-		} else if after, ok := strings.CutPrefix(r, "! "); ok { // the ! prompt matches the others
-			r = prompt.Render("!") + " " + after
-		} else if after, ok := strings.CutPrefix(r, "$ "); ok { // the $ and : prompts match the chat prompt
-			r = prompt.Render("$") + " " + after
-		} else if after, ok := strings.CutPrefix(r, ": "); ok {
-			r = prompt.Render(":") + " " + after
-		}
-		rows = append(rows, fit(cell, r, w))
+		rows = append(rows, fit(cell, inputPrompt(r), w))
 	}
 	return strings.Join(rows, "\n")
+}
+
+// inputPrompt colors the prompt that starts an input row.
+func inputPrompt(r string) string {
+	if after, ok := strings.CutPrefix(r, ">"); ok {
+		return prompt.Render(">") + after
+	}
+	if after, ok := strings.CutPrefix(r, "RE:"); ok { // a reply prompt is the same color
+		return prompt.Render("RE:") + after
+	}
+	if after, ok := strings.CutPrefix(r, "! "); ok { // the ! prompt matches the others
+		return prompt.Render("!") + " " + after
+	}
+	if after, ok := strings.CutPrefix(r, "$ "); ok { // the $ and : prompts match the chat prompt
+		return prompt.Render("$") + " " + after
+	}
+	if after, ok := strings.CutPrefix(r, ": "); ok {
+		return prompt.Render(":") + " " + after
+	}
+	return r
+}
+
+// zenInput is the input on zen's one row: the avail columns of input that keep the cursor in view.
+func zenInput(input string, avail int) string {
+	if avail <= 0 {
+		return ""
+	}
+	raw := strings.ReplaceAll(input, "\n", " ")
+	col := 0 // the cursor's column; the NORMAL footer has none
+	if i := strings.Index(raw, cursorMark); i >= 0 {
+		col = lipgloss.Width(raw[:i])
+	}
+	start := max(col-avail+1, 0)
+	return ansi.Cut(strings.NewReplacer(cursorMark, cursorOn, cursorEndMark, cursorOff).Replace(raw), start, start+avail)
 }
 
 // chanCell is chanCellUncached, memoized on what the cell shows.

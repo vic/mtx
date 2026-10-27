@@ -2,26 +2,26 @@ help:
     just --list
 
 build:
-    nix-shell -p go --run 'go build -tags goolm -o mtx ./cmd/mtx'
+    go build -tags goolm -o mtx ./cmd/mtx
 
 test:
-    nix-shell -p go --run 'go test -tags goolm ./...'
+    go test -tags goolm ./...
 
 fmt:
-    nix-shell -p go --run 'go fmt ./...'
+    go fmt ./...
 
 run *args:
-    nix-shell -p go --run 'go run -tags goolm ./cmd/mtx {{args}}'
+    go run -tags goolm ./cmd/mtx {{args}}
 
 vet:
-    nix-shell -p go --run 'go vet -tags goolm ./...'
+    go vet -tags goolm ./...
 
 ci: vet test conduit
 
 conduit:
     #!/usr/bin/env bash
     set -euo pipefail
-    conduit_bin=$(nix-shell -p matrix-conduit --run 'command -v conduit')
+    conduit_bin=$(command -v conduit)
     CONDUIT_CONFIG=.github/conduit.toml "$conduit_bin" > conduit.log 2>&1 &
     pid=$!
     trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
@@ -42,7 +42,7 @@ conduit:
     a=$(reg "ci_a$RANDOM" "$pa"); b=$(reg "ci_b$RANDOM" "$pb")
     export MTX_CONDUIT_A_USER=$(field "$a" user_id) MTX_CONDUIT_A_PASSWORD=$pa
     export MTX_CONDUIT_B_USER=$(field "$b" user_id) MTX_CONDUIT_B_PASSWORD=$pb
-    timeout 300 nix-shell -p go --run 'go test -tags "goolm conduit" -count=1 -timeout 180s -run TestConduit ./internal/matrix/'
+    timeout 300 go test -tags "goolm conduit" -count=1 -timeout 180s -run TestConduit ./internal/matrix/
 
 
 # Regenerate the keys page and every demo gif. Needs conduit running and MTX_SEED_REG_TOKEN set.

@@ -713,12 +713,13 @@ func helpBox(h, off int) string {
 	return strings.Join(box[off:off+h], "\n")
 }
 
-// overlayCentered draws box centered over screen (w x h cells); the cells around it keep their content.
-func overlayCentered(screen string, w, h int, box string) string {
+// overlayCentered draws box centered over screen (w x h cells), dy rows lower (a popup sliding in); the
+// cells around it keep their content.
+func overlayCentered(screen string, w, h, dy int, box string) string {
 	rows := strings.Split(screen, "\n")
 	bl := strings.Split(box, "\n")
 	bw := min(lipgloss.Width(bl[0]), w)
-	top, left := max((h-len(bl))/2, 0), max((w-bw)/2, 0)
+	top, left := max((h-len(bl))/2, 0)+dy, max((w-bw)/2, 0)
 	for j, b := range bl {
 		if i := top + j; i < len(rows) {
 			b = ansi.Truncate(b, bw, "")

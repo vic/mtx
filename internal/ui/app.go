@@ -219,6 +219,10 @@ type App struct {
 	drag          drag                                              // the mouse gesture in progress (barDrag, selDrag); nil = none
 	sel           *selection                                        // the dragged chat text range; nil = none. A press or a key drops it
 	ctx           *ctxMenu                                          // right press: the open menu drawn at the pointer; nil = which-key box
+	motion        bool                                              // WithMotion: popups slide in and chat jumps glide (tuios springs); off in tests
+	pop           *spring                                           // the opening popup's rows below its place, sliding to 0; nil = in place
+	glide         *spring                                           // the chat's shown offset gliding to off(); nil = shown is off()
+	moving        bool                                              // a frame tick is in flight
 	pq            textinput.Model                                   // picker query (own input: a typed message survives)
 	files         []string                                          // pickFiles: the session's files, from git ls-files (filesMsg)
 	psel          int                                               // picker selection, an index in pickList
@@ -306,6 +310,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	app, ok := model.(App)
 	if ok && app.thread == "" { // on the main thread: its unread count is read
 		delete(app.mainUnread, app.m.Current().Name)
+	}
+	if ok {
+		var frame tea.Cmd
+		app, frame = app.motionAfter(a, msg)
+		cmd, model = tea.Batch(cmd, frame), app
 	}
 	if !ok || app.seen == nil {
 		return model, cmd
@@ -1382,20 +1391,20 @@ func (a App) screen() string {
 	screen := a.chatScreen()
 	switch {
 	case a.img != "":
-		return overlayCentered(screen, a.w, a.h, imgBox(a.img))
+		return overlayCentered(screen, a.w, a.h, a.popDY(), imgBox(a.img))
 	case a.verifySAS != "":
-		return overlayCentered(screen, a.w, a.h, verifyBox(a.verifySAS))
+		return overlayCentered(screen, a.w, a.h, a.popDY(), verifyBox(a.verifySAS))
 	case a.help:
-		return overlayCentered(screen, a.w, a.h, helpBox(a.h, a.helpOff))
+		return overlayCentered(screen, a.w, a.h, a.popDY(), helpBox(a.h, a.helpOff))
 	case a.pick && a.pickWhat == pickGrep:
-		return overlayCentered(screen, a.w, a.h, grepBox(a.w, a.pq.Value()))
+		return overlayCentered(screen, a.w, a.h, a.popDY(), grepBox(a.w, a.pq.Value()))
 	case a.pick:
 		titles := map[pickKind]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned", pickEdits: "edit history", pickExplore: "explore", pickFound: "search results", pickInfo: a.listTitle, pickHelp: "help"}
 		what, ok := titles[a.pickWhat]
 		if !ok {
 			what = "pick"
 		}
-		return overlayCentered(screen, a.w, a.h, pickBox(a.w, a.h, what, a.pq.Value(), a.matches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
+		return overlayCentered(screen, a.w, a.h, a.popDY(), pickBox(a.w, a.h, what, a.pq.Value(), a.matches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
 	}
 	return screen
 }
@@ -1410,7 +1419,7 @@ func (a App) chatBase() string {
 			ml.Left += ": " + t
 		}
 	}
-	return render(a.m, ml, input, a.w, a.h, a.off(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
+	return render(a.m, ml, input, a.w, a.h, a.shownOff(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
 }
 
 // chatScreen is chatBase with the selection, and the completion and toasts floating over it.
@@ -1428,7 +1437,7 @@ func (a App) chatScreen() string {
 		if a.ctxOn() {
 			screen = a.withCtx(screen)
 		} else {
-			screen = overlayRight(screen, a.w, modeline-1, menuBox(name, menus[name], a.h-4))
+			screen = overlayRight(screen, a.w, modeline-1+a.popDY(), menuBox(name, menus[name], a.h-4))
 		}
 	}
 	return withSponsor(screen, a.w)

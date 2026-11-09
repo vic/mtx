@@ -16,7 +16,7 @@ func runDemo() error {
 	if err != nil {
 		return err
 	}
-	app := ui.New(m, func(ch, text string) error { return nil }).WithUser("vic")
+	app := ui.New(m, func(ch, text string) error { return nil }).WithUser("vic").WithMotion()
 	p := tea.NewProgram(app)
 	go func() {
 		p.Send(ui.ThemeMsg("base24/dracula")) // the docs gifs use mtx's own Dracula, not the terminal's

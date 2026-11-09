@@ -111,7 +111,7 @@ func runTUI(ctx context.Context, c *matrix.Client, cfg matrix.Config) error {
 	}
 	defer closeLog()
 	logf("start user=%s", me)
-	app := ui.New(m, r.send).WithUser(localpart(me)).WithCmd(cs.cmd).WithSeen(r.seen).WithReply(r.reply).WithEdit(r.edit).
+	app := ui.New(m, r.send).WithMotion().WithUser(localpart(me)).WithCmd(cs.cmd).WithSeen(r.seen).WithReply(r.reply).WithEdit(r.edit).
 		WithInputSave(func(ch, text string) {
 			go func() {
 				if err := c.AddInput(ctx, ch, text); err != nil {

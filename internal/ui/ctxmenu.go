@@ -110,6 +110,7 @@ func ctxRow(it menuItem, hint string, on bool, width int) string {
 // withCtx draws the context menu over screen.
 func (a App) withCtx(screen string) string {
 	lines, x, y, _ := a.ctxLayout()
+	y += a.popDY()
 	rows := strings.Split(screen, "\n")
 	for j, l := range lines {
 		if r := y + j; r < len(rows) {

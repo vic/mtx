@@ -16,8 +16,6 @@ import (
 )
 
 const (
-	chanW    = 15 // channel list pane, inner width
-	nickW    = 10 // nick pane, inner width
 	minWide  = 40 // below this width (or h < minWideH) View shows the lines pane only
 	minWideH = 5
 	nickCol  = 11 // "<nick>" column in the lines pane
@@ -590,9 +588,9 @@ func chanCellUncached(chans []model.Channel, curName string, i int) string {
 		marker, markSt = strconv.Itoa(c.Unread), unread
 	}
 	if c.Name == curName { // plain text: inner colors would end the background early
-		return fit(selected, " "+fitPlain(c.Name, 11)+fitPlain(marker, 3), chanW)
+		return fit(selected, " "+fitPlain(c.Name, chanW-4)+fitPlain(marker, 3), chanW)
 	}
-	return fitPlain(" "+fit(nameSt, c.Name, 11)+fit(markSt, marker, 3), chanW)
+	return fitPlain(" "+fit(nameSt, c.Name, chanW-4)+fit(markSt, marker, 3), chanW)
 }
 
 // textWidth is the width of the scrollback text in a w x h screen.

@@ -69,9 +69,9 @@ func TestScrollbarTrackPressJumps(t *testing.T) {
 	if a.off() >= 6 || a.drag == nil {
 		t.Fatalf("a press on the bare track jumps the thumb there: off %d drag %v", a.off(), a.drag)
 	}
-	b := scrollApp(t) // at the tail there is no bar: the press is an ordinary click
+	b := scrollApp(t) // at the tail there is no bar: the press grabs the border under it
 	b = mouse(t, b, tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y + 5})
-	if b.drag != nil {
-		t.Fatal("NEG no bar, no drag")
+	if _, ok := b.drag.(barDrag); ok {
+		t.Fatal("NEG no bar, no bar drag")
 	}
 }

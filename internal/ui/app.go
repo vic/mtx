@@ -620,6 +620,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if b, ok := a.grabBar(msg.X, msg.Y); ok {
 				return b, nil
 			}
+			if b, ok := a.pressEdge(msg.X, msg.Y); ok {
+				return b, nil
+			}
 			b, ok := a.pressText(msg.X, msg.Y)
 			if ok { // on the chat text: the release decides between a click and a copy
 				return b, nil
@@ -634,6 +637,8 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case barDrag: // the thumb top follows the pointer
 			g, _, y := a.chatBar()
 			return a.setOff(a.m.Current().Name, g.offAt(msg.Y-y-d.hold)), nil
+		case edgeDrag:
+			return a.dragEdge(d.edge, msg.X), nil
 		case selDrag:
 			s := *a.sel
 			s.head = a.textAt(msg.X, msg.Y)

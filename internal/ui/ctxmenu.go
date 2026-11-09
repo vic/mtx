@@ -169,25 +169,20 @@ func (a App) ctxRun(i int) (tea.Model, tea.Cmd) {
 	return a.key(keyMsg(it.key))
 }
 
-// ctxKey answers a key while the context menu is up: the list keys move (listnav), enter runs, any other key is the
-// which-key menu's.
+// ctxKey answers a key while the context menu is up: the list keys move (listnav), enter runs, any other
+// key is the which-key menu's.
 func (a App) ctxKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	n := len(ctxRows(a.ctx.name))
-	c := *a.ctx
 	if m := listKeys(msg.String()); m != moveNone {
-		c.sel = listStep(c.sel, m, n, a.h-ctxChrome)
+		c := *a.ctx
+		c.sel = listStep(c.sel, m, len(ctxRows(c.name)), a.h-ctxChrome)
 		a.ctx = &c
 		return a, nil
 	}
-	switch msg.String() {
-	case "enter":
-		return a.ctxRun(c.sel)
-	default:
-		a.ctx = nil
-		return a.key(msg)
+	if msg.String() == "enter" {
+		return a.ctxRun(a.ctx.sel)
 	}
-	a.ctx = &c
-	return a, nil
+	a.ctx = nil
+	return a.key(msg)
 }
 
 // ctxHover highlights the row under the pointer, so the pointer tracks like the arrows do.

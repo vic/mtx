@@ -88,6 +88,8 @@ func usePalette(p palette) {
 	readMarkOn = dimmed.Background(pal.slots[0x0D]).Render("✓")
 	pinMarkOn = alert.Background(pal.slots[0x0D]).Render("▴")
 	blankOn = gutter.Render(" ")
+	thumb := fg(pal.slots[0x0D])
+	barInk = [...]string{barFull: thumb.Render("█"), barUpper: thumb.Render("▀"), barLower: thumb.Render("▄")}
 	unreadMark = unread
 	sponsorButton = lipgloss.NewStyle().Foreground(pal.slots[3]).Background(pal.slots[1]).Render(sponsorLabel)
 	cursorOn, cursorOff = func() (string, string) {

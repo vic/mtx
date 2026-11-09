@@ -216,6 +216,7 @@ type App struct {
 	marks         []string                                          // S picker: nicks marked with space, applied by enter
 	toasts        []toast                                           // notification cards, newest last; the tick drops old ones
 	helpOff       int                                               // help box scroll (j k, wheel) when it is taller than the screen
+	grab          *int                                              // scrollbar drag: rows between the pointer and the thumb top; nil = no drag
 	pq            textinput.Model                                   // picker query (own input: a typed message survives)
 	files         []string                                          // pickFiles: the session's files, from git ls-files (filesMsg)
 	psel          int                                               // picker selection, an index in pickList
@@ -606,7 +607,20 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a.helpClick(tea.Mouse(msg))
 		}
 		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.prompt == 0 {
+			if b, ok := a.grabBar(msg.X, msg.Y); ok {
+				return b, nil
+			}
 			return a.click(tea.Mouse(msg))
+		}
+	case tea.MouseMotionMsg:
+		if a.grab != nil { // a scrollbar drag: the thumb top follows the pointer
+			g, _, y := a.chatBar()
+			return a.setOff(a.m.Current().Name, g.offAt(msg.Y-y-*a.grab)), nil
+		}
+	case tea.MouseReleaseMsg:
+		if a.grab != nil {
+			a.grab = nil
+			return a, nil
 		}
 	case tea.MouseWheelMsg:
 		if n := notch(msg.Button); n != 0 {

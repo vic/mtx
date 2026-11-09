@@ -358,6 +358,12 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 	ml.Left = ""
 	tRows, sep := threadBox(p, wide(w, h)) // the threads box above the chat, and its separator line
 	lines, of := tailRows(shown, n-tRows-sep, off, textWidth(w, h), wrap)
+	bar := make([]barCell, max(n-tRows-sep, 0)) // all track: no thumb
+	if off > 0 && wide(w, h) {
+		if b, ok := newBar(n-tRows-sep, rowCount(shown, textWidth(w, h), wrap), off); ok {
+			bar, _, _ = b.cells()
+		}
+	}
 	code := codeRows(lines, of, shown)
 
 	var rows []string
@@ -452,14 +458,17 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 					vEdge(2, "┤", false)+nc+edge(3, "│"))
 				continue
 			}
-			midCell := ""
+			midCell, right := "", vEdge(2, "│", i < tRows)
 			if i < tRows {
 				midCell = tBlock[i]
 			} else {
 				midCell = lineRow(lines, of, shown, hit, i-tRows-sep, mid, p.lead(of, shown, i-tRows-sep), code, q)
+				if c := bar[i-tRows-sep]; c != barTrack { // the scrollbar thumb takes the chat's right border
+					right = barInk[c]
+				}
 			}
 			rows = append(rows, edge(0, "│")+cc+vEdge(1, "│", i < tRows)+midCell+
-				vEdge(2, "│", i < tRows)+nc+edge(3, "│"))
+				right+nc+edge(3, "│"))
 		}
 		rows = append(rows, edge(0, "└")+line(0).Render(strings.Repeat("─", chanW))+vEdge(1, "┴", false)+styleOf(midLit(false)).Render(strings.Repeat("─", mid))+
 			vEdge(2, "┴", false)+line(2).Render(strings.Repeat("─", nickW))+edge(3, "┘"))

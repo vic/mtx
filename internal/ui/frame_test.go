@@ -780,7 +780,7 @@ func TestCmdUsageHint(t *testing.T) {
 }
 
 func TestClickChannelAndNick(t *testing.T) {
-	a := scrollApp(t) // 80x10: channels #a #b #c in the left pane, rows 1..3
+	a := mouse(t, scrollApp(t), tea.WindowSizeMsg{Width: 160, Height: 40}) // channels #a #b #c in the left pane, rows 1..3; room beside the which-key panel a click opens
 	click := func(x, y int) {
 		next, _ := clickUp(a, x, y)
 		a = next.(App)
@@ -815,7 +815,7 @@ func TestClickChannelAndNick(t *testing.T) {
 	a.in.SetValue("@n ok")
 	next, cmd := a.sendLine()
 	a = next.(App)
-	if got := cmd().(SendResultMsg).Text; got != "> <n> msgH\n@n ok" { // row 1 of the 6 shown: msgG is row 0
+	if got := cmd().(SendResultMsg).Text; got != "> <n> msgB\n@n ok" { // row 1 of the 12 shown: msgA is row 0
 		t.Fatalf("sent %q", got)
 	}
 	if a.quote != nil {
@@ -824,8 +824,8 @@ func TestClickChannelAndNick(t *testing.T) {
 }
 
 func TestReplyPromptUntilInputEmpty(t *testing.T) {
-	a := scrollApp(t)
-	next, _ := clickUp(a, 40, 2) // the first click selects it
+	a := mouse(t, scrollApp(t), tea.WindowSizeMsg{Width: 160, Height: 40}) // room beside the which-key panel a click opens
+	next, _ := clickUp(a, 40, 2)                                           // the first click selects it
 	a = next.(App)
 	next, _ = clickUp(a, 40, 2) // the second click replies
 	a = next.(App)

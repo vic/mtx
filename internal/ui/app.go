@@ -625,6 +625,13 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Button == tea.MouseLeft && a.popBox() != "" {
 			return a.popPress(tea.Mouse(msg))
 		}
+		if msg.Button == tea.MouseLeft && a.whichKey() != "" {
+			b, cmd, ok := a.menuPress(tea.Mouse(msg))
+			if ok {
+				return b, cmd
+			}
+			a = b
+		}
 		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.prompt == 0 {
 			if b, ok := a.grabBar(msg.X, msg.Y); ok {
 				return b, nil
@@ -1439,15 +1446,12 @@ func (a App) chatScreen() string {
 	modeline := a.h - len(inputRows(input, a.w, a.h)) - 1
 	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest()) // floats above the prompt: the layout does not move
 	screen = overlayToasts(screen, a.w, modeline-1, a.toasts)     // cards sit just above the modeline
-	name := a.menu                                                // the which-key menu: one key per row, at the bottom right
-	if name == "" && slices.Contains(menuPrefixes, a.pending) {
-		name = a.pending // a prefix waiting for its second key lists the continuations
-	}
+	name := a.whichKey()
 	if name != "" {
 		if a.ctxOn() {
 			screen = a.withCtx(screen)
 		} else {
-			screen = overlayRight(screen, a.w, modeline-1+a.popDY(), menuBox(name, menus[name], a.h-4))
+			screen = overlayRight(screen, a.w, modeline-1+a.popDY(), a.menuPanel(name))
 		}
 	}
 	return withSponsor(screen, a.w)

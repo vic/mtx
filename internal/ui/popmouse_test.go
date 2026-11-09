@@ -1,9 +1,13 @@
 package ui
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // pickerApp is newApp (#a #b #c) at 80x24 with the channel picker open.
@@ -66,5 +70,32 @@ func TestPressAwayDismisses(t *testing.T) {
 	next, cmd := a.Update(tea.MouseClickMsg{Button: tea.MouseLeft, X: 0, Y: 0})
 	if next.(App).verifySAS == "" || cmd != nil { // esc there would run :verify cancel
 		t.Fatalf("NEG a stray press never answers a verification: cmd %v", cmd)
+	}
+}
+
+// A press on a which-key item does what typing its key does; a press away closes the menu.
+func TestWhichKeyPointer(t *testing.T) {
+	a := mouse(t, pickerApp(t), tea.KeyPressMsg{Code: tea.KeyEscape})
+	a, _ = press(t, a, " ")
+	if a.whichKey() == "" {
+		t.Fatal("space opens the which-key menu")
+	}
+	bl := strings.Split(ansi.Strip(a.menuPanel(a.whichKey())), "\n")
+	top := a.menuBottom() - len(bl) + 1
+	var x, y int
+	for r, l := range bl {
+		if i := strings.Index(l, "?  "); i >= 0 {
+			x, y = a.w-lipgloss.Width(bl[0])-1+lipgloss.Width(l[:i]), top+r
+		}
+	}
+	b, _ := press(t, a, "?")
+	a2 := mouse(t, a, tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y})
+	snap := func(a App) string { return fmt.Sprint(a.help, a.pick, a.pickWhat, a.whichKey()) }
+	if snap(a2) != snap(b) || snap(a2) == snap(a) {
+		t.Fatalf("click on the ? item: %s, typing ?: %s", snap(a2), snap(b))
+	}
+	a = mouse(t, a, tea.MouseClickMsg{Button: tea.MouseLeft, X: 0, Y: 0})
+	if a.whichKey() != "" {
+		t.Fatal("a press away closes the which-key menu")
 	}
 }

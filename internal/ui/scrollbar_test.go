@@ -44,8 +44,8 @@ func TestScrollbarDrag(t *testing.T) {
 	a := scrollApp(t).setOff("#a", 3)
 	_, x, y := a.chatBar()
 	a = mouse(t, a, tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y + 2}) // on the thumb
-	if a.grab == nil || *a.grab != 1 {
-		t.Fatalf("press on the thumb row 1 below its top: grab %v", a.grab)
+	if d, ok := a.drag.(barDrag); !ok || d.hold != 1 {
+		t.Fatalf("press on the thumb row 1 below its top: drag %v", a.drag)
 	}
 	a = mouse(t, a, tea.MouseMotionMsg{Button: tea.MouseLeft, X: x, Y: y})
 	if a.off() != 6 {
@@ -57,8 +57,8 @@ func TestScrollbarDrag(t *testing.T) {
 	}
 	a = mouse(t, a, tea.MouseReleaseMsg{Button: tea.MouseLeft, X: x, Y: y + 9})
 	a = mouse(t, a, tea.MouseMotionMsg{Button: tea.MouseLeft, X: x, Y: y})
-	if a.grab != nil || a.off() != 0 {
-		t.Fatalf("NEG motion after release scrolls nothing: grab %v off %d", a.grab, a.off())
+	if a.drag != nil || a.off() != 0 {
+		t.Fatalf("NEG motion after release scrolls nothing: drag %v off %d", a.drag, a.off())
 	}
 }
 
@@ -66,12 +66,12 @@ func TestScrollbarTrackPressJumps(t *testing.T) {
 	a := scrollApp(t).setOff("#a", 6) // thumb on rows 0-2
 	_, x, y := a.chatBar()
 	a = mouse(t, a, tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y + 5})
-	if a.off() >= 6 || a.grab == nil {
-		t.Fatalf("a press on the bare track jumps the thumb there: off %d grab %v", a.off(), a.grab)
+	if a.off() >= 6 || a.drag == nil {
+		t.Fatalf("a press on the bare track jumps the thumb there: off %d drag %v", a.off(), a.drag)
 	}
 	b := scrollApp(t) // at the tail there is no bar: the press is an ordinary click
 	b = mouse(t, b, tea.MouseClickMsg{Button: tea.MouseLeft, X: x, Y: y + 5})
-	if b.grab != nil {
-		t.Fatal("NEG no bar, no grab")
+	if b.drag != nil {
+		t.Fatal("NEG no bar, no drag")
 	}
 }

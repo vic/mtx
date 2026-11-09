@@ -112,9 +112,8 @@ var barInk [barLower + 1]string
 // chatBar is the chat scrollbar's geometry and place on screen: its column x and the screen row y of the
 // first chat row (under the top border and the threads box).
 func (a App) chatBar() (g barGeom, x, y int) {
-	rows, sep := a.threadRows()
-	page := a.page()
-	return barGeom{page, rowCount(a.lines(a.m.Current()), textWidth(a.w, a.h), a.wrap()) - page}, a.w - nickW - 2, 1 + rows + sep
+	page, y := a.chatRows()
+	return barGeom{page, rowCount(a.lines(a.m.Current()), textWidth(a.w, a.h), a.wrap()) - page}, a.w - nickW - 2, y
 }
 
 // grabBar answers a left press on the drawn scrollbar and starts a drag that holds the rows between the
@@ -135,6 +134,6 @@ func (a App) grabBar(x, y int) (App, bool) {
 		_, top, _ = scrollBar{g, a.off()}.cells()
 	}
 	hold := y - by - top
-	a.grab = &hold
+	a.drag = barDrag{hold}
 	return a, true
 }

@@ -216,7 +216,8 @@ type App struct {
 	marks         []string                                          // S picker: nicks marked with space, applied by enter
 	toasts        []toast                                           // notification cards, newest last; the tick drops old ones
 	helpOff       int                                               // help box scroll (j k, wheel) when it is taller than the screen
-	grab          *int                                              // scrollbar drag: rows between the pointer and the thumb top; nil = no drag
+	drag          drag                                              // the mouse gesture in progress (barDrag, selDrag); nil = none
+	sel           *selection                                        // the dragged chat text range; nil = none. A press or a key drops it
 	pq            textinput.Model                                   // picker query (own input: a typed message survives)
 	files         []string                                          // pickFiles: the session's files, from git ls-files (filesMsg)
 	psel          int                                               // picker selection, an index in pickList
@@ -610,18 +611,25 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if b, ok := a.grabBar(msg.X, msg.Y); ok {
 				return b, nil
 			}
-			return a.click(tea.Mouse(msg))
+			b, ok := a.pressText(msg.X, msg.Y)
+			if ok { // on the chat text: the release decides between a click and a copy
+				return b, nil
+			}
+			return b.click(tea.Mouse(msg))
 		}
 	case tea.MouseMotionMsg:
-		if a.grab != nil { // a scrollbar drag: the thumb top follows the pointer
+		switch d := a.drag.(type) {
+		case barDrag: // the thumb top follows the pointer
 			g, _, y := a.chatBar()
-			return a.setOff(a.m.Current().Name, g.offAt(msg.Y-y-*a.grab)), nil
-		}
-	case tea.MouseReleaseMsg:
-		if a.grab != nil {
-			a.grab = nil
+			return a.setOff(a.m.Current().Name, g.offAt(msg.Y-y-d.hold)), nil
+		case selDrag:
+			s := *a.sel
+			s.head = a.textAt(msg.X, msg.Y)
+			a.sel = &s
 			return a, nil
 		}
+	case tea.MouseReleaseMsg:
+		return a.release()
 	case tea.MouseWheelMsg:
 		if n := notch(msg.Button); n != 0 {
 			return a.wheel(msg, n), nil
@@ -642,6 +650,7 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case WheelMsg:
 		return a.wheel(msg.M, msg.N), nil
 	case tea.KeyPressMsg: // v2 decodes one key per event, also when one read holds "gt"
+		a.sel = nil // typing drops the selection, as a press does
 		return a.key(msg)
 	}
 	return a, nil
@@ -1366,8 +1375,8 @@ func (a App) screen() string {
 	return screen
 }
 
-// chatScreen is the scrollback, input and modeline, with the completion and toasts floating over them.
-func (a App) chatScreen() string {
+// chatBase is the scrollback, input and modeline, nothing floating over them.
+func (a App) chatBase() string {
 	label, input, hint := a.inputLine()
 	ml := model.Status(a.m, label, a.info, a.now())
 	if n := len(a.pins[a.m.Current().Name]); n > 0 && a.m.Current().Kind == model.RoomChan { // room stats on the frame border
@@ -1376,7 +1385,13 @@ func (a App) chatScreen() string {
 			ml.Left += ": " + t
 		}
 	}
-	screen := render(a.m, ml, input, a.w, a.h, a.off(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
+	return render(a.m, ml, input, a.w, a.h, a.off(), a.hit, a.sides(), a.lines(a.m.Current()), a.wrap(), nil, hint, a.highlight())
+}
+
+// chatScreen is chatBase with the selection, and the completion and toasts floating over it.
+func (a App) chatScreen() string {
+	_, input, _ := a.inputLine()
+	screen := a.withSelection(a.chatBase())
 	modeline := a.h - len(inputRows(input, a.w, a.h)) - 1
 	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest()) // floats above the prompt: the layout does not move
 	screen = overlayToasts(screen, a.w, modeline-1, a.toasts)     // cards sit just above the modeline

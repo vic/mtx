@@ -782,7 +782,7 @@ func TestCmdUsageHint(t *testing.T) {
 func TestClickChannelAndNick(t *testing.T) {
 	a := scrollApp(t) // 80x10: channels #a #b #c in the left pane, rows 1..3
 	click := func(x, y int) {
-		next, _ := a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+		next, _ := clickUp(a, x, y)
 		a = next.(App)
 	}
 	click(2, 2) // second channel row
@@ -825,9 +825,9 @@ func TestClickChannelAndNick(t *testing.T) {
 
 func TestReplyPromptUntilInputEmpty(t *testing.T) {
 	a := scrollApp(t)
-	next, _ := a.Update(tea.MouseClickMsg{X: 40, Y: 2, Button: tea.MouseLeft}) // the first click selects it
+	next, _ := clickUp(a, 40, 2) // the first click selects it
 	a = next.(App)
-	next, _ = a.Update(tea.MouseClickMsg{X: 40, Y: 2, Button: tea.MouseLeft}) // the second click replies
+	next, _ = clickUp(a, 40, 2) // the second click replies
 	a = next.(App)
 	if _, in, _ := a.inputLine(); !strings.HasPrefix(in, "RE: ") {
 		t.Fatalf("reply prompt: %q", in)

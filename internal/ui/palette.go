@@ -114,6 +114,9 @@ func clearRenderCaches() {
 	hintCells.mu.Lock()
 	hintCells.m = map[string]string{}
 	hintCells.mu.Unlock()
+	lastInput.mu.Lock()
+	lastInput.ok = false
+	lastInput.mu.Unlock()
 }
 
 // applyTheme makes the theme with ID id (a scheme of internal/theme; "" is the terminal default) the

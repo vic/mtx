@@ -337,3 +337,13 @@ func TestMediaTag(t *testing.T) {
 		t.Fatalf("no image icon on the row: %q", ansi.Strip(row))
 	}
 }
+
+// fitPlain is fit(cell, s, n) byte for byte: tabs, newlines, wide runes, escapes, exact and short widths.
+func TestFitPlainIsFitCell(t *testing.T) {
+	ins := []string{"", "abc", "a\tb", "a\nb", "日本語テキスト", "\x1b[31mred\x1b[m tail", "abcdef", "éx"}
+	for _, s := range ins {
+		for _, n := range []int{-1, 0, 1, 3, 6, 9} {
+			require.Equal(t, fit(cell, s, n), fitPlain(s, n), "%q in %d", s, n)
+		}
+	}
+}

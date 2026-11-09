@@ -1318,7 +1318,7 @@ func (a App) footer() string {
 	if zen { // zen's one row: z, then the state values, not the usage hints (vic 2026-10-27)
 		return keyHint("z", "zen:"+onOff(zen)) + "  " + dimmed.Render(strings.Join([]string{thread, mentions, stamps, speakers, grep}, "  "))
 	}
-	return fit(cell, " "+keyHint("t", thread, "M", mentions, "SPC v s", stamps, "S", speakers, "C-g", grep, "/", "search", "J K", "turns", "e", "edit", "O", "thread reply", "z", "zen:"+onOff(zen), ":", "command"), max(a.w, 1)) // one row
+	return fitPlain(" "+keyHint("t", thread, "M", mentions, "SPC v s", stamps, "S", speakers, "C-g", grep, "/", "search", "J K", "turns", "e", "edit", "O", "thread reply", "z", "zen:"+onOff(zen), ":", "command"), max(a.w, 1)) // one row
 }
 
 // View is the full-screen frame; screen is its text.

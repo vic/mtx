@@ -212,7 +212,7 @@ func threadSummary(h model.Thread, unread int) string {
 	if h.Mine {
 		m = alert.Render("@")
 	}
-	return fit(cell, u, 3) + fit(cell, r, 4) + m + " "
+	return fitPlain(u, 3) + fitPlain(r, 4) + m + " "
 }
 
 // threadStamp is the left column of a thread row: the newest reply's time, then the summary columns.
@@ -221,7 +221,7 @@ func threadStamp(at time.Time, h model.Thread, unread int) string {
 	if !at.IsZero() {
 		t = at.Format("01-02 15:04")
 	}
-	return fit(cell, t+" "+threadSummary(h, unread), threadStampW)
+	return fitPlain(t+" "+threadSummary(h, unread), threadStampW)
 }
 
 // threadRow is a head of the threads box: time and summary, then "▸" when selected and "nick: text".
@@ -230,7 +230,7 @@ func threadRow(h model.Thread, selected bool, unread, w int) string {
 	if selected {
 		mark = "▸ "
 	}
-	body := fit(cell, mark+h.Nick+": "+h.Text, w-threadStampW)
+	body := fitPlain(mark+h.Nick+": "+h.Text, w-threadStampW)
 	if unread == 0 && !selected {
 		body = faint.Render(body)
 	}
@@ -248,7 +248,7 @@ func mainThreadRow(selected bool, unread int, at time.Time, last string, w int) 
 	if last != "" {
 		text += ": " + last
 	}
-	return threadStamp(at, model.Thread{}, unread) + fit(cell, text, w-threadStampW)
+	return threadStamp(at, model.Thread{}, unread) + fitPlain(text, w-threadStampW)
 }
 
 // threadsRow is row i of the threads box, width w: the heads, then the main thread last.
@@ -259,7 +259,7 @@ func threadsRow(p sidePanes, i, w int) string {
 		return mainThreadRow(p.thread == "" || focused, p.mainUnread, p.mainLastAt, p.mainLast, w)
 	}
 	if j > len(p.heads) {
-		return fit(cell, "", w)
+		return fitPlain("", w)
 	}
 	u := 0
 	if j < len(p.unread) {

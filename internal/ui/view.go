@@ -118,7 +118,20 @@ func fit(st lipgloss.Style, s string, n int) string {
 	return st.Width(n).MaxWidth(n).Render(strings.ReplaceAll(s, "\n", " "))
 }
 
-// fitCell is fit(cell, s, n), memoized: side pane cells repeat every frame.
+// fitPlain is fit(cell, s, n) without lipgloss: cell has no SGR, so Render only expands tabs, pads and
+// truncates. Hot rows use it; Render's style parsing was half the frame. n <= 0 keeps s, as Render does.
+func fitPlain(s string, n int) string {
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "\t", "    ")
+	if n <= 0 {
+		return s
+	}
+	if w := ansi.StringWidth(s); w < n {
+		return s + strings.Repeat(" ", n-w)
+	}
+	return ansi.Truncate(s, n, "")
+}
+
+// fitCell is fitPlain(s, n), memoized: side pane cells repeat every frame.
 func fitCell(s string, n int) string {
 	k := fitKey{s, n}
 	fitCells.mu.Lock()
@@ -126,7 +139,7 @@ func fitCell(s string, n int) string {
 	if r, ok := fitCells.m[k]; ok {
 		return r
 	}
-	r := fit(cell, s, n)
+	r := fitPlain(s, n)
 	if len(fitCells.m) >= styledMax {
 		fitCells.m = map[fitKey]string{}
 	}
@@ -158,9 +171,37 @@ func paneRows(w, h, in int) int {
 	return max(h-2-in, 1) // title, modeline, input
 }
 
-// inputRows is the input row text (with its prompt) wrapped to w columns: the last rows, at most a third of h,
-// so the end being typed stays visible.
+// inputRows is inputRowsUncached, memoized on the last call: a frame asks for the same rows 3 times
+// (page, modeline, render). Callers only read the slice.
 func inputRows(input string, w, h int) []string {
+	k := inputKey{input, w, h, zen}
+	lastInput.mu.Lock()
+	defer lastInput.mu.Unlock()
+	if lastInput.ok && lastInput.k == k {
+		return lastInput.rows
+	}
+	lastInput.k, lastInput.rows, lastInput.ok = k, inputRowsUncached(input, w, h), true
+	return lastInput.rows
+}
+
+// inputKey is everything inputRowsUncached reads, the palette aside (a palette change drops the memo).
+type inputKey struct {
+	input string
+	w, h  int
+	zen   bool
+}
+
+// lastInput holds the last inputRows result.
+var lastInput struct {
+	mu   sync.Mutex
+	k    inputKey
+	rows []string
+	ok   bool
+}
+
+// inputRowsUncached is the input row text (with its prompt) wrapped to w columns: the last rows, at most a
+// third of h, so the end being typed stays visible.
+func inputRowsUncached(input string, w, h int) []string {
 	if zen { // zen's one row holds the input (zenInput)
 		return nil
 	}
@@ -238,7 +279,7 @@ var styled = struct {
 // code[i]: the row is inside a ``` block of its line.
 func lineRowUncached(rows []string, of []int, shown []model.Line, hit, i, n int, lead string, code []bool, q string) string {
 	if i >= len(rows) {
-		return fit(cell, "", n)
+		return fitPlain("", n)
 	}
 	l, r := shown[of[i]], rows[i]
 	plain := l.Dim
@@ -265,11 +306,11 @@ func lineRowUncached(rows []string, of []int, shown []model.Line, hit, i, n int,
 
 		if of[i] == hit { // the selected line: nick bold italic, its <> in the cursor color
 			br := fg(pal.slots[0x0D]).Bold(true).Italic(true)
-			return fit(cell, lead+br.Render("<")+nickStyle(l.Nick).Bold(true).Italic(true).Render(l.Nick)+br.Render(">")+body(after), n)
+			return fitPlain(lead+br.Render("<")+nickStyle(l.Nick).Bold(true).Italic(true).Render(l.Nick)+br.Render(">")+body(after), n)
 		}
-		return fit(cell, lead+nickStyle(l.Nick).Render(nk)+body(after), n)
+		return fitPlain(lead+nickStyle(l.Nick).Render(nk)+body(after), n)
 	}
-	return fit(cell, lead+body(r), n)
+	return fitPlain(lead+body(r), n)
 }
 
 // codeRows marks the rows inside a ``` block; the fence state restarts per line.
@@ -400,7 +441,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			}
 			if p.chanJump && i < len(chans) && !strings.HasPrefix(chans[i].Name, nickLabel) {
 				if k := chanRowIndex(chans, i); k < len(jumpKeys) {
-					cc = fit(cell, alert.Render(string(jumpKeys[k]))+" "+chans[i].Name, chanW)
+					cc = fitPlain(alert.Render(string(jumpKeys[k]))+" "+chans[i].Name, chanW)
 				}
 			}
 			if p.focus == focusNicks && i+p.nickTop == p.nickSel {
@@ -443,9 +484,9 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 	if hint != "" { // keys for this mode, between the status and the clock (vic 2026-10-22)
 		left += "   " + hint
 	}
-	rows = append(rows, fit(cell, fit(cell, left, max(w-lipgloss.Width(right), 0))+right, w))
+	rows = append(rows, fitPlain(fitPlain(left, max(w-lipgloss.Width(right), 0))+right, w))
 	for _, r := range ir {
-		rows = append(rows, fit(cell, inputPrompt(r), w))
+		rows = append(rows, fitPlain(inputPrompt(r), w))
 	}
 	return strings.Join(rows, "\n")
 }
@@ -521,7 +562,7 @@ var chanCells = struct {
 // chanCellUncached is channel row i of the channel pane, chanW wide.
 func chanCellUncached(chans []model.Channel, curName string, i int) string {
 	if i >= len(chans) {
-		return fit(cell, "", chanW)
+		return fitPlain("", chanW)
 	}
 	if l, ok := strings.CutPrefix(chans[i].Name, nickLabel); ok {
 		return fit(dimmed, " "+l, chanW)
@@ -540,9 +581,9 @@ func chanCellUncached(chans []model.Channel, curName string, i int) string {
 		marker, markSt = strconv.Itoa(c.Unread), unread
 	}
 	if c.Name == curName { // plain text: inner colors would end the background early
-		return fit(selected, " "+fit(cell, c.Name, 11)+fit(cell, marker, 3), chanW)
+		return fit(selected, " "+fitPlain(c.Name, 11)+fitPlain(marker, 3), chanW)
 	}
-	return fit(cell, " "+fit(nameSt, c.Name, 11)+fit(markSt, marker, 3), chanW)
+	return fitPlain(" "+fit(nameSt, c.Name, 11)+fit(markSt, marker, 3), chanW)
 }
 
 // textWidth is the width of the scrollback text in a w x h screen.
@@ -662,7 +703,7 @@ func overlayCentered(screen string, w, h int, box string) string {
 	for j, b := range bl {
 		if i := top + j; i < len(rows) {
 			b = ansi.Truncate(b, bw, "")
-			rows[i] = fit(cell, ansi.Cut(rows[i], 0, left)+b+ansi.Cut(rows[i], left+bw, w), w)
+			rows[i] = fitPlain(ansi.Cut(rows[i], 0, left)+b+ansi.Cut(rows[i], left+bw, w), w)
 		}
 	}
 	return strings.Join(rows, "\n")

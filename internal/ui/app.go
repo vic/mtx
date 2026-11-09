@@ -1444,8 +1444,8 @@ func (a App) chatScreen() string {
 	_, input, _ := a.inputLine()
 	screen := a.withSelection(a.chatBase())
 	modeline := a.h - len(inputRows(input, a.w, a.h)) - 1
-	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest()) // floats above the prompt: the layout does not move
-	screen = overlayToasts(screen, a.w, modeline-1, a.toasts)     // cards sit just above the modeline
+	screen = overlaySuggest(screen, a.w, modeline-1, a.suggest())      // floats above the prompt: the layout does not move
+	screen = overlayToasts(screen, a.w, modeline-1, a.toasts, a.now()) // cards sit just above the modeline
 	name := a.whichKey()
 	if name != "" {
 		if a.ctxOn() {

@@ -347,3 +347,20 @@ func TestFitPlainIsFitCell(t *testing.T) {
 		}
 	}
 }
+
+// The hairline over a toast burns down from the right as it ages; a running status stays lit.
+func TestToastHairlineBurnsDown(t *testing.T) {
+	t0 := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
+	screen := strings.Repeat(strings.Repeat(" ", 80)+"\n", 9) + strings.Repeat(" ", 80)
+	ts := []toast{{text: "abcdefgh", at: t0}} // the card is 11 cells: cap, space, text, space
+	if n := strings.Count(ansi.Strip(strings.Split(overlayToasts(screen, 80, 8, ts, t0), "\n")[7]), "▁"); n != 11 {
+		t.Fatalf("hairline spans the card: %d", n)
+	}
+	if !strings.Contains(strings.Split(overlayToasts(screen, 80, 8, ts, t0.Add(toastFor/2)), "\n")[7], dimmed.Render(strings.Repeat("▁", 5))) {
+		t.Fatal("half way, the right half is burnt")
+	}
+	ts[0].running = true
+	if strings.Contains(overlayToasts(screen, 80, 8, ts, t0.Add(toastFor)), sgrOf(dimmed)+"▁") {
+		t.Fatal("NEG a running status stays lit")
+	}
+}

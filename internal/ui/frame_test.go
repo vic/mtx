@@ -648,10 +648,10 @@ func TestToastCard(t *testing.T) {
 			at = i
 		}
 	}
-	if at < 0 || !strings.Contains(rows[at-3], "needs your attention") || !strings.Contains(v, "91m╭") { // 91 = color 9, bright red
-		t.Fatalf("cards:\n%s", ansi.Strip(v)) // newest lowest, the older one above it, error card red
+	if at < 0 || !strings.Contains(rows[at-2], "needs your attention") || !strings.Contains(v, "91m▊") || !strings.Contains(rows[at-1], "▁") { // 91 = color 9, bright red
+		t.Fatalf("cards:\n%s", ansi.Strip(v)) // newest lowest under its hairline, the older one above it, error cap red
 	}
-	if at != len(rows)-4 { // the lowest card ends just above the modeline
+	if at != len(rows)-3 { // the lowest card ends just above the modeline
 		t.Fatalf("card row %d of %d", at, len(rows))
 	}
 }

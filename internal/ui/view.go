@@ -3,6 +3,7 @@ package ui
 import (
 	"hash/fnv"
 	"image/color"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1002,27 +1003,36 @@ func (p sidePanes) title(name string, f paneFocus) string {
 // toastCards is how many toasts show at once (the newest).
 const toastCards = 3
 
-// overlayToasts draws the newest toasts as cards at the right edge of screen, the
-// lowest card's bottom on row bottom (vic 2026-10-23, after jjui flash messages).
-func overlayToasts(screen string, w, bottom int, ts []toast) string {
+// overlayToasts draws the newest toasts as cards at the right edge of screen, the lowest card's bottom on
+// row bottom (vic 2026-10-23, after jjui flash messages). A card is in tuios's notification ink
+// (internal/app/render_dock_notification.go, github.com/Gaurav-Gosain/tuios, MIT, Copyright (c) 2025 Gaurav
+// Gosain): no border; a cap in the severity color, its weight the severity (two eighths for info, six for an
+// error), so it survives a theme with no contrast to spare; the text on the panel surface; and a hairline
+// above lit in the severity color that burns down from the right as the toast ages. A status still running
+// lights it end to end and stops: not moving says it waits.
+func overlayToasts(screen string, w, bottom int, ts []toast, now time.Time) string {
 	if len(ts) == 0 || w < minWide {
 		return screen
 	}
 	rows := strings.Split(screen, "\n")
 	maxW := max(w/2, 20)
-	for i := len(ts) - 1; i >= max(len(ts)-toastCards, 0) && bottom >= 0; i-- {
-		color := pal.slots[0x0B]
+	for i := len(ts) - 1; i >= max(len(ts)-toastCards, 0) && bottom >= 1; i-- {
+		ink, cap := fg(pal.slots[0x0B]), "▎"
 		if ts[i].err {
-			color = pal.slots[8]
+			ink, cap = alert, "▊"
 		}
-		card := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(color).Padding(0, 1).
-			Width(min(lipgloss.Width(ts[i].text)+4, maxW)).Render(ts[i].text)
-		cl := strings.Split(card, "\n")
-		cw := lipgloss.Width(cl[0])
+		text := ansi.Truncate(ts[i].text, maxW-3, "…")
+		card := ink.Render(cap) + onGround(surfacePre, " "+text+" ", lipgloss.Width(text)+2)
+		cw := lipgloss.Width(card)
+		lit := cw
+		if !ts[i].running {
+			lit = int(math.Ceil(float64(cw) * max(1-now.Sub(ts[i].at).Seconds()/toastFor.Seconds(), 0)))
+		}
+		hair := ink.Render(strings.Repeat("▁", lit)) + dimmed.Render(strings.Repeat("▁", cw-lit))
 		x := max(w-cw-1, 0) // one column from the right edge
-		for j := len(cl) - 1; j >= 0 && bottom >= 0; j-- {
+		for _, l := range []string{card, hair} {
 			if bottom < len(rows) {
-				rows[bottom] = ansi.Cut(rows[bottom], 0, x) + cl[j] + ansi.Cut(rows[bottom], x+cw, w)
+				rows[bottom] = ansi.Cut(rows[bottom], 0, x) + l + ansi.Cut(rows[bottom], x+cw, w)
 			}
 			bottom--
 		}

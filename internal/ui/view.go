@@ -1040,17 +1040,22 @@ func overlayToasts(screen string, w, bottom int, ts []toast, now time.Time) stri
 	return strings.Join(rows, "\n")
 }
 
-// overlaySuggest draws the completion row in a small box over the screen, its
-// bottom border on row bottom, from column 1: it floats above the prompt
-// (vic 2026-10-23), so no layout row moves.
+// overlaySuggest draws the completion rows on the panel surface over the screen, the last on row bottom,
+// from column 1: they float above the prompt (vic 2026-10-23), so no layout row moves.
 func overlaySuggest(screen string, w, bottom int, sugg []string) string {
 	if len(sugg) == 0 || bottom < 2 {
 		return screen
 	}
-	box := strings.Split(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).
-		Padding(0, 1).Render(strings.Join(sugg, "\n")), "\n")
+	bw := 0
+	for _, s := range sugg {
+		bw = max(bw, lipgloss.Width(s))
+	}
+	box := make([]string, len(sugg))
+	for i, s := range sugg {
+		box[i] = onGround(surfacePre, " "+s, min(bw+2, w-1))
+	}
+	bw = min(bw+2, w-1) // the drawn width: a cell of surface each side
 	rows := strings.Split(screen, "\n")
-	bw := lipgloss.Width(box[0])
 	for j := len(box) - 1; j >= 0 && bottom >= 0; j-- {
 		if bottom < len(rows) {
 			rows[bottom] = ansi.Cut(rows[bottom], 0, 1) + box[j] + ansi.Cut(rows[bottom], 1+bw, w)

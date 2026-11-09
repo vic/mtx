@@ -668,7 +668,7 @@ func TestSuggestFloats(t *testing.T) {
 	}
 	s := ansi.Strip(strings.Join(after, "\n"))
 	rows := strings.Split(s, "\n")
-	if !strings.Contains(rows[len(rows)-4], "/invite") || !strings.HasPrefix(rows[len(rows)-1], "> /inv") {
+	if !strings.Contains(rows[len(rows)-3], "/invite") || !strings.HasPrefix(rows[len(rows)-1], "> /inv") {
 		t.Fatalf("no floating box above the prompt:\n%s", s)
 	}
 	checkFrame(t, a, a.w, a.h)

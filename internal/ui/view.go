@@ -397,8 +397,17 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		case focusNicks:
 			pane = 2
 		}
+		bx := [4]int{0, chanW + 1, w - nickW - 2, w - 1} // the border columns
+		grad := gradRect{bx[pane], 0, bx[pane+1], n + 1} // the focused frame
+		y := 0                                           // the row being built: a lit glyph takes its gradient step there
+		glyph := func(lit bool, k int, s string) string {
+			if lit {
+				return litGlyph(grad, bx[k], y, s)
+			}
+			return borderGlyph(false, s)
+		}
 		edge := func(k int, s string) string { // vertical border k, or a corner on it
-			return borderGlyph(k == pane || k == pane+1, s)
+			return glyph(k == pane || k == pane+1, k, s)
 		}
 		threadsFocus := p.focus == focusThreads
 		midLit := func(inThreads bool) bool { return pane == 1 && inThreads == threadsFocus } // the middle column is lit for the box or the chat, never both
@@ -411,9 +420,9 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		vEdge := func(k int, s string, inThreads bool) string { // vertical border k of a row in the box (inThreads) or the chat
 			switch {
 			case k == 1 && pane == 0, k == 2 && pane == 2: // shared with a focused side pane
-				return borderGlyph(true, s)
+				return glyph(true, k, s)
 			case k == 1 || k == 2:
-				return borderGlyph(midLit(inThreads), s)
+				return glyph(midLit(inThreads), k, s)
 			}
 			return edge(k, s)
 		}
@@ -426,6 +435,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		rows = append(rows, edge(0, "┌")+seg(p.title("channels", focusChans), chanW, line(0))+vEdge(1, "┬", tRows > 0)+
 			seg(midTitle(p, details), mid, styleOf(midLit(tRows > 0)))+vEdge(2, "┬", tRows > 0)+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
 		for i := 0; i < n; i++ {
+			y = i + 1
 			nk := at(p.nicks, i+p.nickTop)
 			label := strings.HasPrefix(nk, nickLabel) // a group label: dim, not a nick
 			if label {
@@ -468,8 +478,10 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			rows = append(rows, edge(0, "│")+cc+vEdge(1, "│", i < tRows)+midCell+
 				right+nc+edge(3, "│"))
 		}
+		y = n + 1
 		rows = append(rows, edge(0, "└")+line(0).Render(strings.Repeat("─", chanW))+vEdge(1, "┴", false)+styleOf(midLit(false)).Render(strings.Repeat("─", mid))+
 			vEdge(2, "┴", false)+line(2).Render(strings.Repeat("─", nickW))+edge(3, "┘"))
+		withGradient(rows, grad)
 	}
 
 	left, lst := " ", cell

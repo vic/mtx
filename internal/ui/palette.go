@@ -17,6 +17,7 @@ type palette struct {
 	slots  [16]color.Color
 	nicks  []color.Color
 	donate color.Color
+	rgb    bool // true colors (a theme): a gradient can blend them; the 16-color slots cannot
 }
 
 // ansiPalette is the default: ANSI colors, so the terminal theme picks the shades. Slots that serve
@@ -48,6 +49,7 @@ func paletteOf(colors map[string]string) palette {
 		p.nicks = append(p.nicks, p.slots[i])
 	}
 	p.donate = p.slots[8]
+	p.rgb = true
 	return p
 }
 
@@ -92,6 +94,12 @@ func usePalette(p palette) {
 	barInk = [...]string{barFull: thumb.Render("█"), barUpper: thumb.Render("▀"), barLower: thumb.Render("▄")}
 	unreadMark = unread
 	sponsorButton = lipgloss.NewStyle().Foreground(pal.slots[3]).Background(pal.slots[1]).Render(sponsorLabel)
+	focusPre, gradPre = sgrOf(focusBorder), nil
+	if pal.rgb {
+		for i := range gradLevels {
+			gradPre = append(gradPre, sgrOf(fg(mix(pal.slots[0x0D], pal.slots[0x0E], float64(i)/(gradLevels-1))).Bold(true)))
+		}
+	}
 	cursorOn, cursorOff = func() (string, string) {
 		parts := strings.SplitN(cursor.Render("\x00"), "\x00", 2)
 		return parts[0], parts[1]
@@ -132,3 +140,6 @@ func (a App) applyTheme(id string) App {
 	a.themeNow = id
 	return a
 }
+
+// sgrOf is the escape sequence that st starts its text with.
+func sgrOf(st lipgloss.Style) string { return strings.SplitN(st.Render("\x00"), "\x00", 2)[0] }

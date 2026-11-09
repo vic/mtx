@@ -82,3 +82,14 @@ func BenchmarkTypeChar(b *testing.B) {
 		_ = a.View()
 	}
 }
+
+// BenchmarkViewTheme is BenchmarkView in a true-color theme: the focused frame draws a gradient.
+func BenchmarkViewTheme(b *testing.B) {
+	a := benchApp(b)
+	usePalette(paletteOf(gruvboxDark))
+	b.Cleanup(func() { usePalette(ansiPalette) })
+	b.ResetTimer()
+	for b.Loop() {
+		_ = a.View()
+	}
+}

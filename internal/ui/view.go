@@ -721,8 +721,8 @@ func helpBox(h, off int) string {
 func overlayCentered(screen string, w, h, dy int, box string) string {
 	rows := strings.Split(screen, "\n")
 	bl := strings.Split(box, "\n")
-	bw := min(lipgloss.Width(bl[0]), w)
-	top, left := max((h-len(bl))/2, 0)+dy, max((w-bw)/2, 0)
+	left, top, bw, _ := centeredAt(w, h, box)
+	top += dy
 	for j, b := range bl {
 		if i := top + j; i < len(rows) {
 			b = ansi.Truncate(b, bw, "")
@@ -1303,4 +1303,11 @@ func mediaTag(s string) (kind string, end int, ok bool) {
 	kind, _, _ = strings.Cut(s[1:end], " ")
 	_, ok = mediaIcons[kind]
 	return kind, end + 1, ok
+}
+
+// centeredAt is where overlayCentered puts box on a w x h screen at rest: its top-left cell and its size.
+func centeredAt(w, h int, box string) (x, y, bw, bh int) {
+	bh = strings.Count(box, "\n") + 1
+	bw = min(lipgloss.Width(box[:strings.IndexByte(box+"\n", '\n')]), w)
+	return max((w-bw)/2, 0), max((h-bh)/2, 0), bw, bh
 }

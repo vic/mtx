@@ -619,11 +619,11 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return b, nil
 			}
 		}
-		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.onSponsor(msg.X, msg.Y) {
+		if msg.Button == tea.MouseLeft && a.popBox() == "" && a.onSponsor(msg.X, msg.Y) {
 			return a, openURL(donateURL)
 		}
-		if msg.Button == tea.MouseLeft && a.help {
-			return a.helpClick(tea.Mouse(msg))
+		if msg.Button == tea.MouseLeft && a.popBox() != "" {
+			return a.popPress(tea.Mouse(msg))
 		}
 		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.prompt == 0 {
 			if b, ok := a.grabBar(msg.X, msg.Y); ok {
@@ -641,6 +641,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMotionMsg:
 		if a.ctxOn() && a.drag == nil {
 			return a.ctxHover(msg.X, msg.Y), nil
+		}
+		if a.pick && a.drag == nil {
+			return a.popHover(tea.Mouse(msg)), nil
 		}
 		switch d := a.drag.(type) {
 		case barDrag: // the thumb top follows the pointer
@@ -1379,34 +1382,41 @@ func (a App) View() tea.View {
 	v := tea.NewView(a.screen())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion // wheel comes as MouseWheelMsg, so arrows stay keys
-	// the context menu tracks the pointer, so motion without a button reports too
-	if a.ctxOn() {
+	// a list popup tracks the pointer, so motion without a button reports too
+	if a.ctxOn() || a.pick {
 		v.MouseMode = tea.MouseModeAllMotion
 	}
 	return v
 }
 
-// screen is the chat screen, with the help box or the picker drawn over it.
+// screen is the chat screen, with the centered popup drawn over it.
 func (a App) screen() string {
-	screen := a.chatScreen()
+	if box := a.popBox(); box != "" {
+		return overlayCentered(a.chatScreen(), a.w, a.h, a.popDY(), box)
+	}
+	return a.chatScreen()
+}
+
+// popBox is the centered popup's panel, "" for none: the screen draws it and the pointer hit-tests it.
+func (a App) popBox() string {
 	switch {
 	case a.img != "":
-		return overlayCentered(screen, a.w, a.h, a.popDY(), imgBox(a.img))
+		return imgBox(a.img)
 	case a.verifySAS != "":
-		return overlayCentered(screen, a.w, a.h, a.popDY(), verifyBox(a.verifySAS))
+		return verifyBox(a.verifySAS)
 	case a.help:
-		return overlayCentered(screen, a.w, a.h, a.popDY(), helpBox(a.h, a.helpOff))
+		return helpBox(a.h, a.helpOff)
 	case a.pick && a.pickWhat == pickGrep:
-		return overlayCentered(screen, a.w, a.h, a.popDY(), grepBox(a.w, a.pq.Value()))
+		return grepBox(a.w, a.pq.Value())
 	case a.pick:
 		titles := map[pickKind]string{pickChans: "open chat", pickThreads: "open thread", pickUsers: "open user", pickLines: "search", pickSpeakers: "speaker", pickInvite: "invite to " + a.m.Current().Name, pickFiles: "file", pickFileBlock: "file block", pickGrep: "grep", pickRecent: "recent", pickPins: "pinned", pickEdits: "edit history", pickExplore: "explore", pickFound: "search results", pickInfo: a.listTitle, pickHelp: "help"}
 		what, ok := titles[a.pickWhat]
 		if !ok {
 			what = "pick"
 		}
-		return overlayCentered(screen, a.w, a.h, a.popDY(), pickBox(a.w, a.h, what, a.pq.Value(), a.matches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()))
+		return pickBox(a.w, a.h, what, a.pq.Value(), a.matches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks())
 	}
-	return screen
+	return ""
 }
 
 // chatBase is the scrollback, input and modeline, nothing floating over them.

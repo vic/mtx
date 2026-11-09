@@ -66,8 +66,7 @@ func (a App) helpButtonAt(x, y int) (string, bool) {
 	if len(bl) <= panelBody || a.helpOff > 0 {
 		return "", false
 	}
-	bw := lipgloss.Width(bl[0])
-	top, left := max((a.h-len(bl))/2, 0), max((a.w-bw)/2, 0)
+	left, top, _, _ := centeredAt(a.w, a.h, strings.Join(bl, "\n"))
 	if y != top+panelBody {
 		return "", false
 	}

@@ -218,6 +218,7 @@ type App struct {
 	helpOff       int                                               // help box scroll (j k, wheel) when it is taller than the screen
 	drag          drag                                              // the mouse gesture in progress (barDrag, selDrag); nil = none
 	sel           *selection                                        // the dragged chat text range; nil = none. A press or a key drops it
+	ctx           *ctxMenu                                          // right press: the open menu drawn at the pointer; nil = which-key box
 	pq            textinput.Model                                   // picker query (own input: a typed message survives)
 	files         []string                                          // pickFiles: the session's files, from git ls-files (filesMsg)
 	psel          int                                               // picker selection, an index in pickList
@@ -601,6 +602,14 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 	case tea.MouseClickMsg:
+		if a.ctxOn() {
+			return a.ctxPress(tea.Mouse(msg))
+		}
+		if msg.Button == tea.MouseRight && !a.help && !a.pick && a.prompt == 0 {
+			if b, ok := a.ctxOpen(msg.X, msg.Y); ok {
+				return b, nil
+			}
+		}
 		if msg.Button == tea.MouseLeft && !a.help && !a.pick && a.onSponsor(msg.X, msg.Y) {
 			return a, openURL(donateURL)
 		}
@@ -618,6 +627,9 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return b.click(tea.Mouse(msg))
 		}
 	case tea.MouseMotionMsg:
+		if a.ctxOn() && a.drag == nil {
+			return a.ctxHover(msg.X, msg.Y), nil
+		}
 		switch d := a.drag.(type) {
 		case barDrag: // the thumb top follows the pointer
 			g, _, y := a.chatBar()
@@ -651,6 +663,10 @@ func (a App) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.wheel(msg.M, msg.N), nil
 	case tea.KeyPressMsg: // v2 decodes one key per event, also when one read holds "gt"
 		a.sel = nil // typing drops the selection, as a press does
+		if a.ctxOn() {
+			return a.ctxKey(msg)
+		}
+		a.ctx = nil // its menu closed: it must not place the next one
 		return a.key(msg)
 	}
 	return a, nil
@@ -1349,6 +1365,10 @@ func (a App) View() tea.View {
 	v := tea.NewView(a.screen())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion // wheel comes as MouseWheelMsg, so arrows stay keys
+	// the context menu tracks the pointer, so motion without a button reports too
+	if a.ctxOn() {
+		v.MouseMode = tea.MouseModeAllMotion
+	}
 	return v
 }
 
@@ -1400,7 +1420,11 @@ func (a App) chatScreen() string {
 		name = a.pending // a prefix waiting for its second key lists the continuations
 	}
 	if name != "" {
-		screen = overlayRight(screen, a.w, modeline-1, menuBox(name, menus[name], a.h-4))
+		if a.ctxOn() {
+			screen = a.withCtx(screen)
+		} else {
+			screen = overlayRight(screen, a.w, modeline-1, menuBox(name, menus[name], a.h-4))
+		}
 	}
 	return withSponsor(screen, a.w)
 }

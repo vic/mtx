@@ -1834,6 +1834,11 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return a.forward(ms[a.psel].name)
 	}
+	if m := listKeys(msg.String()); m != moveNone {
+		start, end := pickRows(len(ms), a.psel, a.h) // a page is the drawn window
+		a.psel = listStep(a.psel, m, len(ms), end-start)
+		return a.pickHit(), nil
+	}
 	switch msg.String() {
 	case "esc":
 		if a.pickWhat == pickGrep { // esc clears the grep filter
@@ -1911,10 +1916,6 @@ func (a App) pickKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				a.marks = append(slices.Clone(a.marks), n)
 			}
 		}
-	case "up", "ctrl+p":
-		a.psel = max(a.psel-1, 0)
-	case "down", "ctrl+n":
-		a.psel = max(min(a.psel+1, len(ms)-1), 0)
 	default:
 		var cmd tea.Cmd
 		a.pq, cmd = a.pq.Update(msg)
@@ -2481,15 +2482,15 @@ func (a App) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // next pane, esc back to chat.
 func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	_, names := a.paneItems(a.focus)
+	if m := listKeys(msg.String()); m != moveNone {
+		a.fsel = listStep(a.fsel, m, len(names), a.page())
+		return a.keepSelVisible(), nil
+	}
 	switch k := msg.String(); k {
 	case "esc":
 		a.focus = focusChat
 	case "tab":
 		a.focus, a.fq, a.fsel = a.nextPane(), "", 0
-	case "up", "ctrl+p":
-		a.fsel = max(a.fsel-1, 0)
-	case "down", "ctrl+n":
-		a.fsel = max(min(a.fsel+1, len(names)-1), 0)
 	case "backspace":
 		if r := []rune(a.fq); len(r) > 0 {
 			a.fq, a.fsel = string(r[:len(r)-1]), 0

@@ -169,16 +169,17 @@ func (a App) ctxRun(i int) (tea.Model, tea.Cmd) {
 	return a.key(keyMsg(it.key))
 }
 
-// ctxKey answers a key while the context menu is up: arrows move, enter runs, any other key is the
+// ctxKey answers a key while the context menu is up: the list keys move (listnav), enter runs, any other key is the
 // which-key menu's.
 func (a App) ctxKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	n := len(ctxRows(a.ctx.name))
 	c := *a.ctx
+	if m := listKeys(msg.String()); m != moveNone {
+		c.sel = listStep(c.sel, m, n, a.h-ctxChrome)
+		a.ctx = &c
+		return a, nil
+	}
 	switch msg.String() {
-	case "up":
-		c.sel = (c.sel + n - 1) % n
-	case "down":
-		c.sel = (c.sel + 1) % n
 	case "enter":
 		return a.ctxRun(c.sel)
 	default:

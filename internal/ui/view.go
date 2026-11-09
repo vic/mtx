@@ -708,12 +708,15 @@ func chanNicks(c model.Channel, user string) []string {
 // under it, then the blank, the rule and the hints, and the bottom pad.
 const helpChrome = panelBody + 4
 
-// helpBox is the help panel in h rows at most: taller than that, its text is a window that scrolls.
-func helpBox(h, off int) string {
+// helpBox is the help panel on a w x h screen: as wide as the screen at most, and in h rows at most, taller
+// than that its text is a window that scrolls.
+func helpBox(w, h, off int) string {
 	body := strings.Split(helpText(), "\n")
 	vis := max(h-helpChrome, 1)
 	off = helpOff(len(body), vis, off)
-	return panel{title: "help", width: lipgloss.Width(body[0]), body: textRows(body[off:min(off+vis, len(body))]...),
+	width := min(lipgloss.Width(body[0]), w-2*panelPad)
+	body[0] = helpTop(width) // the buttons stay flush right on a narrow screen
+	return panel{title: "help", width: width, body: textRows(body[off:min(off+vis, len(body))]...),
 		hints: []string{"↑↓", "scroll", "ctrl+c", "quit", "any key", "close"}}.render()
 }
 
@@ -903,9 +906,24 @@ func KeysMarkdown() string {
 	return b.String()
 }
 
+// helpTop is the first help row: the name and what mtx is, then the buttons flush right in width cells. On a
+// screen too narrow for both the buttons go (the main screen keeps the sponsor button); width 0 is the row
+// at its natural width, without the buttons.
+func helpTop(width int) string {
+	name := title.Render("mtx") + dimmed.Render("  Matrix client: & rooms, threads, end-to-end encryption")
+	btns := renderHelpButtons()
+	switch {
+	case width == 0:
+		return name
+	case width < lipgloss.Width(name)+1+lipgloss.Width(btns):
+		return ansi.Truncate(name, width, "…")
+	}
+	return name + strings.Repeat(" ", width-lipgloss.Width(name)-lipgloss.Width(btns)) + btns
+}
+
 // helpText renders helpSections with the key column aligned.
 func helpText() string {
-	head := title.Render("mtx") + dimmed.Render("  Matrix client: & rooms, threads, end-to-end encryption")
+	head := helpTop(0)
 	rows := []string{head, ""}
 	kw := 0 // the widest key: every description starts in one column
 	for _, s := range helpSections {
@@ -924,8 +942,7 @@ func helpText() string {
 	for _, r := range rows {
 		width = max(width, lipgloss.Width(r))
 	}
-	btns := renderHelpButtons()
-	rows[0] = head + strings.Repeat(" ", max(width-lipgloss.Width(head)-lipgloss.Width(btns), 1)) + btns
+	rows[0] = helpTop(width)
 	return strings.Join(rows, "\n")
 }
 

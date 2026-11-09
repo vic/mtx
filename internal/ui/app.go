@@ -1412,7 +1412,7 @@ func (a App) popBox() string {
 	case a.verifySAS != "":
 		return verifyBox(a.verifySAS)
 	case a.help:
-		return helpBox(a.h, a.helpOff)
+		return helpBox(a.w, a.h, a.helpOff)
 	case a.pick && a.pickWhat == pickGrep:
 		return grepBox(a.w, a.pq.Value())
 	case a.pick:

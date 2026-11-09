@@ -73,7 +73,7 @@ func TestHelpButtonsOpenLinks(t *testing.T) {
 	a := newApp(t, &log, nil)
 	a.help = true
 	a.w, a.h = 120, 60 // tall enough that the first help row is on screen
-	bl := strings.Split(helpBox(a.h, a.helpOff), "\n")
+	bl := strings.Split(helpBox(a.w, a.h, a.helpOff), "\n")
 	bw := lipgloss.Width(bl[0])
 	top, left := max((a.h-len(bl))/2, 0), max((a.w-bw)/2, 0)
 	row := ansi.Strip(bl[panelBody])

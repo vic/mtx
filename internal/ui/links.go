@@ -62,7 +62,7 @@ func openURL(url string) tea.Cmd {
 // helpButtonAt is the URL of the help button at screen cell (x, y), if any. The buttons are on the
 // first text row of the help panel, while it is scrolled to the top.
 func (a App) helpButtonAt(x, y int) (string, bool) {
-	bl := strings.Split(helpBox(a.h, a.helpOff), "\n")
+	bl := strings.Split(helpBox(a.w, a.h, a.helpOff), "\n")
 	if len(bl) <= panelBody || a.helpOff > 0 {
 		return "", false
 	}

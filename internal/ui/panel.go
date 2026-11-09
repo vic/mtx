@@ -65,6 +65,9 @@ func onGround(pre, s string, n int) string {
 
 // render is the panel's rows joined.
 func (p panel) render() string {
+	if len(p.hints) > 0 { // the footer is never cut: the panel is as wide as its hints
+		p.width = max(p.width, lipgloss.Width(keyHint(p.hints...)))
+	}
 	pad := onGround(surfacePre, "", panelPad)
 	line := func(r panelRow) string {
 		pre := surfacePre

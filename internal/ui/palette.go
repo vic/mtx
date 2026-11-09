@@ -111,6 +111,9 @@ func clearRenderCaches() {
 	borderGlyphs.mu.Lock()
 	borderGlyphs.m = map[[2]string]string{}
 	borderGlyphs.mu.Unlock()
+	hintCells.mu.Lock()
+	hintCells.m = map[string]string{}
+	hintCells.mu.Unlock()
 }
 
 // applyTheme makes the theme with ID id (a scheme of internal/theme; "" is the terminal default) the

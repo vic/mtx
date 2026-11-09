@@ -61,8 +61,30 @@ func badge(mode string, bypass bool) string {
 	return cell.Bold(true).Background(bg).Foreground(pal.slots[0]).Render(" " + mode + " ") // Inline drops Padding
 }
 
-// keyHint is "key desc" pairs: keys in the shortcut color, descriptions dimmed.
+// keyHint is keyHintUncached, memoized on the pairs: hint rows are the same text frame after frame.
 func keyHint(pairs ...string) string {
+	k := strings.Join(pairs, "\x00")
+	hintCells.mu.Lock()
+	defer hintCells.mu.Unlock()
+	if s, ok := hintCells.m[k]; ok {
+		return s
+	}
+	s := keyHintUncached(pairs...)
+	if len(hintCells.m) >= styledMax {
+		hintCells.m = map[string]string{}
+	}
+	hintCells.m[k] = s
+	return s
+}
+
+// hintCells holds rendered hint rows across frames.
+var hintCells = struct {
+	mu sync.Mutex
+	m  map[string]string
+}{m: map[string]string{}}
+
+// keyHintUncached is "key desc" pairs: keys in the shortcut color, descriptions dimmed.
+func keyHintUncached(pairs ...string) string {
 	var parts []string
 	for i := 0; i+1 < len(pairs); i += 2 {
 		parts = append(parts, shortcut.Render(pairs[i])+" "+dimmed.Render(pairs[i+1]))

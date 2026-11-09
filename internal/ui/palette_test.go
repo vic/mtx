@@ -25,3 +25,14 @@ func TestUsePaletteRestyles(t *testing.T) {
 		t.Fatalf("dimmed still gruvbox: %q", got)
 	}
 }
+
+// A memoized hint row is redrawn in the new palette, not served from the old one.
+func TestUsePaletteRedrawsHints(t *testing.T) {
+	t.Cleanup(func() { usePalette(ansiPalette) })
+	keyHint("q", "quit") // cached in the ansi palette
+	usePalette(paletteOf(gruvboxDark))
+	// base0E is 211 134 155: the shortcut style must draw in it
+	if got := keyHint("q", "quit"); !strings.Contains(got, "211;134;155") {
+		t.Fatalf("hint in gruvbox: %q", got)
+	}
+}

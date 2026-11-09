@@ -265,7 +265,7 @@ func TestPicker(t *testing.T) {
 	a = typeText(t, a, "hon") // fuzzy: h..o..n in &handson only
 	v := checkFrame(t, a, 80, 24)
 	// the picker is an overlay: &review still shows behind it, but is not a match
-	if !strings.Contains(ansi.Strip(v), "◆ &handson") || strings.Contains(ansi.Strip(v), "◆ &review") {
+	if !strings.Contains(ansi.Strip(v), "› 1 &handson") || strings.Contains(ansi.Strip(v), "› &review") {
 		t.Fatalf("picker:\n%s", ansi.Strip(v))
 	}
 	a, _ = press(t, a, "enter")

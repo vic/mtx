@@ -141,8 +141,7 @@ func jumpBox(a App) []string {
 	box := pickBox(a.w, a.h, "t", a.pq.Value(), a.matches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks())
 	var out []string
 	for _, l := range strings.Split(ansi.Strip(box), "\n") {
-		l = strings.TrimSpace(l)
-		l = strings.TrimSuffix(strings.TrimPrefix(l, "│"), "│")
+		l = strings.TrimRight(ansi.Cut(l, panelPad, ansi.StringWidth(l)-panelPad), " ") // the panel pads
 		out = append(out, l)
 	}
 	return out
@@ -175,7 +174,7 @@ func TestJumpGutter(t *testing.T) {
 			for i := 0; i < 12; i++ {
 				name := []rune(ms[i].name)
 				name = name[:min(len(name), 4)]
-				line := box[3+i] // title and a blank line come first; the window starts at the top
+				line := box[pickFirstRow+i] // the window starts at the top
 				if !strings.Contains(line, string(name)) {
 					t.Fatalf("row %d %q not drawn on its line %q", i, ms[i].name, line)
 				}
@@ -186,7 +185,7 @@ func TestJumpGutter(t *testing.T) {
 				} else if c != col {
 					t.Fatalf("row %d text starts at column %d, row 0 at %d: %q", i, c, col, line)
 				}
-				gutter := strings.Trim(pre, " ◆✓")
+				gutter := strings.Trim(pre, " ›✓")
 				want := ""
 				if i < 10 {
 					want = jumpDigit(i)
@@ -387,27 +386,27 @@ func TestJumpThemeAppliesSavesAndToasts(t *testing.T) {
 func jumpScrollApp(t *testing.T, k pickKind) (a App, start, end int) {
 	t.Helper()
 	a, _ = jumpSeedN(t, k, 30)
-	a.h = 20
+	a.h = 24
 	a, _ = press(t, a, slices.Repeat([]string{"down"}, 14)...)
 	n := len(a.matches())
-	start, end = pickWindow(n, a.psel, max(a.h-6, 1))
+	start, end = pickRows(n, a.psel, a.h)
 	if start == 0 || n < 30 {
 		t.Fatalf("%s: window %d..%d over %d rows with the cursor on %d: want it scrolled", jumpKinds[k], start, end, n, a.psel)
 	}
 	return a, start, end
 }
 
-// jumpItems is the item lines of the box, the window markers dropped.
+// jumpItems is the item lines of the box, the window markers and the cursor marker column dropped.
 func jumpItems(a App) []string {
 	var out []string
-	for _, l := range jumpBox(a)[3:] {
+	for _, l := range jumpBox(a)[pickFirstRow:] {
 		if strings.HasPrefix(strings.TrimSpace(l), "↑") {
 			continue
 		}
 		if t := strings.TrimSpace(l); t == "" || strings.HasPrefix(t, "↓") {
 			break
 		}
-		out = append(out, l)
+		out = append(out, ansi.Cut(l, 2, ansi.StringWidth(l))) // the marker columns dropped: the jump key leads
 	}
 	return out
 }
@@ -422,11 +421,11 @@ func TestJumpGutterFollowsScrolling(t *testing.T) {
 			a, start, end := jumpScrollApp(t, k)
 			ms := a.matches()
 			box := jumpBox(a)
-			if !strings.Contains(box[3], "↑") {
-				t.Fatalf("scrolled window lacks its ↑ marker: %q", box[3])
+			if !strings.Contains(box[pickFirstRow], "↑") {
+				t.Fatalf("scrolled window lacks its ↑ marker: %q", box[pickFirstRow])
 			}
 			for j := 0; j < end-start; j++ {
-				line := box[4+j]
+				line := box[pickFirstRow+1+j]
 				name := []rune(ms[start+j].name)
 				name = name[:min(len(name), 4)]
 				at := strings.Index(line, string(name))
@@ -437,7 +436,7 @@ func TestJumpGutterFollowsScrolling(t *testing.T) {
 				if j < 10 {
 					want = jumpDigit(j)
 				}
-				if g := strings.Trim(line[:at], " ◆✓"); g != want {
+				if g := strings.Trim(line[:at], " ›✓"); g != want {
 					t.Fatalf("visible row %d (list row %d) gutter %q want %q: %q", j, start+j, g, want, line)
 				}
 			}
@@ -482,10 +481,10 @@ func TestJumpUnscrolledMovedCursor(t *testing.T) {
 			}
 			a, _ := jumpSeed(t, k)
 			a, _ = press(t, a, "down", "down", "down")
-			if start, _ := pickWindow(len(a.matches()), a.psel, max(a.h-6, 1)); start != 0 {
+			if start, _ := pickRows(len(a.matches()), a.psel, a.h); start != 0 {
 				t.Fatalf("window starts at %d, want the top", start)
 			}
-			if g := strings.Trim(jumpItems(a)[0][:2], " ◆✓"); g != "1" {
+			if g := strings.Trim(jumpItems(a)[0][:2], " ›✓"); g != "1" {
 				t.Fatalf("top row gutter %q want 1", g)
 			}
 			fresh, _ := jumpSeed(t, k)
@@ -538,7 +537,7 @@ func TestJumpFewRowsStopAtLastRow(t *testing.T) {
 				t.Fatalf("%d rows drawn, want %d: %q", len(items), n, items)
 			}
 			for j, l := range items {
-				if g := strings.Trim(l[:2], " ◆✓"); g != jumpDigit(j) {
+				if g := strings.Trim(l[:2], " ›✓"); g != jumpDigit(j) {
 					t.Fatalf("row %d gutter %q want %q: %q", j, g, jumpDigit(j), l)
 				}
 			}
@@ -571,7 +570,7 @@ func TestJumpDigitStyleIsWhichKeyKey(t *testing.T) {
 			a, _ := jumpSeed(t, k)
 			raw := strings.Split(pickBox(a.w, a.h, "t", a.pq.Value(), a.matches(), a.psel, a.pickWhat == pickSpeakers, a.shownMarks()), "\n")
 			for j := 0; j < 10; j++ {
-				line := raw[3+j]
+				line := raw[pickFirstRow+j]
 				if !strings.Contains(line, want(jumpDigit(j))) {
 					t.Fatalf("row %d: %q lacks the which-key styled digit %q", j, line, want(jumpDigit(j)))
 				}
@@ -615,7 +614,7 @@ func TestJumpDigitsStayWhileRowsScroll(t *testing.T) {
 				t.Fatalf("two more down keys left the first drawn row %q unchanged", ia[0])
 			}
 			for j := 0; j < 10; j++ {
-				ga, gb := strings.Trim(ia[j][:2], " ◆✓"), strings.Trim(ib[j][:2], " ◆✓")
+				ga, gb := strings.Trim(ia[j][:2], " ›✓"), strings.Trim(ib[j][:2], " ›✓")
 				if ga != jumpDigit(j) || gb != jumpDigit(j) {
 					t.Fatalf("screen line %d: gutter %q then %q want %q both times", j, ga, gb, jumpDigit(j))
 				}

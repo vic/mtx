@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode"
 
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -54,7 +53,6 @@ func pickList(names []string, q string) []pickMatch {
 	return out
 }
 
-// pickBox is the picker box (channels or lines, titled what), drawn over the screen by overlayCentered.
 // pickW is the picker box width: three quarters of the threads pane in the wide layout, else half the screen.
 func pickW(w, h int) int {
 	if wide(w, h) {
@@ -66,10 +64,17 @@ func pickW(w, h int) int {
 // jumpW is the width of the jump-key gutter at the left of every picker row.
 const jumpW = 2
 
+// pickChrome is the picker panel's rows that are not matches: the top pad, the title chip and the blank
+// under it, the query and the blank under it, then the blank, the rule and the hints, and the bottom pad.
+const pickChrome = 9
+
+// pickFirstRow is the panel row of the first drawn match (or of its ↑ more row), under the query and its blank.
+const pickFirstRow = panelBody + 2
+
 // pickRows is the window [start, end) of the n matches that a picker of height h shows with the selection sel in it;
 // the box draws it and the jump keys read it, so they agree.
 func pickRows(n, sel, h int) (start, end int) {
-	return pickWindow(n, sel, max(h-6, 1))
+	return pickWindow(n, sel, max(h-pickChrome, 1))
 }
 
 // jumpKey is the gutter of the p-th drawn row (0 = the first one on screen): its jump digit (1-9, then 0) in the key-shortcut style for
@@ -81,21 +86,23 @@ func jumpKey(p int) string {
 	return shortcut.Bold(true).Render(string(rune('0'+(p+1)%10))) + " "
 }
 
+// pickBox is the picker panel (channels or lines, titled what), drawn over the screen by overlayCentered.
 func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, marks []string) string {
-	rows := []string{title.Render(what) + " " + prompt.Render(">") + " " + q, ""}
+	inner := pickW(w, h) - 2*panelPad
+	rows := textRows(prompt.Render(">")+" "+q, "")
 	start, end := pickRows(len(ms), sel, h)
 	if start > 0 {
-		rows = append(rows, dimmed.Render(fmt.Sprintf("↑ %d more", start)))
+		rows = append(rows, textRows(dimmed.Render(fmt.Sprintf("  ↑ %d more", start)))...)
 	}
 	for i := start; i < end; i++ {
 		m := ms[i]
-		mark, st := " ", dimmed
+		st := cell
 		if i == sel {
-			mark, st = "◆", cell.Bold(true)
+			st = cell.Bold(true)
 		}
 		var b strings.Builder
-		// one row in the box: cut by cells (wide runes count 2), with a column to spare for the mark
-		rs := []rune(ansi.Truncate(m.name, max(pickW(w, h)-8-jumpW, 1), "…"))
+		// one row: cut by cells (wide runes count 2), after the marker, the jump key and the check
+		rs := []rune(ansi.Truncate(m.name, max(inner-4-jumpW, 1), "…"))
 		for k, r := range rs {
 			if slices.Contains(m.at, k) {
 				b.WriteString(shortcut.Bold(true).Render(string(r)))
@@ -111,29 +118,24 @@ func pickBox(w, h int, what, q string, ms []pickMatch, sel int, multi bool, mark
 			}
 			check += " "
 		}
-		rows = append(rows, jumpKey(i-start)+title.Render(mark)+" "+check+b.String())
+		rows = append(rows, listRow(jumpKey(i-start)+check+b.String(), i == sel))
 	}
 	if end < len(ms) {
-		rows = append(rows, dimmed.Render(fmt.Sprintf("↓ %d more", len(ms)-end)))
+		rows = append(rows, textRows(dimmed.Render(fmt.Sprintf("  ↓ %d more", len(ms)-end)))...)
 	}
 	if len(ms) == 0 {
-		rows = append(rows, dimmed.Render("no match"))
+		rows = append(rows, textRows(dimmed.Render("  no match"))...)
 	}
-	keys := keyHint("enter", "go", "up down", "select", "esc", "close")
+	hints := []string{"enter", "go", "↑↓", "select", "esc", "close"}
 	if multi { // S: space marks, enter applies
-		keys = keyHint("space", "select", "enter", "go", "esc", "close")
+		hints = []string{"space", "select", "enter", "go", "esc", "close"}
 	}
-	rows = append(rows, "", keys)
-	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).
-		Padding(0, 1).Width(pickW(w, h)).Render(strings.Join(rows, "\n"))
-	return box
+	return panel{title: what, width: inner, body: rows, hints: hints}.render()
 }
 
-// grepBox is the ctrl+g input box: the filter text, drawn over the screen by overlayCentered.
+// grepBox is the ctrl+g input panel: the filter text, drawn over the screen by overlayCentered.
 func grepBox(w int, q string) string {
-	rows := []string{title.Render("grep") + " " + prompt.Render(">") + " " + q, "", keyHint("enter", "keep", "esc", "clear")}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).
-		Padding(0, 1).Width(min(max(w/2, 40), w)).Render(strings.Join(rows, "\n"))
+	return panel{title: "grep", width: min(max(w/2, 40), w) - 2*panelPad, body: textRows(prompt.Render(">") + " " + q), hints: []string{"enter", "keep", "esc", "clear"}}.render()
 }
 
 // pickWindow is the matches a picker of rowsMax rows shows: [start, end) with the selection sel in it. A

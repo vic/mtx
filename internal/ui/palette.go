@@ -95,6 +95,7 @@ func usePalette(p palette) {
 	unreadMark = unread
 	sponsorButton = lipgloss.NewStyle().Foreground(pal.slots[3]).Background(pal.slots[1]).Render(sponsorLabel)
 	focusPre, gradPre = sgrOf(focusBorder), nil
+	surfacePre, cursorRowPre = sgrOf(cell.Background(pal.slots[1])), sgrOf(cell.Background(pal.slots[2]))
 	if pal.rgb {
 		for i := range gradLevels {
 			gradPre = append(gradPre, sgrOf(fg(mix(pal.slots[0x0D], pal.slots[0x0E], float64(i)/(gradLevels-1))).Bold(true)))

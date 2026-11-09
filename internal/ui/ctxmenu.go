@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	ctxMinWidth = 16 // below this a row has no room for a marker and a label
-	ctxMaxWidth = 36 // a context menu is a short list of short labels, not a floating panel
-	ctxGap      = 2  // the least run of spaces between a label and its hint
-	ctxChrome   = 4  // rows that are not items: the top pad, the title chip, the blank under it, the bottom pad
-	ctxBodyY    = 3  // the first item row, under the top pad, the chip and the blank
+	ctxMinWidth = 16            // below this a row has no room for a marker and a label
+	ctxMaxWidth = 36            // a context menu is a short list of short labels, not a floating panel
+	ctxGap      = 2             // the least run of spaces between a label and its hint
+	ctxChrome   = panelBody + 1 // rows that are not items: the top pad, the title chip, the blank under it, the bottom pad
+	ctxBodyY    = panelBody     // the first item row, under the top pad, the chip and the blank
 )
 
 // ctxMenu draws the which-key menu name at the pointer (x, y), and sel is its highlighted row. It places
@@ -62,21 +62,17 @@ func (a App) ctxLayout() (lines []string, x, y, start int) {
 		}
 		width = max(width, w)
 	}
-	width = max(min(width, ctxMaxWidth, a.w-2), 1)
+	width = max(min(width, ctxMaxWidth, a.w-2*panelPad), 1)
 	visible := max(min(len(items), a.h-ctxChrome), 1)
 	start = min(max(a.ctx.sel-visible+1, 0), max(len(items)-visible, 0))
 
-	surface := lipgloss.NewStyle().Background(pal.slots[1])
-	pad := surface.Render(" ")
-	blank := surface.Render(strings.Repeat(" ", width+2))
-	chip := lipgloss.NewStyle().Background(pal.slots[0x0D]).Foreground(pal.slots[0]).Bold(true).Render(" " + a.ctx.name + " ")
-	lines = append(lines, blank, pad+chip+surface.Render(strings.Repeat(" ", max(width+1-lipgloss.Width(chip), 0))), blank)
+	var body []panelRow
 	for i := start; i < min(start+visible, len(items)); i++ {
-		lines = append(lines, pad+ctxRow(items[i], hints[i], i == a.ctx.sel, width)+pad)
+		body = append(body, ctxRow(items[i], hints[i], i == a.ctx.sel, width))
 	}
-	lines = append(lines, blank)
+	lines = strings.Split(panel{title: a.ctx.name, width: width, body: body}.render(), "\n")
 
-	bw, bh := width+2, len(lines)
+	bw, bh := width+2*panelPad, len(lines)
 	x, y = a.ctx.x, a.ctx.y
 	if x+bw > a.w { // flip to the other side of the pointer rather than slide along the edge
 		x = a.ctx.x - bw + 1
@@ -87,24 +83,20 @@ func (a App) ctxLayout() (lines []string, x, y, start int) {
 	return lines, max(min(x, a.w-bw), 0), max(min(y, a.h-bh), 0), start
 }
 
-// ctxRow is one item row, width wide: the label gives up room before the hint does.
-func ctxRow(it menuItem, hint string, on bool, width int) string {
-	st := lipgloss.NewStyle().Background(pal.slots[1])
-	marker := "  "
-	if on {
-		st, marker = st.Background(pal.slots[2]), "› "
-	}
-	label := st.Foreground(pal.slots[5]).Bold(on)
-	if it.do == ":redact" { // the destructive row
-		label = label.Foreground(pal.slots[8])
+// ctxRow is one item row, width wide: the label gives up room before the hint does, and the destructive
+// row is in the alert color.
+func ctxRow(it menuItem, hint string, on bool, width int) panelRow {
+	label := cell.Bold(on)
+	if it.do == ":redact" {
+		label = alert
 	}
 	hw := 0
 	if hint != "" {
 		hw = lipgloss.Width(hint) + ctxGap
 	}
-	left := st.Foreground(pal.slots[0x0D]).Bold(true).Render(marker) + label.Render(ansi.Truncate(it.label, max(width-2-hw, 1), "…"))
-	gap := max(width-lipgloss.Width(left)-lipgloss.Width(hint), 0)
-	return left + st.Render(strings.Repeat(" ", gap)) + st.Foreground(pal.slots[3]).Render(hint)
+	text := ansi.Truncate(it.label, max(width-2-hw, 1), "…")
+	gap := max(width-2-lipgloss.Width(text)-lipgloss.Width(hint), 0)
+	return listRow(label.Render(text)+strings.Repeat(" ", gap)+dimmed.Render(hint), on)
 }
 
 // withCtx draws the context menu over screen.

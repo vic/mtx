@@ -750,7 +750,7 @@ func TestHelpScrolls(t *testing.T) {
 		}
 	}
 	checkFrame(t, a, 100, 12)
-	if a.helpOff != helpRows()-12 { // NEG: stops at the bottom
+	if a.helpOff != helpRows()-(12-helpChrome) { // NEG: stops at the bottom
 		t.Fatalf("bottom: off %d of %d", a.helpOff, helpRows())
 	}
 }

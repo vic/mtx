@@ -2742,7 +2742,7 @@ func agentsAt(c model.Channel, session string) []string {
 }
 
 func (a App) helpScroll(n int) App {
-	a.helpOff = helpOff(helpRows(), a.h, a.helpOff+n)
+	a.helpOff = helpOff(helpRows(), a.h-helpChrome, a.helpOff+n)
 	return a
 }
 

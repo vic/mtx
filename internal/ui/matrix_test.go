@@ -76,13 +76,13 @@ func TestHelpButtonsOpenLinks(t *testing.T) {
 	bl := strings.Split(helpBox(a.h, a.helpOff), "\n")
 	bw := lipgloss.Width(bl[0])
 	top, left := max((a.h-len(bl))/2, 0), max((a.w-bw)/2, 0)
-	row := ansi.Strip(bl[1])
+	row := ansi.Strip(bl[panelBody])
 	x := left + lipgloss.Width(row[:strings.Index(row, "github:vic/mtx")]) + 1
-	if u, ok := a.helpButtonAt(x, top+1); !ok || u != repoURL {
+	if u, ok := a.helpButtonAt(x, top+panelBody); !ok || u != repoURL {
 		t.Fatalf("repo button: %q %v", u, ok)
 	}
 	x = left + lipgloss.Width(row[:strings.Index(row, "sponsor @vic")]) + 1
-	if u, ok := a.helpButtonAt(x, top+1); !ok || u != donateURL {
+	if u, ok := a.helpButtonAt(x, top+panelBody); !ok || u != donateURL {
 		t.Fatalf("donate button: %q %v", u, ok)
 	}
 	if _, ok := a.helpButtonAt(0, 0); ok {

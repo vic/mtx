@@ -703,14 +703,17 @@ func chanNicks(c model.Channel, user string) []string {
 	return append([]string{user}, memberNicks(c)...)
 }
 
-// helpBox is the help box in h rows at most: taller than that, a window that scrolls.
+// helpChrome is the help panel's rows that are not help text: the top pad, the title chip and the blank
+// under it, then the blank, the rule and the hints, and the bottom pad.
+const helpChrome = panelBody + 4
+
+// helpBox is the help panel in h rows at most: taller than that, its text is a window that scrolls.
 func helpBox(h, off int) string {
-	box := strings.Split(lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[3]).Padding(0, 1).Render(helpText()), "\n")
-	if len(box) <= h {
-		return strings.Join(box, "\n")
-	}
-	off = helpOff(len(box), h, off)
-	return strings.Join(box[off:off+h], "\n")
+	body := strings.Split(helpText(), "\n")
+	vis := max(h-helpChrome, 1)
+	off = helpOff(len(body), vis, off)
+	return panel{title: "help", width: lipgloss.Width(body[0]), body: textRows(body[off:min(off+vis, len(body))]...),
+		hints: []string{"↑↓", "scroll", "ctrl+c", "quit", "any key", "close"}}.render()
 }
 
 // overlayCentered draws box centered over screen (w x h cells), dy rows lower (a popup sliding in); the
@@ -732,8 +735,8 @@ func overlayCentered(screen string, w, h, dy int, box string) string {
 // helpOff clamps a help scroll offset for a box of n rows in h rows.
 func helpOff(n, h, off int) int { return min(max(off, 0), max(n-h, 0)) }
 
-// helpRows is how many rows the help box has.
-func helpRows() int { return strings.Count(helpText(), "\n") + 3 } // text rows + top and bottom border
+// helpRows is how many rows of help text there are.
+func helpRows() int { return strings.Count(helpText(), "\n") + 1 }
 
 // helpSections is the ? popup: a heading, then key and description pairs.
 var helpSections = []struct {
@@ -922,7 +925,7 @@ func helpText() string {
 	}
 	btns := renderHelpButtons()
 	rows[0] = head + strings.Repeat(" ", max(width-lipgloss.Width(head)-lipgloss.Width(btns), 1)) + btns
-	return strings.Join(append(rows, keyHint("ctrl+c", "quit", "any key", "close help")), "\n")
+	return strings.Join(rows, "\n")
 }
 
 // mentionRE is an @nick in text (D:258); teammate nicks carry @session.
@@ -1188,8 +1191,6 @@ func chanRowIndex(chans []model.Channel, i int) int {
 	return n
 }
 
-// menuBox is an open which-key menu as a bordered box: the menu name, then one "key  label" row per item.
-
 // overlayRight draws box at the right edge of screen, its bottom row on row bottom (w columns).
 func overlayRight(screen string, w, bottom int, box string) string {
 	rows := strings.Split(screen, "\n")
@@ -1228,11 +1229,15 @@ func menuHint(it menuItem) string {
 	return strings.Join(bindingKeys(match), " ")
 }
 
-// menuBox is an open which-key menu as a bordered box: the menu name, then one "key  label" row per item.
+// menuChrome is the which-key panel's rows that are not items: the top pad, the title chip and the blank
+// under it, then the blank, the rule and the hints, and the bottom pad.
+const menuChrome = panelBody + 4
+
+// menuBox is an open which-key menu as a panel: the menu name, then one "key  label" row per item.
 // An item's direct NORMAL keys are in muted style at the right edge of the box, all ending in one column.
 // Items that would make the box taller than maxRows (the screen) go into side-by-side columns.
 func menuBox(name string, items []menuItem, maxRows int) string {
-	per := max(maxRows-3, 1) // the title and the border take three rows
+	per := max(maxRows-menuChrome, 1)
 	hints := make([]string, len(items))
 	w := 0 // the widest row of the whole box, in every column: label, and for a hinted row a gap and its hint
 	for i, it := range items {
@@ -1267,20 +1272,20 @@ func menuBox(name string, items []menuItem, maxRows int) string {
 		blocks = append(blocks, c)
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, blocks...)
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).
-		Render(title.Render(name) + "\n" + body)
+	rows := strings.Split(body, "\n")
+	return panel{title: name, width: lipgloss.Width(rows[0]), body: textRows(rows...), hints: []string{"esc", "close", "backspace", "back"}}.render()
 }
 
-// verifyBox is the emoji box of a device verification: the emojis to compare, and the answer keys.
+// verifyBox is the device verification panel: the emojis to compare, and the answer keys.
 func verifyBox(emojis string) string {
-	rows := []string{title.Render("verify this device"), "", emojis, "", keyHint("y", "they match", "n", "they differ")}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
+	return panel{title: "verify this device", width: max(lipgloss.Width(emojis), 30), body: textRows(emojis),
+		hints: []string{"y", "they match", "n", "they differ"}}.render()
 }
 
-// imgBox is the image popup: the rendered image s in a rounded box, with how to close it.
+// imgBox is the image panel: the rendered image s, and how to close it.
 func imgBox(s string) string {
-	rows := []string{title.Render("image  (any key closes)"), "", s}
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(pal.slots[0x0E]).Padding(0, 1).Render(strings.Join(rows, "\n"))
+	rows := strings.Split(s, "\n")
+	return panel{title: "image", width: max(lipgloss.Width(rows[0]), 20), body: textRows(rows...), hints: []string{"any key", "close"}}.render()
 }
 
 // mediaIcons marks a media line's tag so it stands out (vic 2026-10-26).

@@ -1806,7 +1806,7 @@ func TestWhichKeyHintsRightAligned(t *testing.T) {
 			t.Fatalf("hint %q missing from row %q", hint, row)
 		}
 		ends[lipgloss.Width(row[:i+len(hint)])] = true
-		if rest := row[i+len(hint):]; rest != " │" { // flush right: one padding space, then the border
+		if rest := row[i+len(hint):]; rest != strings.Repeat(" ", panelPad) { // flush right: then the panel pad
 			t.Fatalf("hint %q is not flush right: %q follows it in %q", hint, rest, row)
 		}
 	}
@@ -1856,7 +1856,7 @@ func TestWhichKeyHintsRightAlignedAcrossColumns(t *testing.T) {
 		}
 		return out
 	}
-	two := edges(6) // 3 items a column: two columns
+	two := edges(3 + menuChrome) // 3 items a column: two columns
 	if len(two) != 2 {
 		t.Fatalf("two columns give %d hint edges, want 2: %v", len(two), two)
 	}

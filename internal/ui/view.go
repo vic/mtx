@@ -438,13 +438,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			if row.label { // a group label: dim, not a nick
 				nk = dimmed.Render(nk)
 			} else if nk != "" { // an empty Render still emits escapes
-				mark, name := "", nk
-				for _, sm := range statusMarks {
-					if rest, ok := strings.CutPrefix(nk, sm); ok {
-						mark, name = sm, rest
-					}
-				}
-				nk = presenceStyle(mark) + nickStyle(name).Render(name)
+				nk = presenceStyle(row.mark) + nickStyle(nk).Render(nk)
 			}
 			cc, nc := chanCell(chans, byName, cur.Name, i), fitCell(" "+nk, nickW)
 			if p.focus == focusChans && i+p.chanTop == p.sel && i < len(chans) {
@@ -456,7 +450,8 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 				}
 			}
 			if p.focus == focusNicks && i+p.nickTop == p.nickSel {
-				nc = fit(current, " "+p.nicks[min(i+p.nickTop, len(p.nicks)-1)].text, nickW)
+				sel := p.nicks[min(i+p.nickTop, len(p.nicks)-1)]
+				nc = fit(current, " "+sel.mark+sel.text, nickW)
 			}
 			if sep == 1 && i == tRows { // the line between the threads box and the chat box
 				rows = append(rows, edge(0, "│")+cc+vEdge(1, "├", false)+styleOf(midLit(false)).Render(frameRule(details, mid))+

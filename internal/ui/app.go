@@ -2318,14 +2318,11 @@ const (
 	idleMark   = "💤" // idle, or not live
 )
 
-// statusMarks lists every mark, for the view to split it from the nick.
 // quickReacts is the + row: + then 1-9 reacts to the cursor line with that emoji.
 var quickReacts = []string{"👍", "❤️", "😂", "🎉", "😮", "😢", "🙏", "🔥", "👀"}
 
-var statusMarks = []string{busyMark, typingMark, idleMark, presenceOnline, presenceAway, presenceOffline}
-
 // Presence dots before a nick (PresenceMsg): green online, yellow away, dim offline. Each is one glyph
-// with a space, so the view can split it from the nick and style it.
+// with a space.
 const (
 	presenceOnline  = "● "
 	presenceAway    = "◐ "
@@ -2345,10 +2342,10 @@ func presenceMark(state string) string {
 	return ""
 }
 
-// paneNicks is chanNicks with a status mark before each nick.
-func (a App) paneNicks() []string {
+// paneNicks is chanNicks, each nick with its status mark.
+func (a App) paneNicks() []railRow {
 	cur := a.m.Current()
-	out := chanNicks(cur, a.user)
+	out := items(chanNicks(cur, a.user))
 	busy := func(pid int) bool { return a.info[pid].Status == "busy" }
 	mark := func(b bool) string {
 		if b {
@@ -2356,9 +2353,9 @@ func (a App) paneNicks() []string {
 		}
 		return idleMark
 	}
-	out[0] = mark(false) + out[0]
+	out[0].mark = mark(false)
 	if a.mode == Insert && a.in.Value() != "" {
-		out[0] = typingMark + chanNicks(cur, a.user)[0]
+		out[0].mark = typingMark
 	}
 	for i := 1; i < len(out); i++ {
 		switch {
@@ -2366,18 +2363,18 @@ func (a App) paneNicks() []string {
 			nick := cur.Members[i-1].Nick
 			switch p := presenceMark(a.presence[nick]); {
 			case busy(a.pidOf(nick)):
-				out[i] = busyMark + out[i]
+				out[i].mark = busyMark
 			case slices.Contains(a.typing[cur.Name], nick):
-				out[i] = typingMark + out[i]
+				out[i].mark = typingMark
 			case p != "": // a dot for a nick we know the presence of
-				out[i] = p + out[i]
+				out[i].mark = p
 			default:
 				// no presence known: no mark
 			}
 		case i == 1: // the main agent
-			out[i] = mark(busy(cur.PID)) + out[i]
+			out[i].mark = mark(busy(cur.PID))
 		default:
-			out[i] = mark(cur.Agents[i-2].Busy) + out[i]
+			out[i].mark = mark(cur.Agents[i-2].Busy)
 		}
 	}
 	return out
@@ -2466,6 +2463,15 @@ func (a App) paneItems(f paneFocus) (show, names []railRow) {
 	return fs, fn
 }
 
+// paneRowAt is the item drawn on row i of side pane f, counted from the pane's first shown row.
+func (a App) paneRowAt(f paneFocus, i int) (string, bool) {
+	show, _ := a.paneItems(f)
+	if j := i + a.ptop[f]; i >= 0 && j < len(show) {
+		return show[j].item()
+	}
+	return "", false
+}
+
 // paneKey is paneStep plus the channel preview: moving over the channel pane shows
 // that channel in the chat and nick panes (vic 2026-10-23).
 func (a App) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -2540,16 +2546,12 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 	i := m.Y - 1
 	switch {
 	case m.X < chanW+2: // the channel pane and its borders
-		if _, names := a.paneItems(focusChans); i < len(names) {
-			if n, ok := names[i].item(); ok {
-				a = a.focusName(n)
-			}
+		if n, ok := a.paneRowAt(focusChans, i); ok {
+			a = a.focusName(n)
 		}
 	case m.X >= a.w-nickW-2: // the nick pane and its borders
-		if _, names := a.paneItems(focusNicks); i < len(names) {
-			if n, ok := names[i].item(); ok {
-				a = a.mention(n)
-			}
+		if n, ok := a.paneRowAt(focusNicks, i); ok {
+			a = a.mention(n)
 		}
 	default: // the lines pane: a file or `command` opens, else a click replies to that line's nick
 		rows, sep := a.threadRows()

@@ -8,8 +8,9 @@ import (
 
 // railRow is one row of a side pane: an item (a channel, a nick, a thread) or a group label.
 type railRow struct {
-	text  string
-	label bool // a group label: drawn dim, never focused, mentioned or jumped to
+	mark  string // a nick's status mark, drawn before the text
+	text  string // what the row names: the channel, the nick, the thread, or the label
+	label bool   // a group label: drawn dim, never focused, mentioned or jumped to
 }
 
 // item is the row's text when the row is an item, not a group label.
@@ -63,7 +64,7 @@ func levelGroup(level int) int {
 // (not a room, or filtering) rows are the plain pane and rowOf is the identity.
 func (a App) nickRows() (rows []railRow, rowOf []int) {
 	cur := a.m.Current()
-	out := items(a.paneNicks())
+	out := a.paneNicks()
 	plain := func() ([]railRow, []int) {
 		rowOf = make([]int, len(out))
 		for i := range rowOf {

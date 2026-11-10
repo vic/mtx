@@ -413,12 +413,12 @@ func TestMarkdownColors(t *testing.T) {
 func TestBusyMarks(t *testing.T) {
 	var log []sent
 	a := newApp(t, &log, nil)                                     // #a pid 1, user "me"
-	if got := strings.Join(a.paneNicks(), ","); got != "💤me,💤a" { // control: idle, not typing
+	if got := shown(a.paneNicks()); got != "💤me,💤a" { // control: idle, not typing
 		t.Fatalf("idle %q", got)
 	}
 	next, _ := a.Update(InfoMsg{1: {Status: "busy"}})
 	a, _ = press(t, next.(App), "i", "x")
-	if got := strings.Join(a.paneNicks(), ","); got != "💬me,⌛a" {
+	if got := shown(a.paneNicks()); got != "💬me,⌛a" {
 		t.Fatalf("busy+typing %q", got)
 	}
 	if !strings.Contains(ansi.Strip(a.screen()), "⌛a") {
@@ -428,7 +428,7 @@ func TestBusyMarks(t *testing.T) {
 	next, _ = next.(App).Update(MembersMsg{Ch: "&r", Nicks: []string{"lib1"}})
 	a = next.(App).focusName("&r")
 	a.m, _ = a.m.WithRoomMembers("&r", []model.Member{{Nick: "a"}, {Nick: "x@a"}, {Nick: "b"}}) // no PIDs, as at runtime
-	if got := strings.Join(a.paneNicks(), ","); got != "💬me,⌛a,⌛x@a,b" {                        // NEG: b (pid 2) has no mark
+	if got := shown(a.paneNicks()); got != "💬me,⌛a,⌛x@a,b" {                        // NEG: b (pid 2) has no mark
 		t.Fatalf("room %q", got)
 	}
 }
@@ -438,7 +438,7 @@ func TestAgentsInPane(t *testing.T) {
 	a := newApp(t, &log, nil)
 	next, _ := a.Update(AgentsMsg{Ch: "#a", Agents: []model.Agent{{Nick: "driver-1", Busy: true}, {Nick: "scribe-1"}}})
 	a = next.(App)
-	if got := strings.Join(a.paneNicks(), ","); got != "💤me,💤a,⌛driver-1,💤scribe-1" {
+	if got := shown(a.paneNicks()); got != "💤me,💤a,⌛driver-1,💤scribe-1" {
 		t.Fatalf("pane %q", got)
 	}
 	next, _ = a.Update(AgentsMsg{Ch: "&nope", Agents: []model.Agent{{Nick: "x"}}}) // NEG: unknown channel ignored

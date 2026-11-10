@@ -550,7 +550,7 @@ func TestChanGroups(t *testing.T) {
 		}
 		return -1
 	}
-	fav, fr, rooms, people, ana := pos(railRow{"favourites", true}), pos(railRow{text: "#r"}), pos(railRow{"rooms", true}), pos(railRow{"people", true}), pos(railRow{text: "@ana"})
+	fav, fr, rooms, people, ana := pos(railRow{text: "favourites", label: true}), pos(railRow{text: "#r"}), pos(railRow{text: "rooms", label: true}), pos(railRow{text: "people", label: true}), pos(railRow{text: "@ana"})
 	if !(fav >= 0 && fav < fr && fr < rooms && rooms < people && people < ana) {
 		t.Fatalf("rows %v", rows)
 	}
@@ -600,7 +600,7 @@ func TestChanGroupsSpaces(t *testing.T) {
 		}
 		return -1
 	}
-	nix, r1, rooms, r2 := pos(railRow{"nix", true}), pos(railRow{text: "#r1"}), pos(railRow{"rooms", true}), pos(railRow{text: "#r2"})
+	nix, r1, rooms, r2 := pos(railRow{text: "nix", label: true}), pos(railRow{text: "#r1"}), pos(railRow{text: "rooms", label: true}), pos(railRow{text: "#r2"})
 	if !(nix >= 0 && nix < r1 && r1 < rooms && rooms < r2) {
 		t.Fatalf("rows %v", rows)
 	}
@@ -1232,7 +1232,7 @@ func TestDMGroup(t *testing.T) {
 	rows := a.chanRows()
 	people, dm := -1, -1
 	for i, r := range rows {
-		if r == (railRow{"people", true}) {
+		if r == (railRow{text: "people", label: true}) {
 			people = i
 		}
 		if r == (railRow{text: "#chat-with-ana"}) {
@@ -1462,10 +1462,10 @@ func TestPresenceMark(t *testing.T) {
 	found := false
 	rows, _ := a.nickRows()
 	for _, row := range rows {
-		if strings.Contains(row.text, "ana") && strings.Contains(row.text, "●") {
+		if strings.Contains(row.text, "ana") && strings.Contains(row.mark, "●") {
 			found = true
 		}
-		if strings.Contains(row.text, "bob") && strings.Contains(row.text, "●") {
+		if strings.Contains(row.text, "bob") && strings.Contains(row.mark, "●") {
 			t.Fatalf("bob has no presence but shows a dot: %v", row)
 		}
 	}

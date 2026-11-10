@@ -720,12 +720,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		a.jumpOpen, a.jumpChan = false, false
 		if chanJump {
 			_, names := a.paneItems(focusChans)
-			var rows []string // the channel rows from the top of the pane: group labels skipped
-			for _, n := range names[min(a.ptop[focusChans], len(names)):] {
-				if !strings.HasPrefix(n, nickLabel) {
-					rows = append(rows, n)
-				}
-			}
+			rows := itemNames(names[min(a.ptop[focusChans], len(names)):]) // the channel rows from the top of the pane
 			if i := strings.Index(jumpKeys, k); len(k) == 1 && i >= 0 && i < len(rows) {
 				return a.focusName(rows[i]), nil
 			}
@@ -1048,7 +1043,7 @@ func (a App) key(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case NextTurn, PrevTurn:
 		a = a.turn(act.Kind == NextTurn)
 	case FocusPane:
-		a.focus, a.fq, a.fsel = focusChans, "", max(slices.Index(a.chanRows(), a.m.Current().Name), 0) // start on the current channel
+		a.focus, a.fq, a.fsel = focusChans, "", max(slices.Index(a.chanRows(), railRow{text: a.m.Current().Name}), 0) // start on the current channel
 	case PaneNext, PanePrev, GotoChan:
 		a = a.switchChan(act)
 	}
@@ -1116,15 +1111,7 @@ func (a App) switchChan(act Action) App {
 }
 
 // paneNames are the channels in the channel pane's order: its rows without the group labels.
-func (a App) paneNames() []string {
-	var names []string
-	for _, n := range a.chanRows() {
-		if !strings.HasPrefix(n, nickLabel) {
-			names = append(names, n)
-		}
-	}
-	return names
-}
+func (a App) paneNames() []string { return itemNames(a.chanRows()) }
 
 // paneChan steps to the next or previous channel in the channel pane's order, with wrap.
 func (a App) paneChan(act Action) App {
@@ -2451,28 +2438,29 @@ const (
 // paneItems is the focused side pane's rows: names (channels, or nicks with busy
 // marks) filtered fuzzily by fq, and the plain names to act on. Unfocused or
 // with no query, every row in pane order.
-func (a App) paneItems(f paneFocus) (show, names []string) {
+func (a App) paneItems(f paneFocus) (show, names []railRow) {
 	if f == focusThreads {
-		names = nil // the heads, then the main thread last
+		var heads []string // the heads, then the main thread last
 		for _, r := range a.threadOrder() {
-			names = append(names, r.label)
+			heads = append(heads, r.label)
 		}
+		names = items(heads)
 		show = names
 	} else if f == focusChans {
 		names = a.chanRows()
 		if f == a.focus && strings.TrimSpace(a.fq) != "" {
-			names = a.chanNames() // a filter matches channel names, never group labels
+			names = items(a.chanNames()) // a filter matches channel names, never group labels
 		}
 		show = names
 	} else {
-		names = chanNicks(a.m.Current(), a.user)
+		names = items(chanNicks(a.m.Current(), a.user))
 		show, _ = a.nickRows()
 	}
 	if f != a.focus || strings.TrimSpace(a.fq) == "" {
 		return show, names
 	}
-	var fs, fn []string
-	for _, m := range pickList(names, a.fq) {
+	var fs, fn []railRow
+	for _, m := range pickList(texts(names), a.fq) {
 		fs, fn = append(fs, show[m.idx]), append(fn, names[m.idx])
 	}
 	return fs, fn
@@ -2485,7 +2473,9 @@ func (a App) paneKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	b := next.(App)
 	if k := msg.String(); b.focus == focusChans && k != "esc" && k != "enter" && k != "tab" {
 		if _, names := b.paneItems(focusChans); b.fsel < len(names) {
-			b = b.focusName(names[b.fsel])
+			if n, ok := names[b.fsel].item(); ok {
+				b = b.focusName(n)
+			}
 		}
 	}
 	return b, cmd
@@ -2513,16 +2503,19 @@ func (a App) paneStep(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if a.fsel >= len(names) {
 			return a, nil
 		}
-		if a.focus == focusThreads {
-			if names[a.fsel] == mainThreadLabel {
+		n, ok := names[a.fsel].item()
+		switch {
+		case !ok: // a group label names nothing to open
+		case a.focus == focusThreads:
+			if n == mainThreadLabel {
 				a = a.selectThread("")
-			} else if h, ok := a.threadAt(names[a.fsel]); ok {
+			} else if h, ok := a.threadAt(n); ok {
 				a = a.selectThread(h.Root)
 			}
-		} else if a.focus == focusChans {
-			a = a.focusName(names[a.fsel])
-		} else {
-			a = a.mention(names[a.fsel])
+		case a.focus == focusChans:
+			a = a.focusName(n)
+		default:
+			a = a.mention(n)
 		}
 		a.focus = focusChat
 	default:
@@ -2548,11 +2541,15 @@ func (a App) click(m tea.Mouse) (tea.Model, tea.Cmd) {
 	switch {
 	case m.X < chanW+2: // the channel pane and its borders
 		if _, names := a.paneItems(focusChans); i < len(names) {
-			a = a.focusName(names[i])
+			if n, ok := names[i].item(); ok {
+				a = a.focusName(n)
+			}
 		}
 	case m.X >= a.w-nickW-2: // the nick pane and its borders
 		if _, names := a.paneItems(focusNicks); i < len(names) {
-			a = a.mention(names[i])
+			if n, ok := names[i].item(); ok {
+				a = a.mention(n)
+			}
 		}
 	default: // the lines pane: a file or `command` opens, else a click replies to that line's nick
 		rows, sep := a.threadRows()

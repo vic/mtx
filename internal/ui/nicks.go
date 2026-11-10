@@ -6,8 +6,43 @@ import (
 	"mtx/internal/model"
 )
 
-// nickLabel marks a group label row in the nick pane (never a selectable nick).
-const nickLabel = "\x00"
+// railRow is one row of a side pane: an item (a channel, a nick, a thread) or a group label.
+type railRow struct {
+	text  string
+	label bool // a group label: drawn dim, never focused, mentioned or jumped to
+}
+
+// item is the row's text when the row is an item, not a group label.
+func (r railRow) item() (string, bool) { return r.text, !r.label }
+
+// items are plain item rows, one per name.
+func items(names []string) []railRow {
+	rows := make([]railRow, len(names))
+	for i, n := range names {
+		rows[i] = railRow{text: n}
+	}
+	return rows
+}
+
+// texts are the rows' texts, labels included.
+func texts(rows []railRow) []string {
+	out := make([]string, len(rows))
+	for i, r := range rows {
+		out[i] = r.text
+	}
+	return out
+}
+
+// itemNames are the rows' item texts, group labels left out.
+func itemNames(rows []railRow) []string {
+	var out []string
+	for _, r := range rows {
+		if n, ok := r.item(); ok {
+			out = append(out, n)
+		}
+	}
+	return out
+}
 
 // nickGroupNames are the room's member groups, in pane order: by power level.
 var nickGroupNames = [...]string{"admins", "mods", "members"}
@@ -26,10 +61,10 @@ func levelGroup(level int) int {
 // nickRows is the nick pane of the current channel: rows with a group label above each group of
 // a room (admins first). rowOf maps each chanNicks index (0 = me) to its row. Without grouping
 // (not a room, or filtering) rows are the plain pane and rowOf is the identity.
-func (a App) nickRows() (rows []string, rowOf []int) {
+func (a App) nickRows() (rows []railRow, rowOf []int) {
 	cur := a.m.Current()
-	out := a.paneNicks()
-	plain := func() ([]string, []int) {
+	out := items(a.paneNicks())
+	plain := func() ([]railRow, []int) {
 		rowOf = make([]int, len(out))
 		for i := range rowOf {
 			rowOf[i] = i
@@ -39,7 +74,7 @@ func (a App) nickRows() (rows []string, rowOf []int) {
 	if cur.Kind != model.RoomChan || a.fq != "" || len(out) != len(cur.Members)+1 {
 		return plain()
 	}
-	rows = []string{out[0]}
+	rows = []railRow{out[0]}
 	rowOf = make([]int, len(out))
 	for g, name := range nickGroupNames {
 		var members []int
@@ -51,7 +86,7 @@ func (a App) nickRows() (rows []string, rowOf []int) {
 		if len(members) == 0 {
 			continue
 		}
-		rows = append(rows, nickLabel+name)
+		rows = append(rows, railRow{text: name, label: true})
 		for _, j := range members {
 			rows = append(rows, out[j+1])
 			rowOf[j+1] = len(rows) - 1
@@ -79,9 +114,9 @@ func chanGroup(c model.Channel, tag string) int {
 }
 
 // chanRows is the channel pane: favourites, then each space (a tag "space:name"), rooms, people and low
-// priority, each channel group under a nickLabel row when more than one group has channels.
+// priority, each channel group under a label row when more than one group has channels.
 // Label rows are not channels.
-func (a App) chanRows() []string {
+func (a App) chanRows() []railRow {
 	var groups [len(chanGroupNames)][]string
 	var spaceOrder []string
 	spaceRooms := map[string][]string{}
@@ -113,12 +148,12 @@ func (a App) chanRows() []string {
 			sections = append(sections, section{chanGroupNames[i], groups[i]})
 		}
 	}
-	var out []string
+	var out []railRow
 	for _, s := range sections {
 		if len(sections) > 1 {
-			out = append(out, nickLabel+s.label)
+			out = append(out, railRow{text: s.label, label: true})
 		}
-		out = append(out, s.names...)
+		out = append(out, items(s.names)...)
 	}
 	return out
 }

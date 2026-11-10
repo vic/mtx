@@ -57,7 +57,7 @@ func TestNickGroupsByRole(t *testing.T) {
 	rows, _ := a.nickRows()
 	var got []string
 	for _, r := range rows {
-		got = append(got, strings.TrimPrefix(ansi.Strip(r), " "))
+		got = append(got, strings.TrimPrefix(ansi.Strip(r.text), " "))
 	}
 	s := strings.Join(got, "|")
 	iAdm, iMod, iMem := strings.Index(s, "admins"), strings.Index(s, "mods"), strings.Index(s, "members")

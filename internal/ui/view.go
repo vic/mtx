@@ -342,7 +342,7 @@ func View(m model.Model, ml model.Modeline, input string, w, h, off, hit int) st
 	for _, c := range m.All() {
 		names = append(names, c.Name)
 	}
-	return render(m, ml, "> "+input, w, h, off, hit, sidePanes{chans: names, nicks: memberNicks(cur)}, cur.Lines.All(), wrapLine, nil, "", "")
+	return render(m, ml, "> "+input, w, h, off, hit, sidePanes{chans: items(names), nicks: items(memberNicks(cur))}, cur.Lines.All(), wrapLine, nil, "", "")
 }
 
 // render is View with the nick pane given as nicks and the shown lines of the current channel.
@@ -376,14 +376,7 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 		for _, c := range m.All() {
 			byName[c.Name] = c
 		}
-		var chans []model.Channel
-		for _, n := range p.chans[min(p.chanTop, len(p.chans)):] {
-			if strings.HasPrefix(n, nickLabel) {
-				chans = append(chans, model.Channel{Name: n}) // a group label row
-				continue
-			}
-			chans = append(chans, byName[n])
-		}
+		chans := p.chans[min(p.chanTop, len(p.chans)):] // the channel rows from the pane's top
 		mid := w - chanW - nickW - 4 // four border columns
 		var tBlock []string          // the threads box rows, memoized
 		if tRows > 0 {
@@ -437,10 +430,13 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			seg(midTitle(p, details), mid, styleOf(midLit(tRows > 0)))+vEdge(2, "┬", tRows > 0)+seg(p.title("nicks", focusNicks), nickW, line(2))+edge(3, "┐"))
 		for i := 0; i < n; i++ {
 			y = i + 1
-			nk := at(p.nicks, i+p.nickTop)
-			label := strings.HasPrefix(nk, nickLabel) // a group label: dim, not a nick
-			if label {
-				nk = dimmed.Render(strings.TrimPrefix(nk, nickLabel))
+			var row railRow // past the last nick: an empty row
+			if j := i + p.nickTop; j < len(p.nicks) {
+				row = p.nicks[j]
+			}
+			nk := row.text
+			if row.label { // a group label: dim, not a nick
+				nk = dimmed.Render(nk)
 			} else if nk != "" { // an empty Render still emits escapes
 				mark, name := "", nk
 				for _, sm := range statusMarks {
@@ -450,17 +446,17 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 				}
 				nk = presenceStyle(mark) + nickStyle(name).Render(name)
 			}
-			cc, nc := chanCell(chans, cur.Name, i), fitCell(" "+nk, nickW)
+			cc, nc := chanCell(chans, byName, cur.Name, i), fitCell(" "+nk, nickW)
 			if p.focus == focusChans && i+p.chanTop == p.sel && i < len(chans) {
-				cc = fit(current, " "+chans[i].Name, chanW)
+				cc = fit(current, " "+chans[i].text, chanW)
 			}
-			if p.chanJump && i < len(chans) && !strings.HasPrefix(chans[i].Name, nickLabel) {
-				if k := chanRowIndex(chans, i); k < len(jumpKeys) {
-					cc = fitPlain(alert.Render(string(jumpKeys[k]))+" "+chans[i].Name, chanW)
+			if p.chanJump && i < len(chans) && !chans[i].label {
+				if k := len(itemNames(chans[:i])); k < len(jumpKeys) {
+					cc = fitPlain(alert.Render(string(jumpKeys[k]))+" "+chans[i].text, chanW)
 				}
 			}
 			if p.focus == focusNicks && i+p.nickTop == p.nickSel {
-				nc = fit(current, " "+p.nicks[min(i+p.nickTop, len(p.nicks)-1)], nickW)
+				nc = fit(current, " "+p.nicks[min(i+p.nickTop, len(p.nicks)-1)].text, nickW)
 			}
 			if sep == 1 && i == tRows { // the line between the threads box and the chat box
 				rows = append(rows, edge(0, "│")+cc+vEdge(1, "├", false)+styleOf(midLit(false)).Render(frameRule(details, mid))+
@@ -546,18 +542,21 @@ func zenInput(input string, avail int) string {
 }
 
 // chanCell is chanCellUncached, memoized on what the cell shows.
-func chanCell(chans []model.Channel, curName string, i int) string {
+func chanCell(chans []railRow, byName map[string]model.Channel, curName string, i int) string {
 	if i >= len(chans) {
 		return fitCell("", chanW)
 	}
-	c := chans[i]
-	k := chanKey{name: c.Name, kind: c.Kind, gone: c.Gone, unread: c.Unread, cur: c.Name == curName}
+	c, label := model.Channel{Name: chans[i].text}, chans[i].label
+	if !label {
+		c = byName[c.Name]
+	}
+	k := chanKey{name: c.Name, label: label, kind: c.Kind, gone: c.Gone, unread: c.Unread, cur: c.Name == curName}
 	chanCells.mu.Lock()
 	defer chanCells.mu.Unlock()
 	if s, ok := chanCells.m[k]; ok {
 		return s
 	}
-	s := chanCellUncached(chans, curName, i)
+	s := chanCellUncached(c, label, curName)
 	if len(chanCells.m) >= styledMax {
 		chanCells.m = map[chanKey]string{}
 	}
@@ -568,6 +567,7 @@ func chanCell(chans []model.Channel, curName string, i int) string {
 // chanKey is everything chanCellUncached reads for one channel.
 type chanKey struct {
 	name      string
+	label     bool // a group label row
 	kind      model.ChanKind
 	gone, cur bool
 	unread    int
@@ -579,15 +579,11 @@ var chanCells = struct {
 	m  map[chanKey]string
 }{m: map[chanKey]string{}}
 
-// chanCellUncached is channel row i of the channel pane, chanW wide.
-func chanCellUncached(chans []model.Channel, curName string, i int) string {
-	if i >= len(chans) {
-		return fitPlain("", chanW)
+// chanCellUncached is the channel pane row of c, or of the group label c.Name, chanW wide.
+func chanCellUncached(c model.Channel, label bool, curName string) string {
+	if label {
+		return fit(dimmed, " "+c.Name, chanW)
 	}
-	if l, ok := strings.CutPrefix(chans[i].Name, nickLabel); ok {
-		return fit(dimmed, " "+l, chanW)
-	}
-	c := chans[i]
 	marker, markSt, nameSt := "", cell, nickStyle(strings.TrimPrefix(c.Name, "#")) // a session is its main agent nick
 	if c.Kind == model.RoomChan {
 		nameSt = roomName
@@ -989,7 +985,7 @@ func wrapStamped(l model.Line, width int) []string {
 // sidePanes is what the channel and nick panes show: rows in order (filtered when
 // focused), which pane has focus, its selected row and the query typed in it.
 type sidePanes struct {
-	chans, nicks     []string
+	chans, nicks     []railRow
 	chanJump         bool // gc: channel rows show their jump labels
 	focus            paneFocus
 	sel              int
@@ -1210,17 +1206,6 @@ func jumpLabel(of []int, k int) string {
 		return " "
 	}
 	return alert.Render(string(jumpKeys[n]))
-}
-
-// chanRowIndex is the position of channel row i among the channel rows above and at it: group labels do not count.
-func chanRowIndex(chans []model.Channel, i int) int {
-	n := 0
-	for _, c := range chans[:i] {
-		if !strings.HasPrefix(c.Name, nickLabel) {
-			n++
-		}
-	}
-	return n
 }
 
 // overlayRight draws box at the right edge of screen, its bottom row on row bottom (w columns).

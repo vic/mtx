@@ -796,7 +796,7 @@ func TestClickChannelAndNick(t *testing.T) {
 	_, nk := a.paneItems(focusNicks) // bare names; the pane shows them with marks
 	nx := a.w - nickW - 2            // first column of the nick pane border
 	click(nx+1, 1)                   // first nick row
-	if a.mode != Insert || a.in.Value() != "@"+nk[0]+" " {
+	if a.mode != Insert || a.in.Value() != "@"+nk[0].text+" " {
 		t.Fatalf("click nick: mode %v input %q", a.mode, a.in.Value())
 	}
 	click(2, 1) // back to #a, which has the lines

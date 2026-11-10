@@ -542,7 +542,7 @@ func TestChanGroups(t *testing.T) {
 	next, _ = a.Update(TagsMsg{"#r": "favourite"})
 	a = next.(App)
 	rows := a.chanRows()
-	pos := func(s string) int {
+	pos := func(s railRow) int {
 		for i, r := range rows {
 			if r == s {
 				return i
@@ -550,9 +550,9 @@ func TestChanGroups(t *testing.T) {
 		}
 		return -1
 	}
-	fav, fr, rooms, people, ana := pos(nickLabel+"favourites"), pos("#r"), pos(nickLabel+"rooms"), pos(nickLabel+"people"), pos("@ana")
+	fav, fr, rooms, people, ana := pos(railRow{"favourites", true}), pos(railRow{text: "#r"}), pos(railRow{"rooms", true}), pos(railRow{"people", true}), pos(railRow{text: "@ana"})
 	if !(fav >= 0 && fav < fr && fr < rooms && rooms < people && people < ana) {
-		t.Fatalf("rows %q", rows)
+		t.Fatalf("rows %v", rows)
 	}
 }
 
@@ -592,7 +592,7 @@ func TestChanGroupsSpaces(t *testing.T) {
 	next, _ = a.Update(TagsMsg{"#r1": "space:nix"})
 	a = next.(App)
 	rows := a.chanRows()
-	pos := func(s string) int {
+	pos := func(s railRow) int {
 		for i, r := range rows {
 			if r == s {
 				return i
@@ -600,9 +600,9 @@ func TestChanGroupsSpaces(t *testing.T) {
 		}
 		return -1
 	}
-	nix, r1, rooms, r2 := pos(nickLabel+"nix"), pos("#r1"), pos(nickLabel+"rooms"), pos("#r2")
+	nix, r1, rooms, r2 := pos(railRow{"nix", true}), pos(railRow{text: "#r1"}), pos(railRow{"rooms", true}), pos(railRow{text: "#r2"})
 	if !(nix >= 0 && nix < r1 && r1 < rooms && rooms < r2) {
-		t.Fatalf("rows %q", rows)
+		t.Fatalf("rows %v", rows)
 	}
 }
 
@@ -820,12 +820,7 @@ func TestJumpChan(t *testing.T) {
 		t.Fatal("gc did not open the channel labels")
 	}
 	_, names := a.paneItems(focusChans)
-	var rows []string
-	for _, n := range names {
-		if !strings.HasPrefix(n, nickLabel) {
-			rows = append(rows, n)
-		}
-	}
+	rows := itemNames(names)
 	a, _ = press(t, a, string(jumpKeys[1]))
 	if got := a.m.Current().Name; got != rows[1] {
 		t.Fatalf("current %q want %q", got, rows[1])
@@ -1237,15 +1232,15 @@ func TestDMGroup(t *testing.T) {
 	rows := a.chanRows()
 	people, dm := -1, -1
 	for i, r := range rows {
-		if r == nickLabel+"people" {
+		if r == (railRow{"people", true}) {
 			people = i
 		}
-		if r == "#chat-with-ana" {
+		if r == (railRow{text: "#chat-with-ana"}) {
 			dm = i
 		}
 	}
 	if people < 0 || dm < 0 || dm < people {
-		t.Fatalf("rows %q", rows)
+		t.Fatalf("rows %v", rows)
 	}
 }
 
@@ -1467,15 +1462,15 @@ func TestPresenceMark(t *testing.T) {
 	found := false
 	rows, _ := a.nickRows()
 	for _, row := range rows {
-		if strings.Contains(row, "ana") && strings.Contains(row, "●") {
+		if strings.Contains(row.text, "ana") && strings.Contains(row.text, "●") {
 			found = true
 		}
-		if strings.Contains(row, "bob") && strings.Contains(row, "●") {
-			t.Fatalf("bob has no presence but shows a dot: %q", row)
+		if strings.Contains(row.text, "bob") && strings.Contains(row.text, "●") {
+			t.Fatalf("bob has no presence but shows a dot: %v", row)
 		}
 	}
 	if !found {
-		t.Fatalf("no dot on ana: %q", rows)
+		t.Fatalf("no dot on ana: %v", rows)
 	}
 }
 
@@ -1878,11 +1873,7 @@ func TestNextPrevChannelFollowsPaneOrder(t *testing.T) {
 	next, _ := a.Update(TagsMsg{"#b": "favourite"}) // the pane shows #b first, then the rooms #a and #c
 	a = next.(App)
 	var want []string
-	for _, r := range a.chanRows() {
-		if !strings.HasPrefix(r, nickLabel) {
-			want = append(want, r)
-		}
-	}
+	want = append(want, itemNames(a.chanRows())...)
 	if len(want) != 3 {
 		t.Fatalf("pane channels %q", want)
 	}
@@ -1951,11 +1942,7 @@ func TestBracketChannelFollowsPaneOrder(t *testing.T) {
 	next, _ := a.Update(TagsMsg{"#b": "favourite"}) // the pane shows #b first, then the rooms #a and #c
 	a = next.(App)
 	var want []string
-	for _, r := range a.chanRows() {
-		if !strings.HasPrefix(r, nickLabel) {
-			want = append(want, r)
-		}
-	}
+	want = append(want, itemNames(a.chanRows())...)
 	if len(want) != 3 {
 		t.Fatalf("pane channels %q", want)
 	}
@@ -1999,11 +1986,7 @@ func TestGotoChannelFollowsPaneOrder(t *testing.T) {
 	next, _ := a.Update(TagsMsg{"#b": "favourite"}) // the pane shows #b first, then the rooms #a and #c
 	a = next.(App)
 	var want []string
-	for _, r := range a.chanRows() {
-		if !strings.HasPrefix(r, nickLabel) {
-			want = append(want, r)
-		}
-	}
+	want = append(want, itemNames(a.chanRows())...)
 	if len(want) != 3 {
 		t.Fatalf("pane channels %q", want)
 	}
@@ -2038,8 +2021,8 @@ func TestThreadStepFollowsPaneOrder(t *testing.T) {
 	}
 	a.threads = map[string][]model.Thread{"#a": heads}
 	rows, _ := a.paneItems(focusThreads)
-	if len(rows) != len(heads)+1 || rows[len(heads)] != mainThreadLabel {
-		t.Fatalf("pane rows %q, want the heads then the main thread", rows)
+	if len(rows) != len(heads)+1 || rows[len(heads)].text != mainThreadLabel {
+		t.Fatalf("pane rows %v, want the heads then the main thread", rows)
 	}
 	// at reports the pane row the chat is on: a head's index, or the main thread's last row.
 	at := func(a App) int {
@@ -2213,7 +2196,7 @@ func TestPaneFollowsSelection(t *testing.T) {
 		t.Fatalf("channel pane did not scroll: top %d", a.ptop[focusChans])
 	}
 	_, rows := a.paneItems(focusChans)
-	if sel := rows[a.fsel]; !strings.Contains(ansi.Strip(a.screen()), sel) {
+	if sel := rows[a.fsel].text; !strings.Contains(ansi.Strip(a.screen()), sel) {
 		t.Fatalf("selected %q is not on screen", sel)
 	}
 }

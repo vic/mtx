@@ -16,6 +16,9 @@ Download pre-built binary from [releases](https://github.com/vic/mtx/releases) o
 nix run github:vic/mtx
 ```
 
-Docs, keys and short demos: https://mtx.oeiuwq.com
+
+Docs, keys and short demos: https://mtx.oeiuwq.com.
+
+Join us at #[`{mtx}`](https://matrix.to/#/#/mtx/:matrix.org) channel.
 
 Apache-2.0. Made with `<3` by [vic](https://x.com/oeiuwq).

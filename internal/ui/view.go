@@ -377,8 +377,8 @@ func render(m model.Model, ml model.Modeline, input string, w, h, off, hit int, 
 			byName[c.Name] = c
 		}
 		chans := p.chans[min(p.chanTop, len(p.chans)):] // the channel rows from the pane's top
-		mid := w - chanW - nickW - 4 // four border columns
-		var tBlock []string          // the threads box rows, memoized
+		mid := w - chanW - nickW - 4                    // four border columns
+		var tBlock []string                             // the threads box rows, memoized
 		if tRows > 0 {
 			tBlock = threadsPane(p, tRows, mid)
 		}

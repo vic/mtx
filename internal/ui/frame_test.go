@@ -412,7 +412,7 @@ func TestMarkdownColors(t *testing.T) {
 
 func TestBusyMarks(t *testing.T) {
 	var log []sent
-	a := newApp(t, &log, nil)                                     // #a pid 1, user "me"
+	a := newApp(t, &log, nil)                         // #a pid 1, user "me"
 	if got := shown(a.paneNicks()); got != "💤me,💤a" { // control: idle, not typing
 		t.Fatalf("idle %q", got)
 	}
@@ -428,7 +428,7 @@ func TestBusyMarks(t *testing.T) {
 	next, _ = next.(App).Update(MembersMsg{Ch: "&r", Nicks: []string{"lib1"}})
 	a = next.(App).focusName("&r")
 	a.m, _ = a.m.WithRoomMembers("&r", []model.Member{{Nick: "a"}, {Nick: "x@a"}, {Nick: "b"}}) // no PIDs, as at runtime
-	if got := shown(a.paneNicks()); got != "💬me,⌛a,⌛x@a,b" {                        // NEG: b (pid 2) has no mark
+	if got := shown(a.paneNicks()); got != "💬me,⌛a,⌛x@a,b" {                                    // NEG: b (pid 2) has no mark
 		t.Fatalf("room %q", got)
 	}
 }

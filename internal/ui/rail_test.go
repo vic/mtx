@@ -40,7 +40,7 @@ func TestClickGroupedNick(t *testing.T) {
 // TestClickScrolledChannel: a click on a channel row of a scrolled pane opens the channel drawn there.
 func TestClickScrolledChannel(t *testing.T) {
 	a := mouse(t, scrollApp(t), tea.WindowSizeMsg{Width: 160, Height: 40}) // channels #a #b #c
-	a.ptop[focusChans] = 1                                                  // the pane starts at #b
+	a.ptop[focusChans] = 1                                                 // the pane starts at #b
 	next, _ := clickUp(a, 2, 1)
 	if got := next.(App).m.Current().Name; got != "#b" {
 		t.Fatalf("click on the first row of a pane scrolled by one: %s, want #b", got)
